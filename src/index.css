@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@import "./assets/fonts.css";
+
+/* Reset default margins and padding */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+#root {
+  height: 100%;
+  min-height: 100vh;
+}
+
+/* Global font: use BasisGrotesquePro from fonts.css, with sensible fallbacks */
+html, body, #root, button, input, select, textarea {
+  font-family: 'BasisGrotesquePro', 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
+}
+
+/* Custom placeholder styling for Inter font */
+.inter-placeholder::placeholder {
+  font-family: 'Inter', sans-serif !important;
+  color: #4D6080CC !important;
+}
