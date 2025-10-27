@@ -12,15 +12,13 @@ export default function Sidebar() {
       ? "bg-white text-[#003F8F] font-semibold "
       : "text-white hover:bg-[#FFFFFF80] hover:border hover:[#FFFFFF80]"
   }`;
-
-
   return (
     <>
    
     <div className="w-[260px] h-[calc(100vh-70px)] bg-[#003F8F] flex flex-col justify-between font-[BasisGrotesquePro] overflow-hidden shadow-lg">
 
       {/* --- Top Section --- */}
-      <div className="flex-1 flex flex-col gap-2 pt-6 px-3">
+      <div className="flex-1 flex flex-col gap-2 pt-10 px-3">
         {/* Dashboard */}
         <Link to="/dashboard" className={linkClass("/dashboard")}>
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full ">

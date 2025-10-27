@@ -6,7 +6,7 @@ const Header = () => {
   return (
    <>
    <div className='flex justify-between bg-[#FFFFFF] shadow-sm'>
-   <div className='border-r border-r-[#003F8F] pl-[50px] pr-[50px] pt-[14px] flex items-center'>
+   <div className='border-r border-r-[#003F8F] w-[260px] pt-[14px] flex items-center justify-center'>
     <img src={DloadLogo} className='w-[75px]'/>
    </div>
    <div className='flex justify-center items-center content-center gap-5 pr-[20px]'>

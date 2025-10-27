@@ -11,14 +11,14 @@ export default function ClientLayout() {
       </div>
       
       {/* Fixed Sidebar */}
-      <div className="fixed top-[120px] left-0 bottom-0 z-40">
+      <div className="fixed top-[70px] left-0 bottom-0 z-40">
         <Sidebar />
       </div>
       
       {/* Main Content */}
       <main
         className="
-          ml-[260px] mt-[70px] 
+          ml-[260px] mt-[98px] 
           min-h-[calc(100vh-70px)] 
           overflow-y-auto 
           bg-[#F3F7FF] 
