@@ -1,67 +1,132 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Chat, Home, Reminders, Settings, WorkOut, WorkOutPlan } from "./icons";
+import { useAuth } from "../../context/AuthContext";
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen }) {
   const location = useLocation();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) => {
+    if (path === '/client/dashboard') {
+      return location.pathname === path || location.pathname.startsWith('/client/dashboard/');
+    }
+    return location.pathname === path;
+  };
 
   const linkClass = (path) =>
-  `flex items-center gap-3 px-4 py-2 rounded-md text-[16px] font-medium transition-all duration-300 border border-transparent ${
-    isActive(path)
-      ? "bg-white text-[#003F8F] font-semibold "
-      : "text-white hover:bg-[#FFFFFF80] hover:border hover:[#FFFFFF80]"
-  }`;
-  return (
-    <>
-   
-    <div className="w-[260px] h-[calc(100vh-70px)] bg-[#003F8F] flex flex-col justify-between font-[BasisGrotesquePro] overflow-hidden shadow-lg">
+    `flex items-center gap-3 px-4 py-2 rounded-md text-[16px] font-medium transition-all duration-300 border border-transparent ${
+      isActive(path)
+        ? "bg-[#FFFFFF80] text-white font-medium "
+        : "text-white hover:bg-[#FFFFFF80] hover:border hover:[#FFFFFF80]"
+    }`;
 
-      {/* --- Top Section --- */}
-      <div className="flex-1 flex flex-col gap-2 pt-10 px-3">
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  return (
+    <div className={`h-[calc(100vh-70px)] bg-[#326DB7] flex flex-col font-[BasisGrotesquePro] overflow-hidden shadow-lg transition-all duration-300 ${
+      isOpen ? 'w-[260px]' : 'w-[80px] lg:w-[80px]'
+    }`}>
+      {/* --- Navigation Links --- */}
+      <div className="flex-1 flex flex-col gap-2 px-2 lg:px-4 pt-13 pb-4">
         {/* Dashboard */}
-        <Link to="/dashboard" className={linkClass("/dashboard")}>
-          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full ">
-           <Home />
+        <Link 
+          to="/client/dashboard" 
+          className={linkClass("/client/dashboard")}
+          title={!isOpen ? "Dashboard" : ""}
+        >
+          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
+            <Home />
           </span>
-          Dashboard
+          {isOpen && <span className="whitespace-nowrap">Dashboard</span>}
         </Link>
         {/* Log Workout */}
-        <Link to="/log-workout" className={linkClass("/log-workout")}>
-          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full ">
-          <WorkOut />
+        <Link 
+          to="/client/log-workout" 
+          className={linkClass("/client/log-workout")}
+          title={!isOpen ? "Log Workout" : ""}
+        >
+          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
+            <WorkOut />
           </span>
-          Log Workout
+          {isOpen && <span className="whitespace-nowrap">Log Workout</span>}
         </Link>
-        {/* Workout Plans */}
-        <Link to="/workout-plans" className={linkClass("/workout-plans")}>
-          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full ">
-           <WorkOutPlan />
+        {/* Workout Plan */}
+        <Link 
+          to="/client/workout-plans" 
+          className={linkClass("/client/workout-plans")}
+          title={!isOpen ? "Workout Plan" : ""}
+        >
+          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
+            <WorkOutPlan />
           </span>
-          Workout Plans
+          {isOpen && <span className="whitespace-nowrap">Workout Plan</span>}
         </Link>
         {/* Reminders */}
-        <Link to="/reminders" className={linkClass("/reminders")}>
-          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full ">
-           <Reminders />
+        <Link 
+          to="/client/reminders" 
+          className={linkClass("/client/reminders")}
+          title={!isOpen ? "Reminders" : ""}
+        >
+          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
+            <Reminders />
           </span>
-          Reminders
+          {isOpen && <span className="whitespace-nowrap">Reminders</span>}
         </Link>
         {/* Chat */}
-        <Link to="/chat" className={linkClass("/chat")}>
-          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full ">
-           <Chat />
+        <Link 
+          to="/client/chat" 
+          className={linkClass("/client/chat")}
+          title={!isOpen ? "Chat" : ""}
+        >
+          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
+            <Chat />
           </span>
-          Chat
+          {isOpen && <span className="whitespace-nowrap">Chat</span>}
         </Link>
-        <Link to="/settings" className={linkClass("/settings")}>
-          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full ">
-           <Settings />
+        {/* Settings */}
+        <Link 
+          to="/client/settings" 
+          className={linkClass("/client/settings")}
+          title={!isOpen ? "Settings" : ""}
+        >
+          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
+            <Settings />
           </span>
-         Settings
+          {isOpen && <span className="whitespace-nowrap">Settings</span>}
         </Link>
       </div>
+
+      {/* Logout Button */}
+      <div className="px-2 lg:px-4 pb-4 border-t border-white/20 pt-4">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-4 py-2 rounded-md text-[16px] font-medium transition-all duration-300 border border-transparent text-white hover:bg-[#FFFFFF80] hover:border hover:[#FFFFFF80] w-full"
+          title={!isOpen ? "Logout" : ""}
+        >
+          <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M7.5 17.5H4.16667C3.72464 17.5 3.30072 17.3244 2.98816 17.0118C2.67559 16.6993 2.5 16.2754 2.5 15.8333V4.16667C2.5 3.72464 2.67559 3.30072 2.98816 2.98816C3.30072 2.67559 3.72464 2.5 4.16667 2.5H7.5M13.3333 14.1667L17.5 10M17.5 10L13.3333 5.83333M17.5 10H7.5"
+                stroke="white"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          {isOpen && <span className="whitespace-nowrap">Logout</span>}
+        </button>
+      </div>
     </div>
-     </>
   );
 }

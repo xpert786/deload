@@ -1,14 +1,54 @@
 import React from 'react';
-import { Routes, Route} from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import ClientRoutes from './ClientDashboard/ClientRoutes';
-const App = () => {
-  return (
-   <>
-    <Routes>
-      <Route path='/*' element={<ClientRoutes />}/>
-      </Routes>
-   </>
-  )
-}
+import CoachRoutes from './CoachDashboard/CoachRoutes';
+import AdminRoutes from './AdminDashboard/AdminRoutes';
+import Register from './ClientDashboard/Pages/Register';
+import ClientRegister from './ClientDashboard/Pages/ClientRegister';
+import CoachRegister from './CoachDashboard/Pages/CoachRegister';
+import Login from './pages/Login';
+import { useAuth } from './context/AuthContext';
 
-export default App
+const App = () => {
+  const { isAuthenticated, user } = useAuth();
+
+  return (
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/clientregister" element={<ClientRegister />} />
+      <Route path="/coachregister" element={<CoachRegister />} />
+      
+      {/* Redirect root to appropriate dashboard or login */}
+      <Route
+        path="/"
+        element={
+          isAuthenticated ? (
+            user?.role === 'client' ? (
+              <Navigate to="/client/dashboard" replace />
+            ) : user?.role === 'coach' ? (
+              <Navigate to="/coach/dashboard" replace />
+            ) : user?.role === 'admin' ? (
+              <Navigate to="/admin/dashboard" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      {/* Protected Routes */}
+      <Route path="/client/*" element={<ClientRoutes />} />
+      <Route path="/coach/*" element={<CoachRoutes />} />
+      <Route path="/admin/*" element={<AdminRoutes />} />
+
+      {/* Catch all - redirect to login */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  );
+};
+
+export default App;

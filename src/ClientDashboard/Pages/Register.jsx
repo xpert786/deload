@@ -30,12 +30,18 @@ const Register = () => {
 
         {/* Buttons */}
         <div className="flex gap-4 pt-4">
-          <button className="bg-[#003F8F] text-white rounded-lg font-medium font-[BasisGrotesquePro] px-8 py-4 hover:bg-[#002A5F] transition-colors">
+          <Link
+            to="/clientregister"
+            className="bg-[#003F8F] text-white rounded-lg font-medium font-[BasisGrotesquePro] px-8 py-4 hover:bg-[#002A5F] transition-colors text-center"
+          >
             Register as Client
-          </button>
-          <button className="bg-[#003F8F] text-white rounded-lg font-medium font-[BasisGrotesquePro] px-8 py-4 hover:bg-[#002A5F] transition-colors">
+          </Link>
+          <Link
+            to="/coachregister"
+            className="bg-[#003F8F] text-white rounded-lg font-medium font-[BasisGrotesquePro] px-8 py-4 hover:bg-[#002A5F] transition-colors text-center"
+          >
             Register as Coach
-          </button>
+          </Link>
         </div>
 
         {/* Login Link */}
