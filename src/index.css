@@ -16,7 +16,7 @@ html, body {
 
 /* Global font: use BasisGrotesquePro from fonts.css, with sensible fallbacks */
 html, body, #root, button, input, select, textarea {
-  font-family: 'BasisGrotesquePro', 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
+  font-family: '', 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif !important;
 }
 
 /* Custom placeholder styling for Inter font */
@@ -24,3 +24,5 @@ html, body, #root, button, input, select, textarea {
   font-family: 'Inter', sans-serif !important;
   color: #4D6080CC !important;
 }
+
+
