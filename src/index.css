@@ -25,4 +25,14 @@ html, body, #root, button, input, select, textarea {
   color: #4D6080CC !important;
 }
 
+/* Hide scrollbar for webkit browsers */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 

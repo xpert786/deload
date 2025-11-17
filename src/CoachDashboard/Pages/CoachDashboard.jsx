@@ -1,7 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { AddNewClient, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon, AvgSession, ClientIcon,DoumbleIcon,PendingIcon, PercentageTodayIcon, TodayMessageIcon, WeeklyGoalIcon, MessageIconn, AiWorkout } from '../../ClientDashboard/Components/icons';
-
+import ManImage from "../../assets/dashboard.png";
 const quickStats = [
   { label: 'Clients', value: 12, icon: <ClientIcon /> },
   { label: 'Completed Today', value: 5, icon: <DoumbleIcon /> },
@@ -35,23 +36,39 @@ const quickActions = [{name:'Add New Client', icon:<AddNewClient />}, {name:'AI 
 
 const CoachDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   return (
-    <div className="space-y-6 p-2 sm:p-6 bg-[#F7F7F7] text-[#003F8F]">
+    <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
       {/* Hero */}
-      <div className="bg-gradient-to-r from-[#0F5BB3] via-[#1F6ED8] to-[#2B7BFF] rounded-3xl p-6 sm:p-8 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between shadow-md">
-        <div>
-          <p className="text-xl font-semibold font-[Poppins]">Hello, {user?.name?.split(' ')[0] || 'Mike'}!</p>
-          <p className="text-sm font-[Inter] opacity-80">
-            You’re on a 7-day streak! Ready to crush today’s workout?
-          </p>
-        </div>
-        <img
-          src="https://i.pravatar.cc/100?img=67"
-          alt="Trainer"
-          className="w-24 h-24 rounded-full border-4 border-white/40 mt-4 sm:mt-0"
-        />
-      </div>
+      <div className="bg-[#326DB7] rounded-lg p-6 text-white relative overflow-hidden">
+  <div className="flex justify-between items-start">
+    <div>
+      <h1 className="text-2xl font-medium font-[Poppins] mb-2">
+        Welcome back, {user?.name?.split(' ')[0] || 'John'}!
+      </h1>
+      <p className="text-sm font-[Inter] mb-4">
+        You're on a 7-day streak! Ready to crush today's workout?
+      </p>
+    </div>
+
+    {/* Image shown only on larger screens */}
+    <div className="hidden sm:absolute sm:right-0 sm:bottom-0 sm:h-full sm:flex sm:items-end">
+      <img
+        src={ManImage}
+        alt="Fitness"
+        className="h-full w-auto object-cover opacity-90"
+        style={{ maxHeight: '200px' }}
+      />
+    </div>
+  </div>
+
+  {/* Background image only on mobile */}
+  <div
+    className="absolute inset-0 bg-cover bg-no-repeat bg-bottom sm:hidden opacity-30"
+    style={{ backgroundImage: `url(${ManImage})` }}
+  ></div>
+</div>
 
       {/* Quick Start */}
       <div>
@@ -154,7 +171,10 @@ const CoachDashboard = () => {
               </div>
               <div className="flex gap-3 w-full md:w-auto">
 
-                <button className="px-5 py-2 bg-[#003F8F] text-white rounded-xl text-sm font-semibold whitespace-nowrap">
+                <button 
+                  onClick={() => navigate('/coach/dashboard/sessions')}
+                  className="px-5 py-2 bg-[#003F8F] text-white rounded-xl text-sm font-semibold whitespace-nowrap hover:bg-[#002F6F] transition cursor-pointer"
+                >
                   View All
                 </button>
               </div>
@@ -238,7 +258,7 @@ const CoachDashboard = () => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
              
               <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center rounded-full border border-[#CBD8FF]">
+                <div className="flex items-center rounded-lg border border-[#CBD8FF]">
                   <button className="px-5 py-2 rounded-lg bg-[#003F8F] text-white text-sm font-semibold">
                     Weekly Target
                   </button>
@@ -274,7 +294,10 @@ const CoachDashboard = () => {
                 </div>
               ))}
             </div>
-            <button className="px-4 py-2 border border-[#CBD8FF] rounded-xl flex items-center gap-2 text-[#0D4FB8] font-semibold text-sm">
+            <button 
+              onClick={() => navigate('/coach/dashboard/client-progress')}
+              className="px-4 py-2 border border-[#CBD8FF] rounded-xl flex items-center gap-2 text-[#0D4FB8] font-semibold text-sm cursor-pointer"
+            >
                   See All
                   <span className="text-base"><ArrowRightIcon /></span>
                 </button>
@@ -313,10 +336,10 @@ const CoachDashboard = () => {
               ].map((stat) => (
                 <div
                   key={stat.label}
-                  className="px-4 py-3 rounded-2xl border border-[#E5EDFF] bg-white flex items-center justify-between shadow-sm"
+                  className="px-4 py-3 rounded-xl border border-[#E5EDFF] bg-white flex items-center justify-between shadow-sm"
                 >
                   <div className="flex items-center gap-2 text-[#0A3D91]">
-                    <span className="w-6 h-6 rounded-full border border-[#E5EDFF] flex items-center justify-center text-[12px]">
+                    <span className="w-6 h-6 rounded-xl border border-[#E5EDFF] flex items-center justify-center text-[12px]">
                       {stat.icon}
                     </span>
                     <span>{stat.label}</span>
@@ -330,20 +353,20 @@ const CoachDashboard = () => {
           <div className="bg-white rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-xl font-semibold text-[#0A3D91]">Notifications</p>
-              <button className="px-4 py-2 rounded-xl bg-[#0A3D91] text-white text-sm font-semibold">
+              <button className="px-4 py-2 rounded-xl bg-[#0A3D91] text-white text-sm font-semibold cursor-pointer">
                 View All
               </button>
             </div>
 
             <div className="space-y-4 text-sm font-[Inter]">
-              <p className="text-xs font-semibold text-[#0A3D91] uppercase">Today</p>
+              <p className="text-xs font-semibold text-[#0A3D91]">Today</p>
               {notifications.today.map((note) => (
                 <div
                   key={note.title}
-                  className="flex items-center justify-between px-4 py-3 border border-[#E5EDFF] rounded-2xl bg-white shadow-sm gap-4"
+                  className="flex items-center justify-between px-4 py-3 border border-[#E5EDFF] rounded-xl bg-white shadow-sm gap-4"
                 >
                   <div className="flex items-center gap-3 text-[#0A3D91]">
-                    <span className="w-7 h-7 rounded-full border border-[#E5EDFF] flex items-center justify-center text-[13px]">
+                    <span className="w-7 h-7 rounded-xl border border-[#E5EDFF] flex items-center justify-center text-[13px]">
                       {note.icon}
                     </span>
                     <span className="font-semibold">{note.title}</span>
@@ -352,14 +375,14 @@ const CoachDashboard = () => {
                 </div>
               ))}
 
-              <p className="text-xs font-semibold text-[#0A3D91] uppercase pt-2">Yesterday</p>
+              <p className="text-xs font-semibold text-[#0A3D91] pt-2">Yesterday</p>
               {notifications.yesterday.map((note) => (
                 <div
                   key={note.title}
-                  className="flex items-center justify-between px-4 py-3 border border-[#E5EDFF] rounded-2xl bg-white shadow-sm gap-4"
+                  className="flex items-center justify-between px-4 py-3 border border-[#E5EDFF] rounded-xl bg-white shadow-sm gap-4"
                 >
                   <div className="flex items-center gap-3 text-[#0A3D91]">
-                    <span className="w-7 h-7 rounded-full border border-[#E5EDFF] flex items-center justify-center text-[13px]">
+                    <span className="w-7 h-7 rounded-xl border border-[#E5EDFF] flex items-center justify-center text-[13px]">
                       {note.icon}
                     </span>
                     <span className="font-semibold">{note.title}</span>
@@ -377,9 +400,9 @@ const CoachDashboard = () => {
               {quickActions.map((action, index) => (
                 <button
                   key={action}
-                  className="w-full flex items-center gap-3 rounded-2xl border border-[#C7D8F7] px-4 py-3 text-[#0A3D91] text-sm font-semibold hover:bg-[#F5F8FF] transition"
+                  className="w-full flex items-center gap-3 rounded-xl border border-[#C7D8F7] px-4 py-3 text-[#0A3D91] text-sm font-semibold hover:bg-[#F5F8FF] transition"
                 >
-                  <span className="w-6 h-6 rounded-full border border-[#C7D8F7] flex items-center justify-center text-[12px]">
+                  <span className="w-6 h-6 rounded-xl border border-[#C7D8F7] flex items-center justify-center text-[12px]">
                    {action.icon}
                   </span>
                   {action.name}
