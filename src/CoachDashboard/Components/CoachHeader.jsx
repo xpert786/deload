@@ -55,32 +55,28 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
             <img src={DloadLogo} className="w-[50px] h-[50px] ml-10" alt="Dload Logo" />
           )}
         </div>
+      </div>
 
-        {/* Search Bar */}
-        <div
-          className={`relative transition-all duration-300 flex items-center
+      {/* Search Bar */}
+      <div
+        className={`relative transition-all duration-300 flex items-center
   ${isSidebarOpen ? 'ml-4' : 'ml-2 lg:ml-20'}
   w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg`}
-        >
+      >
 
-          {/* Icon Positioned Inside Input */}
-          <div className="absolute left-3 inset-y-0 flex items-center pointer-events-none">
-            <SearchIcon />
-          </div>
-
-          {/* Input */}
-          <input
-            type="text"
-            placeholder="Search here..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg
-    focus:outline-none focus:ring-2 focus:ring-blue-500
-    focus:border-transparent text-sm"
-          />
+        {/* Icon Positioned Inside Input */}
+        <div className="absolute left-3 inset-y-0 flex items-center pointer-events-none">
+          <SearchIcon />
         </div>
 
-
-
-
+        {/* Input */}
+        <input
+          type="text"
+          placeholder="Search here..."
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg
+    focus:outline-none focus:ring-2 focus:ring-blue-500
+    focus:border-transparent text-sm"
+        />
       </div>
 
 
@@ -232,9 +228,9 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
       </div>
 
       {/* Add New Client Modal */}
-      <AddNewClientModal 
-        isOpen={showAddClientModal} 
-        onClose={() => setShowAddClientModal(false)} 
+      <AddNewClientModal
+        isOpen={showAddClientModal}
+        onClose={() => setShowAddClientModal(false)}
       />
     </div>
   );

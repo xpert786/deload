@@ -41,34 +41,34 @@ const CoachDashboard = () => {
   return (
     <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
       {/* Hero */}
-      <div className="bg-[#326DB7] rounded-lg p-6 text-white relative overflow-hidden">
-  <div className="flex justify-between items-start">
-    <div>
-      <h1 className="text-2xl font-medium font-[Poppins] mb-2">
-        Welcome back, {user?.name?.split(' ')[0] || 'John'}!
-      </h1>
-      <p className="text-sm font-[Inter] mb-4">
-        You're on a 7-day streak! Ready to crush today's workout?
-      </p>
+      <div className="bg-[#326DB7] rounded-lg p-6 text-white relative">
+    <div className="relative flex justify-between items-start">
+      <div>
+        <h1 className="text-2xl font-medium font-[Poppins] mb-2">
+          Welcome back, {user?.name?.split(' ')[0] || 'John'}!
+        </h1>
+        <p className="text-sm font-[Inter] mb-4">
+          You're on a 7-day streak! Ready to crush today's workout?
+        </p>
+      </div>
+ 
+      {/* Image shown only on larger screens and moved above parent */}
+      <div className="hidden sm:flex sm:absolute sm:right-0 sm:-top-15 sm:items-end">
+        <img
+          src={ManImage}
+          alt="Fitness"
+          className="h-full w-auto object-cover opacity-90"
+          style={{ maxHeight: '150px' }}
+        />
+      </div>
     </div>
-
-    {/* Image shown only on larger screens */}
-    <div className="hidden sm:absolute sm:right-0 sm:bottom-0 sm:h-full sm:flex sm:items-end">
-      <img
-        src={ManImage}
-        alt="Fitness"
-        className="h-full w-auto object-cover opacity-90"
-        style={{ maxHeight: '200px' }}
-      />
-    </div>
+ 
+    {/* Background image only on mobile */}
+    <div
+      className="absolute inset-0 bg-cover bg-no-repeat bg-bottom sm:hidden opacity-30"
+      style={{ backgroundImage: `url(${ManImage})` }}
+    ></div>
   </div>
-
-  {/* Background image only on mobile */}
-  <div
-    className="absolute inset-0 bg-cover bg-no-repeat bg-bottom sm:hidden opacity-30"
-    style={{ backgroundImage: `url(${ManImage})` }}
-  ></div>
-</div>
 
       {/* Quick Start */}
       <div>

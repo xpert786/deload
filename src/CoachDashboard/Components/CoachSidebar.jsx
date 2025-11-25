@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Chat, Home, Settings, WorkOutPlan } from '../../ClientDashboard/Components/icons';
+import { Chat, Home, Settings, WorkOutPlan, Reminders } from '../../ClientDashboard/Components/icons';
 import { useAuth } from '../../context/AuthContext';
 
 export default function CoachSidebar({ isOpen }) {
@@ -55,14 +55,14 @@ export default function CoachSidebar({ isOpen }) {
         </Link>
 
         <Link
-          to="/coach/workout-plans"
-          className={linkClass("/coach/workout-plans")}
-          title={!isOpen ? "Workout Plans" : ""}
+          to="/coach/ai-program"
+          className={linkClass("/coach/ai-program")}
+          title={!isOpen ? "AI Progress" : ""}
         >
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
-            <WorkOutPlan />
+            <Reminders />
           </span>
-          {isOpen && <span className="whitespace-nowrap">Workout Plans</span>}
+          {isOpen && <span className="whitespace-nowrap">AI Progress</span>}
         </Link>
 
         <Link

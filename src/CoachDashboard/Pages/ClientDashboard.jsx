@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArchiveIconForCoach, DeleteIconForCoach, EditIconForCoach, LocationIconForCoach, MailIconForCoach, MobileIconForCoach, PercentageIconForCoach, SearchIcon } from '../Components/Icons';
 import ProfileLogo from "../../assets/clientprofile.jpg";
 import { MessageIconForCoach } from '../Components/Icons';
+import WorkOut from './ClientDashboard/WorkOut';
+import CustomWorkouts from './ClientDashboard/CustomWorkouts';
 
 // Sample data
 const progressData = {
@@ -117,19 +119,22 @@ const ClientDashboard = () => {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            <button className="px-4 py-2 border bg-[#003F8F] border-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
+            <button 
+              onClick={() => navigate(`/coach/messages/${id}`)}
+              className="px-4 py-2 border bg-[#003F8F] border-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2"
+            >
               <MessageIconForCoach />
               Message
             </button>
-            <button className="px-4 py-2 border border-[#003F8F] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
-              Edit
+            <button className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
               <EditIconForCoach />
+              Edit
             </button>
-            <button className="px-4 py-2 border border-[#003F8F] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
-              Archive
+            <button className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
               <ArchiveIconForCoach />
+              Archive
             </button>
-            <button className="px-4 py-2 border border-[#003F8F] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
+            <button className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
               <DeleteIconForCoach />
             </button>
           </div>
@@ -184,6 +189,13 @@ const ClientDashboard = () => {
         </div>
       </div>
 
+      {/* Render Workout Calendar when tab is active */}
+      {activeTab === 'Workout Calendar' ? (
+        <WorkOut />
+      ) : activeTab === 'Custom Workouts' ? (
+        <CustomWorkouts />
+      ) : (
+        <>
       {/* Main Content - Two Columns */}
       <div className="grid lg:grid-cols-[2fr_2fr] gap-6">
         {/* Left Column */}
@@ -398,6 +410,8 @@ const ClientDashboard = () => {
 
       </div>
       {/* Season History Card */}
+        </>
+      )}
     </div>
   );
 };
