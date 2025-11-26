@@ -9,6 +9,7 @@ const WorkOut = () => {
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedExercise, setSelectedExercise] = useState(null);
     const [openExerciseIndex, setOpenExerciseIndex] = useState(0); // Track which exercise dropdown is open
+    const [selectedDay, setSelectedDay] = useState('Mon'); // Day selector for workout view
 
     // Detailed workout data with sets, reps, weights, rest times, and statuses
     const detailedWorkoutData = {
@@ -120,6 +121,115 @@ const WorkOut = () => {
     };
 
     const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayTabs = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    // Workout data for day-by-day view (matching screenshot)
+    // Common workout data for all weekdays (Mon-Sat)
+    const commonWorkoutData = {
+        workoutName: 'Full Body Workout',
+        exercises: [
+            {
+                group: 'A',
+                exercises: [
+                    {
+                        label: 'A1',
+                        name: 'Barbell Squat',
+                        sets: 4,
+                        reps: 8,
+                        instruction: 'Keep chest up, go below parallel',
+                        videoLink: 'Seated Cable Row...',
+                        status: 'Completed'
+                    },
+                    {
+                        label: 'A2',
+                        name: 'Bench Press',
+                        sets: 3,
+                        reps: 10,
+                        instruction: 'Shoulders retracted, elbows at 45°',
+                        videoLink: 'Bench Press Form...',
+                        status: 'Completed'
+                    }
+                ],
+                status: 'Completed'
+            },
+            {
+                group: 'B',
+                exercises: [
+                    {
+                        label: 'B',
+                        name: 'Romanian Deadlift',
+                        sets: 3,
+                        reps: 10,
+                        instruction: 'Slight knee bend, hinge at hips',
+                        videoLink: '',
+                        status: 'Skipped'
+                    }
+                ],
+                status: 'Skipped'
+            },
+            {
+                group: 'C-G',
+                exercises: [
+                    {
+                        label: 'C',
+                        name: 'Bent Over Row',
+                        sets: 4,
+                        reps: 8,
+                        instruction: 'Maintain flat back, pull towards waist',
+                        videoLink: '',
+                        status: null
+                    },
+                    {
+                        label: 'D',
+                        name: 'Plank',
+                        sets: 3,
+                        reps: '30s',
+                        instruction: 'Keep body straight, engage core',
+                        videoLink: '',
+                        status: null
+                    },
+                    {
+                        label: 'E',
+                        name: 'Push-Up',
+                        sets: 3,
+                        reps: 15,
+                        instruction: 'Keep elbows close to body, lower until chest nearly touches ground',
+                        videoLink: '',
+                        status: 'Completed'
+                    },
+                    {
+                        label: 'F',
+                        name: 'Squat',
+                        sets: 4,
+                        reps: 12,
+                        instruction: 'Feet shoulder-width apart, keep back straight',
+                        videoLink: '',
+                        status: null
+                    },
+                    {
+                        label: 'G',
+                        name: 'Burpee',
+                        sets: 3,
+                        reps: 10,
+                        instruction: 'Jump up, drop into a squat, kick feet back, return to squat and jump up',
+                        videoLink: '',
+                        status: null
+                    }
+                ],
+                status: 'Completed'
+            }
+        ]
+    };
+
+    const dayWorkoutData = {
+        'Mon': commonWorkoutData,
+        'Tue': commonWorkoutData,
+        'Wed': commonWorkoutData,
+        'Thu': commonWorkoutData,
+        'Fri': commonWorkoutData,
+        'Sat': commonWorkoutData
+        // Sun is intentionally excluded - it will show rest day or nothing
+    };
 
     const progressPhotos = [
         { date: '14 Apr 2025', image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=200&h=200&fit=crop' },
@@ -264,334 +374,403 @@ const WorkOut = () => {
         <div className="space-y-6 p-2 sm:p-2 bg-[#F7F7F7] text-[#003F8F]">
             {/* Interactive Workout Calendar Section */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <h2 className="text-2xl font-semibold text-[#003F8F] font-[Poppins]">Interactive Workout Calendar</h2>
+                <h2 className="text-2xl font-semibold text-[#003F8F] font-[Poppins]">Interactive Workout Calendar</h2>
 
-                    <div className="flex items-center gap-4">
-                        {/* Week/Monthly Toggle */}
-                        <div className="flex items-center gap-2 border border-gray-200 rounded-lg p-1">
-                            <button
-                                onClick={() => setViewMode('Week')}
-                                className={`px-4 py-2 font-semibold text-sm transition rounded-md ${viewMode === 'Week'
-                                    ? 'bg-[#003F8F] text-white'
-                                    : 'text-[#003F8F] hover:bg-gray-100'
-                                    }`}
-                            >
-                                Week
-                            </button>
-                            <button
-                                onClick={() => setViewMode('Monthly')}
-                                className={`px-4 py-2 font-semibold text-sm transition rounded-md ${viewMode === 'Monthly'
-                                    ? 'bg-[#003F8F] text-white'
-                                    : 'text-[#003F8F] hover:bg-gray-100'
-                                    }`}
-                            >
-                                Monthly
-                            </button>
-                        </div>
-
-                    </div>
+                <div className="flex items-center gap-4">
+                    {/* Week Button */}
+                    <button
+                        onClick={() => setViewMode('Week')}
+                        className="px-4 py-2 font-semibold text-sm transition rounded-md bg-[#003F8F] text-white"
+                    >
+                        Week
+                    </button>
                 </div>
-            <div className="bg-white rounded-xl p-6 space-y-4">
-            
+            </div>
 
-                {/* Calendar Header - Sep 2025 and Today in Same Line */}
-                <div className="flex items-center justify-between mb-4">
-                    <span className="text-xl font-bold text-[#003F8F] font-[Poppins]">
-                        {formatDate(currentDate)}
-                    </span>
-
-                    {/* Calendar Navigation in Light Gray Box */}
-                    <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-1 py-1">
-                        {/* Left Arrow Button */}
+            {/* Day-by-Day Workout View */}
+            <div className="bg-white rounded-xl overflow-hidden border border-gray-300" style={{ borderRadius: '12px' }}>
+                {/* Day Tabs - Full Width */}
+                <div className="flex items-center w-full border-b border-gray-200">
+                    {dayTabs.map((day, index) => (
                         <button
-                            onClick={() => navigateDate('prev')}
-                            className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded transition hover:bg-gray-50"
+                            key={day}
+                            onClick={() => setSelectedDay(day)}
+                            className={`flex-1 px-4 py-3 font-semibold text-sm transition relative ${index > 0 ? 'border-l border-gray-200' : ''
+                                } ${selectedDay === day
+                                    ? 'bg-[#003F8F] text-white'
+                                    : 'bg-white text-[#003F8F] hover:bg-gray-50'
+                                }`}
+                            style={{
+                                borderRadius: selectedDay === day && index === 0 ? '0.75rem 0 0 0' :
+                                    selectedDay === day && index === dayTabs.length - 1 ? '0 0.75rem 0 0' :
+                                        '0'
+                            }}
                         >
-                            <svg width="5" height="7" viewBox="0 0 5 7" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M3.93278 0.182778C3.87496 0.124838 3.80628 0.0788707 3.73067 0.0475073C3.65506 0.0161439 3.57401 0 3.49215 0C3.4103 0 3.32925 0.0161439 3.25364 0.0475073C3.17803 0.0788707 3.10935 0.124838 3.05153 0.182778L0.182778 3.05153C0.124838 3.10935 0.0788707 3.17803 0.0475073 3.25364C0.0161439 3.32925 0 3.4103 0 3.49215C0 3.57401 0.0161439 3.65506 0.0475073 3.73067C0.0788707 3.80628 0.124838 3.87496 0.182778 3.93278L3.05153 6.80153C3.10939 6.85939 3.17809 6.90529 3.25369 6.93661C3.32929 6.96792 3.41032 6.98404 3.49215 6.98404C3.57398 6.98404 3.65501 6.96792 3.73062 6.93661C3.80622 6.90529 3.87491 6.85939 3.93278 6.80153C3.99064 6.74366 4.03654 6.67497 4.06786 6.59937C4.09917 6.52376 4.11529 6.44273 4.11529 6.3609C4.11529 6.27907 4.09917 6.19804 4.06786 6.12244C4.03654 6.04683 3.99064 5.97814 3.93278 5.92028L1.50778 3.48903L3.93278 1.06403C4.17653 0.820277 4.17028 0.420278 3.93278 0.182778Z" fill="#003F8F" />
-                            </svg>
-
+                            {day}
                         </button>
-
-                        {/* Today Button */}
-                        <button
-                            onClick={goToToday}
-                            className="px-3 py-1.5 text-sm font-bold text-[#003F8F] bg-white border border-gray-200 rounded transition hover:bg-gray-50 shadow-sm"
-                        >
-                            Today
-                        </button>
-
-                        {/* Right Arrow Button */}
-                        <button
-                            onClick={() => navigateDate('next')}
-                            className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 rounded transition hover:bg-gray-50"
-                        >
-                            <svg width="5" height="7" viewBox="0 0 5 7" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M1.06722 0.182778C1.12504 0.124838 1.19372 0.0788707 1.26933 0.0475073C1.34494 0.0161439 1.42599 0 1.50785 0C1.5897 0 1.67075 0.0161439 1.74636 0.0475073C1.82197 0.0788707 1.89065 0.124838 1.94847 0.182778L4.81722 3.05153C4.87516 3.10935 4.92113 3.17803 4.95249 3.25364C4.98386 3.32925 5 3.4103 5 3.49215C5 3.57401 4.98386 3.65506 4.95249 3.73067C4.92113 3.80628 4.87516 3.87496 4.81722 3.93278L1.94847 6.80153C1.89061 6.85939 1.82191 6.90529 1.74631 6.93661C1.67071 6.96792 1.58968 6.98404 1.50785 6.98404C1.42602 6.98404 1.34499 6.96792 1.26938 6.93661C1.19378 6.90529 1.12509 6.85939 1.06722 6.80153C1.00936 6.74366 0.963457 6.67497 0.932143 6.59937C0.900829 6.52376 0.884705 6.44273 0.884705 6.3609C0.884705 6.27907 0.900829 6.19804 0.932143 6.12244C0.963457 6.04683 1.00936 5.97814 1.06722 5.92028L3.49222 3.48903L1.06722 1.06403C0.82347 0.820277 0.82972 0.420278 1.06722 0.182778Z" fill="#003F8F" />
-                            </svg>
-                        </button>
-                    </div>
+                    ))}
                 </div>
 
-                {/* Calendar Grid - Table Structure */}
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-7">
-                        {/* Day Headers */}
-                        {daysOfWeek.map((day) => (
-                            <div key={day} className="text-center font-semibold text-sm text-[#003F8F] font-[Inter] py-2 border-b border-gray-200 border-r border-gray-200 last:border-r-0">
-                                {day}
-                            </div>
-                        ))}
-                    </div>
+                {/* Workout Content */}
+                <div className="p-6 space-y-6">
 
-                    {/* Calendar Dates Grid */}
-                    <div className="grid grid-cols-7">
-                        {calendarDates.map((date, idx) => {
-                            const dateKey = formatDateKey(date);
-                            const dayName = daysOfWeek[date.getDay()];
-                            const isCurrentMonth = date.getMonth() === currentDate.getMonth();
-                            const isToday = formatDateKey(date) === formatDateKey(new Date());
-                            const workouts = workoutDataByDate[dateKey] || [];
-                            const isWed = dayName === 'Wed' && isCurrentMonth;
-                            const isTue = dayName === 'Tue' && isCurrentMonth;
+                    {/* Workout Content for Selected Day */}
+                    {dayWorkoutData[selectedDay] && selectedDay !== 'Sun' && (
+                        <>
+                            {/* Workout Name */}
+                            <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">
+                                {dayWorkoutData[selectedDay].workoutName}
+                            </h3>
 
-                            return (
-                                <div
-                                    key={idx}
-                                    className={`min-h-[400px] border-r border-gray-200 last:border-r-0 p-2 space-y-2 ${!isCurrentMonth && viewMode === 'Monthly' ? 'bg-gray-50' : ''
-                                        }`}
-                                >
-                                    {/* Date Number - Only show in Monthly view or Week view */}
-                                    {viewMode === 'Monthly' && (
-                                        <div className={`text-xs font-semibold mb-2 ${!isCurrentMonth ? 'text-gray-400' : 'text-[#003F8F]'} ${isToday ? 'text-[#003F8F] font-bold' : ''}`}>
-                                            {date.getDate()}
-                                        </div>
-                                    )}
-                                    {viewMode === 'Week' && (
-                                        <div className={`text-xs font-semibold mb-2 text-[#003F8F] ${isToday ? 'font-bold' : ''}`}>
-                                            {date.getDate()}
-                                        </div>
-                                    )}
+                            {/* Workout Cards */}
+                            <div className="space-y-4">
+                                {dayWorkoutData[selectedDay].exercises.map((group, groupIndex) => {
+                                    // If group has multiple exercises, render as one card (superset like A1, A2 or group like C-G)
+                                    // Otherwise, render each exercise as separate card
+                                    const isGrouped = group.exercises.length > 1;
 
-                                    {/* Workout Cards */}
-                                    {workouts.length > 0 ? (
-                                        <>
-                                            {workouts.map((exercise, exerciseIdx) => (
-                                                <div
-                                                    key={exerciseIdx}
-                                                    onClick={() => handleExerciseClick(date, exercise)}
-                                                    className={`bg-[#EA77261A] border rounded-lg p-2 cursor-pointer hover:shadow-md transition relative ${isWed && exerciseIdx === 4
-                                                        ? 'bg-orange-50 border-orange-300 z-10'
-                                                        : isWed && exerciseIdx === 5
-                                                            ? 'bg-orange-50 border-orange-300 z-20 -mt-2 ml-2'
-                                                            : 'border-orange-200'
-                                                        }`}
-                                                >
-                                                    <p className="text-sm font-semibold text-[#003F8F] font-[Inter] mb-1">
-                                                        {exercise.name}
-                                                    </p>
-                                                    <p className="text-xs text-gray-600 font-[Inter]">
-                                                        Sets: {exercise.sets} Reps: {exercise.reps}
-                                                    </p>
-                                                    {isWed && exerciseIdx === 5 && (
-                                                        <div className="absolute top-1 right-1 cursor-grab">
-                                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                                <circle cx="3" cy="3" r="1.5" fill="#003F8F" />
-                                                                <circle cx="9" cy="3" r="1.5" fill="#003F8F" />
-                                                                <circle cx="3" cy="9" r="1.5" fill="#003F8F" />
-                                                                <circle cx="9" cy="9" r="1.5" fill="#003F8F" />
+                                    if (isGrouped) {
+                                        // Render as one card for superset
+                                        return (
+                                            <div
+                                                key={groupIndex}
+                                                className={`rounded-xl p-6 border relative ${group.status === 'Completed' ? 'bg-green-50' : group.status === 'Skipped' ? 'bg-red-50' : 'bg-white'
+                                                    }`}
+                                                style={{
+                                                    borderRadius: '12px',
+                                                    borderColor: group.status === 'Completed' ? '#25CD25' : group.status === 'Skipped' ? '#fca5a5' : '#d1d5db',
+                                                    borderWidth: '1px'
+                                                }}
+                                            >
+                                                {/* Blue vertical line for superset (only for A group) - inside card, after border */}
+                                                {group.group === 'A' && (
+                                                    <div
+                                                        className="absolute bg-[#003F8F]"
+                                                        style={{
+                                                            left: '20px', // After border (1px border)
+                                                            top: '12px',
+                                                            bottom: '12px',
+                                                            width: '4px',
+                                                            borderRadius: '2px'
+                                                        }}
+                                                    ></div>
+                                                )}
+
+                                                {/* Status Badge - Top Right Corner */}
+                                                <div className="absolute top-6 right-6 flex flex-col items-center gap-1">
+                                                    {group.status === 'Completed' ? (
+                                                        <>
+                                                            <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <g clipPath="url(#clip0_1300_205)">
+                                                                    <path d="M18 0C8.05894 0 0 8.05894 0 18C0 27.9416 8.05894 36 18 36C27.9416 36 36 27.9416 36 18C36 8.05894 27.9416 0 18 0ZM18 33.7854C9.31556 33.7854 2.25 26.6844 2.25 17.9999C2.25 9.31549 9.31556 2.24993 18 2.24993C26.6844 2.24993 33.75 9.31553 33.75 17.9999C33.75 26.6843 26.6844 33.7854 18 33.7854ZM25.1837 11.4137L14.6227 22.041L9.86678 17.2851C9.42746 16.8458 8.71534 16.8458 8.27547 17.2851C7.83615 17.7244 7.83615 18.4365 8.27547 18.8758L13.8437 24.4446C14.283 24.8833 14.9951 24.8833 15.435 24.4446C15.4856 24.3939 15.5289 24.3388 15.5683 24.2814L26.7756 13.005C27.2143 12.5657 27.2143 11.8535 26.7756 11.4137C26.3357 10.9744 25.6236 10.9744 25.1837 11.4137Z" fill="#25CD25" />
+                                                                </g>
+                                                                <defs>
+                                                                    <clipPath id="clip0_1300_205">
+                                                                        <rect width="36" height="36" fill="white" />
+                                                                    </clipPath>
+                                                                </defs>
                                                             </svg>
-                                                        </div>
+                                                            <span className="text-xs font-semibold text-green-700">{group.status}</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="w-9 h-9 bg-red-500 rounded-full flex items-center justify-center">
+                                                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                    <path d="M4 4L12 12M12 4L4 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                                                </svg>
+                                                            </div>
+                                                            <span className="text-xs font-semibold text-red-700">{group.status}</span>
+                                                        </>
                                                     )}
                                                 </div>
-                                            ))}
-                                            {/* Icons for Tuesday */}
-                                            {isTue && workouts.length > 0 && (
-                                                <div className="flex items-center gap-2 mt-2 pt-2">
-                                                    <button className="p-1.5 hover:bg-gray-100 rounded transition">
-                                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M7 7C8.10457 7 9 6.10457 9 5C9 3.89543 8.10457 3 7 3C5.89543 3 5 3.89543 5 5C5 6.10457 5.89543 7 7 7Z" stroke="#4D6080" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                                                            <path d="M2 12C2 10.3431 3.34315 9 5 9H9C10.6569 9 12 10.3431 12 12" stroke="#4D6080" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                                                        </svg>
-                                                    </button>
-                                                    <button className="p-1.5 hover:bg-gray-100 rounded transition">
-                                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <rect x="2.5" y="2.5" width="9" height="9" rx="1.5" stroke="#4D6080" strokeWidth="1.2" />
-                                                            <path d="M7 5.5V8.5M5.5 7H8.5" stroke="#4D6080" strokeWidth="1.2" strokeLinecap="round" />
-                                                        </svg>
-                                                    </button>
-                                                    <button className="p-1.5 hover:bg-gray-100 rounded transition">
-                                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                            <path d="M9.91667 2.33333C10.07 2.18 10.25 2.05933 10.45 1.97833C10.65 1.89733 10.8633 1.85733 11.0783 1.86133C11.2933 1.86533 11.505 1.913 11.7 2.00133C11.895 2.08967 12.0693 2.21667 12.2133 2.375C12.3573 2.53333 12.468 2.71967 12.5383 2.92333C12.6087 3.127 12.6367 3.34367 12.6207 3.55867C12.6047 3.77367 12.545 3.98267 12.445 4.17333L7.58333 9.03333L5.25 9.75L5.96667 7.41667L9.91667 2.33333Z" stroke="#4D6080" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                                                        </svg>
-                                                    </button>
+
+                                                {/* Exercises */}
+                                                <div className={`space-y-4 pr-20 ${group.group === 'A' ? 'pl-4' : ''}`}>
+                                                    {group.exercises.map((exercise, exIndex) => (
+                                                        <div key={exIndex} className={exIndex < group.exercises.length - 1 ? 'border-b border-gray-300 pb-4' : ''}>
+                                                            <h4 className="text-lg font-bold text-[#003F8F] font-[Poppins] mb-2">
+                                                                {exercise.label}. {exercise.name}
+                                                            </h4>
+                                                            <div className="text-sm text-[#003F8F] font-medium mb-2">
+                                                                {exercise.sets} x {exercise.reps}
+                                                            </div>
+                                                            <p className="text-sm text-[#003F8F] font-[Inter] mb-2">
+                                                                {exercise.instruction}
+                                                            </p>
+                                                            {exercise.videoLink && (
+                                                                <a href="#" className="inline-flex items-center gap-1.5 bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium hover:bg-blue-200 transition" style={{ color: '#003F8F' }}>
+                                                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                        <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                                                    </svg>
+                                                                    <span>{exercise.videoLink}</span>
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className="text-center text-gray-400 text-sm py-4">No workouts</div>
-                                    )}
+                                            </div>
+                                        );
+                                    } else {
+                                        // Render each exercise as separate card
+                                        return group.exercises.map((exercise, exIndex) => (
+                                            <div
+                                                key={`${groupIndex}-${exIndex}`}
+                                                className={`rounded-xl p-6 border relative ${exercise.status === 'Completed' ? 'bg-green-50' : exercise.status === 'Skipped' ? 'bg-red-50' : 'bg-white'
+                                                    }`}
+                                                style={{
+                                                    borderRadius: '12px',
+                                                    borderColor: exercise.status === 'Completed' ? '#25CD25' : exercise.status === 'Skipped' ? '#fca5a5' : '#d1d5db',
+                                                    borderWidth: '1px'
+                                                }}
+                                            >
+                                                {/* Status Badge - Only show if exercise has status - Top Right Corner */}
+                                                {exercise.status && (
+                                                    <div className="absolute top-6 right-6 flex flex-col items-center gap-1">
+                                                        {exercise.status === 'Completed' ? (
+                                                            <>
+                                                                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                    <g clipPath="url(#clip0_1300_205_ex)">
+                                                                        <path d="M18 0C8.05894 0 0 8.05894 0 18C0 27.9416 8.05894 36 18 36C27.9416 36 36 27.9416 36 18C36 8.05894 27.9416 0 18 0ZM18 33.7854C9.31556 33.7854 2.25 26.6844 2.25 17.9999C2.25 9.31549 9.31556 2.24993 18 2.24993C26.6844 2.24993 33.75 9.31553 33.75 17.9999C33.75 26.6843 26.6844 33.7854 18 33.7854ZM25.1837 11.4137L14.6227 22.041L9.86678 17.2851C9.42746 16.8458 8.71534 16.8458 8.27547 17.2851C7.83615 17.7244 7.83615 18.4365 8.27547 18.8758L13.8437 24.4446C14.283 24.8833 14.9951 24.8833 15.435 24.4446C15.4856 24.3939 15.5289 24.3388 15.5683 24.2814L26.7756 13.005C27.2143 12.5657 27.2143 11.8535 26.7756 11.4137C26.3357 10.9744 25.6236 10.9744 25.1837 11.4137Z" fill="#25CD25" />
+                                                                    </g>
+                                                                    <defs>
+                                                                        <clipPath id="clip0_1300_205_ex">
+                                                                            <rect width="36" height="36" fill="white" />
+                                                                        </clipPath>
+                                                                    </defs>
+                                                                </svg>
+                                                                <span className="text-xs font-semibold text-green-700">{exercise.status}</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className="w-9 h-9  flex items-center justify-center">
+                                                                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                        <path d="M25.9197 11.67C26.1185 11.4568 26.2266 11.1747 26.2215 10.8832C26.2164 10.5918 26.0983 10.3137 25.8922 10.1076C25.6861 9.90146 25.408 9.78339 25.1165 9.77825C24.8251 9.77311 24.543 9.88129 24.3297 10.08L10.0797 24.33C9.96921 24.433 9.88056 24.5572 9.81907 24.6952C9.75758 24.8332 9.72452 24.9822 9.72185 25.1332C9.71919 25.2843 9.74698 25.4343 9.80356 25.5744C9.86014 25.7145 9.94436 25.8417 10.0512 25.9486C10.158 26.0554 10.2853 26.1396 10.4253 26.1962C10.5654 26.2528 10.7155 26.2806 10.8665 26.2779C11.0176 26.2752 11.1666 26.2422 11.3045 26.1807C11.4425 26.1192 11.5667 26.0305 11.6697 25.92L25.9197 11.67Z" fill="#E53E3E" />
+                                                                        <path d="M18 1.5C27.1125 1.5 34.5 8.8875 34.5 18C34.5 27.1125 27.1125 34.5 18 34.5C8.8875 34.5 1.5 27.1125 1.5 18C1.5 8.8875 8.8875 1.5 18 1.5ZM3.75 18C3.75 21.7793 5.25133 25.4039 7.92373 28.0763C10.5961 30.7487 14.2207 32.25 18 32.25C21.7793 32.25 25.4039 30.7487 28.0763 28.0763C30.7487 25.4039 32.25 21.7793 32.25 18C32.25 14.2207 30.7487 10.5961 28.0763 7.92373C25.4039 5.25133 21.7793 3.75 18 3.75C14.2207 3.75 10.5961 5.25133 7.92373 7.92373C5.25133 10.5961 3.75 14.2207 3.75 18Z" fill="#E53E3E" />
+                                                                    </svg>
+
+                                                                </div>
+                                                                <span className="text-xs font-semibold text-red-700">{exercise.status}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Exercise Content */}
+                                                <div className="pr-20">
+                                                    <h4 className="text-lg font-bold text-[#003F8F] font-[Poppins] mb-2">
+                                                        {exercise.label}. {exercise.name}
+                                                    </h4>
+                                                    <div className="text-sm text-[#003F8F] font-medium mb-2">
+                                                        {exercise.sets} x {exercise.reps}
+                                                    </div>
+                                                    <p className="text-sm text-[#003F8F] font-[Inter] mb-2">
+                                                        {exercise.instruction}
+                                                    </p>
+                                                    {exercise.videoLink && (
+                                                        <a href="#" className="inline-flex items-center gap-1.5 bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium hover:bg-blue-200 transition" style={{ color: '#003F8F' }}>
+                                                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                                            </svg>
+                                                            <span>{exercise.videoLink}</span>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ));
+                                    }
+                                })}
+                            </div>
+                        </>
+                    )}
+
+                    {/* Rest Day Screen for Sunday */}
+                    {selectedDay === 'Sun' && (
+                        <div className="space-y-6">
+                            {/* Rest Day Heading - Top Left */}
+                            <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins] text-left">
+                                Rest Day
+                            </h3>
+                            
+                            {/* Bordered Box with Centered Content */}
+                            <div className="bg-white border border-gray-300 rounded-xl p-6">
+                                <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                                    {/* Bed Icon */}
+                                    <div className="flex items-center justify-center">
+                                        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M7.119 40.0795V17.5795C7.119 17.2092 7.04605 16.8424 6.90432 16.5003C6.76259 16.1581 6.55485 15.8472 6.29297 15.5853C6.03108 15.3234 5.72018 15.1157 5.37802 14.974C5.03585 14.8322 4.66912 14.7593 4.29876 14.7593C3.9284 14.7593 3.56166 14.8322 3.2195 14.974C2.87733 15.1157 2.56643 15.3234 2.30455 15.5853C2.04266 15.8472 1.83492 16.1581 1.69319 16.5003C1.55146 16.8424 1.47852 17.2092 1.47852 17.5795V54.4205C1.47852 54.7908 1.55146 55.1576 1.69319 55.4997C1.83492 55.8419 2.04266 56.1528 2.30455 56.4147C2.56643 56.6766 2.87733 56.8843 3.2195 57.026C3.56166 57.1678 3.9284 57.2407 4.29876 57.2407C4.66912 57.2407 5.03585 57.1678 5.37802 57.026C5.72018 56.8843 6.03108 56.6766 6.29297 56.4147C6.55485 56.1528 6.76259 55.8419 6.90432 55.4997C7.04605 55.1576 7.119 54.7908 7.119 54.4205V49.1357L64.8817 49.0017V54.2837C64.8817 54.6539 64.9547 55.0206 65.0964 55.3627C65.238 55.7047 65.4457 56.0156 65.7076 56.2774C65.9694 56.5392 66.2802 56.7469 66.6223 56.8886C66.9643 57.0303 67.331 57.1032 67.7012 57.1032C68.0715 57.1032 68.4381 57.0303 68.7802 56.8886C69.1223 56.7469 69.4331 56.5392 69.6949 56.2774C69.9568 56.0156 70.1645 55.7047 70.3061 55.3627C70.4478 55.0206 70.5208 54.6539 70.5208 54.2837V39.9456L7.119 40.0795Z" fill="#4D6080" fill-opacity="0.3"/>
+<path d="M70.5212 37.6646H27.6523V27.0431C27.6523 25.5635 28.24 24.1444 29.2862 23.098C30.3323 22.0516 31.7512 21.4635 33.2309 21.4631H59.256C62.2437 21.4631 65.1091 22.65 67.2217 24.7626C69.3343 26.8752 70.5212 29.7406 70.5212 32.7283V37.6646Z" fill="#4D6080" fill-opacity="0.3"/>
+<path d="M17.6171 36.4493C21.4193 36.4493 24.5017 33.367 24.5017 29.5647C24.5017 25.7624 21.4193 22.6801 17.6171 22.6801C13.8148 22.6801 10.7324 25.7624 10.7324 29.5647C10.7324 33.367 13.8148 36.4493 17.6171 36.4493Z" fill="#4D6080" fill-opacity="0.3"/>
+</svg>
+
+                                    </div>
+                                    
+                                    {/* Rest & Recovery Text */}
+                                    <div className="flex flex-col items-center space-y-1">
+                                        <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins]">
+                                            Rest & Recovery
+                                        </h4>
+                                        
+                                        {/* Description Text */}
+                                        <p className="text-sm text-[#003F8F] font-regular text-center">
+                                            Active recovery or complete rest day
+                                        </p>
+                                    </div>
                                 </div>
-                            );
-                        })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Notes and Progress Photos Section - Separate from workout cards */}
+            <div className="grid lg:grid-cols-[1fr_1fr] gap-6">
+                {/* Notes Section */}
+                <div className="bg-white rounded-xl p-6 space-y-4">
+                    <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Notes</h3>
+                    <textarea
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="Add notes about client's progress..."
+                        className="w-full h-40 p-4 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] resize-none text-sm font-[Inter] text-gray-700"
+                    />
+                    <div className="flex justify-start">
+                        <button
+                            onClick={handleSaveNote}
+                            className="px-6 py-3 bg-[#003F8F] text-white rounded-xl font-semibold text-base hover:bg-[#002F6F] transition shadow-md"
+                        >
+                            Save Note
+                        </button>
+                    </div>
+                </div>
+
+                {/* Progress Photos Section */}
+                <div className="bg-white rounded-xl p-6 space-y-4">
+                    <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Progress photos</h3>
+                    <div className="grid grid-cols-4 gap-4">
+                        {progressPhotos.map((photo, idx) => (
+                            <div key={idx} className="space-y-2">
+                                <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                    <img
+                                        src={photo.image}
+                                        alt={`Progress ${idx + 1}`}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>';
+                                        }}
+                                    />
+                                </div>
+                                <p className="text-xs text-gray-600 font-[Inter] text-center font-medium">{photo.date}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
 
-            {/* Bottom Section - Notes, Progress Photos, and Completion Rate */}
-            <div className="space-y-6">
-                {/* Top Row - Notes and Progress Photos */}
-                <div className="grid lg:grid-cols-[1fr_1fr] gap-6">
-                    {/* Notes Section */}
-                    <div className="bg-white rounded-xl p-6 space-y-4 shadow-sm">
-                        <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Notes</h3>
-                        <textarea
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            placeholder="Add notes about client's progress..."
-                            className="w-full h-40 p-4 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] resize-none text-sm font-[Inter] text-gray-700"
-                        />
-                        <div className="flex justify-start">
-                            <button
-                                onClick={handleSaveNote}
-                                className="px-6 py-3 bg-[#003F8F] text-white rounded-xl font-semibold text-base hover:bg-[#002F6F] transition shadow-md"
-                            >
-                                Save Note
-                            </button>
-                        </div>
-                    </div>
+            {/* Completion Rate Section */}
+            <div className="bg-white rounded-xl p-6 space-y-4 shadow-sm">
+                <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Completion Rate</h3>
+                <div className="grid grid-cols-3 items-center gap-12">
+                    {/* Left Spacer */}
+                    <div></div>
 
-                    {/* Progress Photos Section */}
-                    <div className="bg-white rounded-xl p-4 sm:p-6 space-y-4 ">
-                        <h3 className="text-xl sm:text-2xl font-bold text-[#003F8F] font-[Poppins]">Progress photos</h3>
-                        <div className="bg-[#4D60801A] rounded-xl p-3 sm:p-6">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-                                {progressPhotos.map((photo, idx) => (
-                                    <div key={idx} className="space-y-2">
-                                        <div className="w-full aspect-square rounded-lg overflow-hidden bg-white ">
-                                            <img
-                                                src={photo.image}
-                                                alt={`Progress ${idx + 1}`}
-                                                className="w-full h-full object-cover"
-                                                onError={(e) => {
-                                                    e.target.style.display = 'none';
-                                                    e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400">No Image</div>';
-                                                }}
+                    {/* Pie Chart with Labels - Centered */}
+                    <div className="relative w-48 h-48 flex-shrink-0 mx-auto">
+                        <svg className="w-48 h-48" viewBox="0 0 200 200">
+                            {(() => {
+                                // Dynamic calculations
+                                const centerX = 100;
+                                const centerY = 100;
+                                const radius = 100;
+                                const startAngle = -Math.PI / 2; // Start from top
+
+                                // Calculate angles for segments
+                                const completedAngle = (completedPercent / 100) * 2 * Math.PI;
+                                const missedAngle = (missedPercent / 100) * 2 * Math.PI;
+
+                                // Calculate end points
+                                const completedEndX = centerX + radius * Math.cos(startAngle + completedAngle);
+                                const completedEndY = centerY + radius * Math.sin(startAngle + completedAngle);
+
+                                // Calculate mid angles for labels
+                                const completedMidAngle = startAngle + completedAngle / 2;
+                                const missedMidAngle = startAngle + completedAngle + missedAngle / 2;
+
+                                return (
+                                    <>
+                                        {/* Pie Chart Segments */}
+                                        {/* Completed (Blue) */}
+                                        <path
+                                            d={`M ${centerX},${centerY} L ${centerX},${centerY - radius} A ${radius},${radius} 0 ${completedPercent > 50 ? 1 : 0},1 ${completedEndX},${completedEndY} Z`}
+                                            fill="#003F8F"
+                                        />
+                                        {/* Missed (Orange) */}
+                                        <path
+                                            d={`M ${centerX},${centerY} L ${completedEndX},${completedEndY} A ${radius},${radius} 0 ${missedPercent > 50 ? 1 : 0},1 ${centerX},${centerY - radius} Z`}
+                                            fill="#FB923C"
+                                        />
+
+                                        {/* Lines and Labels for Completed */}
+                                        <g>
+                                            <line
+                                                x1={centerX + 80 * Math.cos(completedMidAngle)}
+                                                y1={centerY + 80 * Math.sin(completedMidAngle)}
+                                                x2={centerX + 130 * Math.cos(completedMidAngle)}
+                                                y2={centerY + 130 * Math.sin(completedMidAngle)}
+                                                stroke="#003F8F"
+                                                strokeWidth="2"
                                             />
-                                        </div>
-                                        <p className="text-xs sm:text-sm text-gray-600 font-[Inter] text-center font-medium">{photo.date}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Bottom Row - Completion Rate (Full Width) */}
-                <div className="bg-white rounded-xl p-6 space-y-4 shadow-sm">
-                    <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Completion Rate</h3>
-                    <div className="grid grid-cols-3 items-center gap-12">
-                        {/* Left Spacer */}
-                        <div></div>
-                        
-                        {/* Pie Chart with Labels - Centered */}
-                        <div className="relative w-48 h-48 flex-shrink-0 mx-auto">
-                            <svg className="w-48 h-48" viewBox="0 0 200 200">
-                                {(() => {
-                                    // Dynamic calculations
-                                    const centerX = 100;
-                                    const centerY = 100;
-                                    const radius = 100;
-                                    const startAngle = -Math.PI / 2; // Start from top
-                                    
-                                    // Calculate angles for segments
-                                    const completedAngle = (completedPercent / 100) * 2 * Math.PI;
-                                    const missedAngle = (missedPercent / 100) * 2 * Math.PI;
-                                    
-                                    // Calculate end points
-                                    const completedEndX = centerX + radius * Math.cos(startAngle + completedAngle);
-                                    const completedEndY = centerY + radius * Math.sin(startAngle + completedAngle);
-                                    
-                                    // Calculate mid angles for labels
-                                    const completedMidAngle = startAngle + completedAngle / 2;
-                                    const missedMidAngle = startAngle + completedAngle + missedAngle / 2;
-                                    
-                                    return (
-                                        <>
-                                            {/* Pie Chart Segments */}
-                                            {/* Completed (Blue) */}
-                                            <path
-                                                d={`M ${centerX},${centerY} L ${centerX},${centerY - radius} A ${radius},${radius} 0 ${completedPercent > 50 ? 1 : 0},1 ${completedEndX},${completedEndY} Z`}
+                                            <text
+                                                x={centerX + 145 * Math.cos(completedMidAngle)}
+                                                y={centerY + 145 * Math.sin(completedMidAngle)}
                                                 fill="#003F8F"
-                                            />
-                                            {/* Missed (Orange) */}
-                                            <path
-                                                d={`M ${centerX},${centerY} L ${completedEndX},${completedEndY} A ${radius},${radius} 0 ${missedPercent > 50 ? 1 : 0},1 ${centerX},${centerY - radius} Z`}
-                                                fill="#FB923C"
-                                            />
-                                            
-                                            {/* Lines and Labels for Completed */}
-                                            <g>
-                                                <line
-                                                    x1={centerX + 80 * Math.cos(completedMidAngle)}
-                                                    y1={centerY + 80 * Math.sin(completedMidAngle)}
-                                                    x2={centerX + 130 * Math.cos(completedMidAngle)}
-                                                    y2={centerY + 130 * Math.sin(completedMidAngle)}
-                                                    stroke="#003F8F"
-                                                    strokeWidth="2"
-                                                />
-                                                <text
-                                                    x={centerX + 145 * Math.cos(completedMidAngle)}
-                                                    y={centerY + 145 * Math.sin(completedMidAngle)}
-                                                    fill="#003F8F"
-                                                    fontSize="18"
-                                                    fontWeight="bold"
-                                                    textAnchor="middle"
-                                                    dominantBaseline="middle"
-                                                >
-                                                    {completed}
-                                                </text>
-                                            </g>
-                                            
-                                            {/* Lines and Labels for Missed */}
-                                            <g>
-                                                <line
-                                                    x1={centerX + 80 * Math.cos(missedMidAngle)}
-                                                    y1={centerY + 80 * Math.sin(missedMidAngle)}
-                                                    x2={centerX + 130 * Math.cos(missedMidAngle)}
-                                                    y2={centerY + 130 * Math.sin(missedMidAngle)}
-                                                    stroke="#FB923C"
-                                                    strokeWidth="2"
-                                                />
-                                                <text
-                                                    x={centerX + 145 * Math.cos(missedMidAngle)}
-                                                    y={centerY + 145 * Math.sin(missedMidAngle)}
-                                                    fill="#FB923C"
-                                                    fontSize="18"
-                                                    fontWeight="bold"
-                                                    textAnchor="middle"
-                                                    dominantBaseline="middle"
-                                                >
-                                                    {missed}
-                                                </text>
-                                            </g>
-                                        </>
-                                    );
-                                })()}
-                            </svg>
-                        </div>
+                                                fontSize="18"
+                                                fontWeight="bold"
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                            >
+                                                {completed}
+                                            </text>
+                                        </g>
 
-                        {/* Legend */}
-                        <div className="space-y-2 flex-1 max-w-[200px]">
-                            <div>
-                                <span className="text-sm font-semibold text-[#003F8F] font-[Inter]">Completed: {completed}</span>
-                            </div>
-                            <div>
-                                <span className="text-sm font-semibold text-[#FB923C] font-[Inter]">Missed: {missed}</span>
-                            </div>
-                            <div>
-                                <span className="text-sm font-semibold text-[#003F8F] font-[Inter]">Total workouts: {total}</span>
-                            </div>
+                                        {/* Lines and Labels for Missed */}
+                                        <g>
+                                            <line
+                                                x1={centerX + 80 * Math.cos(missedMidAngle)}
+                                                y1={centerY + 80 * Math.sin(missedMidAngle)}
+                                                x2={centerX + 130 * Math.cos(missedMidAngle)}
+                                                y2={centerY + 130 * Math.sin(missedMidAngle)}
+                                                stroke="#FB923C"
+                                                strokeWidth="2"
+                                            />
+                                            <text
+                                                x={centerX + 145 * Math.cos(missedMidAngle)}
+                                                y={centerY + 145 * Math.sin(missedMidAngle)}
+                                                fill="#FB923C"
+                                                fontSize="18"
+                                                fontWeight="bold"
+                                                textAnchor="middle"
+                                                dominantBaseline="middle"
+                                            >
+                                                {missed}
+                                            </text>
+                                        </g>
+                                    </>
+                                );
+                            })()}
+                        </svg>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="space-y-2 flex-1 max-w-[200px]">
+                        <div>
+                            <span className="text-sm font-semibold text-[#003F8F] font-[Inter]">Completed: {completed}</span>
+                        </div>
+                        <div>
+                            <span className="text-sm font-semibold text-[#FB923C] font-[Inter]">Missed: {missed}</span>
+                        </div>
+                        <div>
+                            <span className="text-sm font-semibold text-[#003F8F] font-[Inter]">Total workouts: {total}</span>
                         </div>
                     </div>
                 </div>

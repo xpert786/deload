@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDay, isRestDay = false }) => {
+  const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState(day);
   const [workoutName, setWorkoutName] = useState('Full Body');
   const [fullBodyVideoLinks, setFullBodyVideoLinks] = useState([
@@ -60,6 +62,7 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
   const [isWorkoutDeleted, setIsWorkoutDeleted] = useState(false);
   const [showSuggestionsFor, setShowSuggestionsFor] = useState(null);
   const [suggestionInputValue, setSuggestionInputValue] = useState({});
+  const [isEditMode, setIsEditMode] = useState(false);
   const menuRef = useRef(null);
   const suggestionRefs = useRef({});
 
@@ -185,6 +188,40 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
     ));
   };
 
+  const handleAddSuperset = (exerciseId) => {
+    const exerciseIndex = exercises.findIndex(ex => ex.id === exerciseId);
+    if (exerciseIndex === -1) return;
+
+    const currentExercise = exercises[exerciseIndex];
+    const baseLetter = currentExercise.label.replace(/[0-9]/g, '') || 'A';
+
+    // Convert current exercise to B1 (or baseLetter1)
+    const updatedExercise = {
+      ...currentExercise,
+      label: `${baseLetter}1`,
+      isSuperset: true
+    };
+
+    // Create B2 (or baseLetter2)
+    const maxId = Math.max(...exercises.map(ex => ex.id), 0);
+    const newExercise2 = {
+      id: maxId + 1,
+      label: `${baseLetter}2`,
+      name: '',
+      sets: 0,
+      reps: 0,
+      notes: '',
+      videoLinks: [],
+      isSuperset: true
+    };
+
+    // Replace current exercise with B1 and add B2 after it
+    const newExercises = [...exercises];
+    newExercises[exerciseIndex] = updatedExercise;
+    newExercises.splice(exerciseIndex + 1, 0, newExercise2);
+    setExercises(newExercises);
+  };
+
   const handleDeleteExercise = (exerciseId) => {
     setExercises(exercises.filter(ex => ex.id !== exerciseId));
     setHoveredExerciseId(null);
@@ -294,7 +331,10 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
                 <span>+</span>
                 Add Workout
               </button>
-              <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2">
+              <button
+                onClick={() => setIsEditMode(!isEditMode)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2"
+              >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M11.3333 2L14 4.66667M11.3333 2L8.66667 4.66667M11.3333 2V5.33333M14 4.66667H11.3333M14 4.66667V14C14 14.3682 13.7015 14.6667 13.3333 14.6667H2.66667C2.29848 14.6667 2 14.3682 2 14V2.66667C2 2.29848 2.29848 2 2.66667 2H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -304,20 +344,21 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
           </div>
 
           {/* Day Tabs - Full Width */}
-          <div className="flex items-end w-full mb-6 gap-2">
+          <div className="flex items-end w-full mb-6 border border-gray-200 rounded-lg overflow-hidden">
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, index) => (
               <button
                 key={d}
                 onClick={() => setSelectedDay(d)}
-                className={`flex-1 py-3 font-semibold text-sm transition relative ${d === selectedDay
-                  ? 'bg-[#003F8F] text-white rounded-lg z-10'
-                  : 'bg-white text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50'
+                className={`flex-1 py-3 font-semibold text-sm transition relative ${index > 0 ? 'border-l border-gray-200' : ''
+                  } ${d === selectedDay
+                    ? 'bg-[#003F8F] text-white z-10'
+                    : 'bg-white text-[#003F8F] hover:bg-gray-50'
                   }`}
               >
                 {d}
               </button>
             ))}
-            {onToggleRestDay && (
+            {false && onToggleRestDay && !exerciseId && !isEditMode && (
               <div className="flex items-center gap-2 ml-2">
                 <span className="text-sm text-gray-600 font-[Inter] whitespace-nowrap">Toggle Rest Day</span>
                 <button
@@ -352,31 +393,97 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
             </div>
           )}
 
+          {/* Video Links Section for Full Body Workout */}
+          {selectedDay !== 'Sun' && !isWorkoutDeleted && exercises.length > 0 && workoutName && (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
+                <h6 className="text-sm font-semibold text-[#9CA3AF]">Video Links</h6>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12.5 8.33333L16.2942 6.43667C16.4212 6.3732 16.5623 6.34323 16.7042 6.34962C16.846 6.35601 16.9839 6.39854 17.1047 6.47317C17.2255 6.5478 17.3252 6.65206 17.3944 6.77606C17.4636 6.90006 17.4999 7.03967 17.5 7.18167V12.8183C17.4999 12.9603 17.4636 13.0999 17.3944 13.2239C17.3252 13.3479 17.2255 13.4522 17.1047 13.5268C16.9839 13.6015 16.846 13.644 16.7042 13.6504C16.5623 13.6568 16.4212 13.6268 16.2942 13.5633L12.5 11.6667V8.33333ZM2.5 6.66667C2.5 6.22464 2.67559 5.80072 2.98816 5.48816C3.30072 5.17559 3.72464 5 4.16667 5H10.8333C11.2754 5 11.6993 5.17559 12.0118 5.48816C12.3244 5.80072 12.5 6.22464 12.5 6.66667V13.3333C12.5 13.7754 12.3244 14.1993 12.0118 14.5118C11.6993 14.8244 11.2754 15 10.8333 15H4.16667C3.72464 15 3.30072 14.8244 2.98816 14.5118C2.67559 14.1993 2.5 13.7754 2.5 13.3333V6.66667Z" stroke="#4D6080" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+
+              </div>
+              <div className="space-y-2">
+                {fullBodyVideoLinks.map((link, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="flex-1 text-sm text-[#003F8F]">{link}</span>
+                    <button
+                      onClick={() => handleRemoveFullBodyVideoLink(idx)}
+                      className="w-5 h-5 bg-[#003F8F] rounded-full flex items-center justify-center hover:bg-[#002F6F] transition"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M2.5 2.5L7.5 7.5M7.5 2.5L2.5 7.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                {!showFullBodyVideoInput ? (
+                  <button
+                    onClick={handleShowFullBodyVideoInput}
+                    className="w-full flex items-center justify-between bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-xs text-[#003F8F] font-semibold hover:bg-gray-200 transition shadow-sm"
+                  >
+                    <div className="flex items-center gap-2">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M7 2.5V11.5M2.5 7H11.5" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      <span>Add Video link</span>
+                    </div>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newFullBodyVideoLink}
+                      onChange={(e) => setNewFullBodyVideoLink(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddFullBodyVideoLink();
+                        }
+                      }}
+                      placeholder="https://"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] bg-white"
+                      autoFocus
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleAddFullBodyVideoLink}
+                        className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition"
+                      >
+                        Add
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowFullBodyVideoInput(false);
+                          setNewFullBodyVideoLink('');
+                        }}
+                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Empty State - Separate White Card with Border (like Rest Day) */}
           {(isWorkoutDeleted || exercises.length === 0) && selectedDay !== 'Sun' ? (
             <div className="bg-white rounded-lg p-12 flex flex-col items-center justify-center min-h-[400px] !border border-[#4D60804D] mt-0">
               <div className="text-center">
                 <button
                   onClick={() => {
-                    setIsWorkoutDeleted(false);
-                    setExercises([
-                      {
-                        id: 1,
-                        label: 'A',
-                        name: 'Exercise Title',
-                        sets: 0,
-                        reps: 0,
-                        notes: 'Sets, Reps, Rest, Notes',
-                        videoLinks: [],
-                        isSuperset: false
-                      }
-                    ]);
-                    setWorkoutName('Full Body');
-                    setFullBodyVideoLinks([]);
+                    navigate('/coach/ai-program/add-workout');
                   }}
                   className="mb-6 flex justify-center cursor-pointer hover:opacity-80 transition"
                 >
-                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center ml-10">
                     <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <rect width="72" height="72" rx="36" fill="#4D6080" fillOpacity="0.3" />
                       <g clipPath="url(#clip0_1025_156839)">
@@ -422,24 +529,47 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
                 <div>
                   {exercises.map((exercise, index) => {
                     const prevExercise = index > 0 ? exercises[index - 1] : null;
-                    // Show "- Superset" if current exercise is in a superset
-                    const showSupersetDivider = exercise.isSuperset;
-                    // Show "+ Superset" if current exercise is not in superset (to allow adding new superset)
-                    const showAddSuperset = index > 0 && !exercise.isSuperset;
+                    // Show "- Superset" before each exercise that is in a superset
+                    const isInSuperset = exercise.isSuperset;
+                    const prevIsInSameSuperset = prevExercise && prevExercise.isSuperset &&
+                      prevExercise.label.replace(/[0-9]/g, '') === exercise.label.replace(/[0-9]/g, '');
+                    // Show "- Superset" before every exercise in superset (including A2 after A1)
+                    const showSupersetDivider = isInSuperset;
+                    // Show "+ Superset" before exercises that are not in superset, but not before the last exercise
+                    const showAddSuperset = !exercise.isSuperset && index > 0 && index < exercises.length - 1;
+                    // Show "+ Exercise" after the last exercise only (C ke neeche)
                     const showAddExercise = index === exercises.length - 1;
-                    // No spacing between A1 and A2 to keep blue border continuous
-                    const isA2AfterA1 = exercise.label === 'A2' && prevExercise?.label === 'A1';
-                    const hasBlueBorder = exercise.label === 'A1' || exercise.label === 'A2';
+                    // Check if previous exercise is in the same superset group
+                    const isInSameSupersetGroup = prevExercise &&
+                      exercise.isSuperset &&
+                      prevExercise.isSuperset &&
+                      prevExercise.label.replace(/[0-9]/g, '') === exercise.label.replace(/[0-9]/g, '');
+                    const hasBlueBorder = exercise.isSuperset;
 
                     return (
                       <div key={exercise.id}>
-                        {/* Superset Divider with Centered Button */}
+                        {/* Superset Divider with Centered Button - Above each exercise in superset */}
                         {showSupersetDivider && (
-                          <div className={`relative flex items-center ${isA2AfterA1 ? 'mb-0' : 'my-4'}`}>
+                          <div
+                            className={`relative flex items-center ${isInSameSupersetGroup ? 'mb-0 mt-0' : 'my-4'}`}
+                            style={isInSameSupersetGroup ? { marginTop: '0', marginBottom: '0' } : {}}
+                          >
                             <div className="flex-1 border-t border-gray-300"></div>
                             <button
                               onClick={() => toggleSuperset(exercise.id)}
-                              className="px-3 py-1 bg-[#003F8F] text-white rounded-lg text-xs font-semibold transition mx-2"
+                              className="bg-[#003F8F] text-white text-xs font-semibold transition mx-2 hover:bg-[#002F6F]"
+                              style={{
+                                borderRadius: '9999px',
+                                padding: '0.5rem 1.25rem',
+                                height: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                whiteSpace: 'nowrap',
+                                lineHeight: '1.5',
+                                border: 'none',
+                                outline: 'none'
+                              }}
                             >
                               - Superset
                             </button>
@@ -452,8 +582,20 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
                           <div className="relative flex items-center my-4">
                             <div className="flex-1 border-t border-gray-300"></div>
                             <button
-                              onClick={() => toggleSuperset(exercise.id)}
-                              className="px-3 py-1 bg-blue-100 text-[#003F8F] rounded-lg text-xs font-semibold transition mx-2 hover:bg-blue-200"
+                              onClick={() => handleAddSuperset(exercise.id)}
+                              className="bg-blue-100 text-[#003F8F] text-xs font-semibold transition mx-2 hover:bg-blue-200"
+                              style={{
+                                borderRadius: '9999px',
+                                padding: '0.5rem 1.25rem',
+                                height: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                whiteSpace: 'nowrap',
+                                lineHeight: '1.5',
+                                border: 'none',
+                                outline: 'none'
+                              }}
                             >
                               + Superset
                             </button>
@@ -461,273 +603,311 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
                           </div>
                         )}
 
-                        {/* Add Exercise Divider */}
+                        {/* Exercise Card - Blue left border for all exercises in superset */}
+                        {(() => {
+                          // Check if previous exercise is in the same superset group
+                          const isInSameSupersetGroup = prevExercise &&
+                            exercise.isSuperset &&
+                            prevExercise.isSuperset &&
+                            prevExercise.label.replace(/[0-9]/g, '') === exercise.label.replace(/[0-9]/g, '');
+                          const shouldRemoveTopPadding = isInSameSupersetGroup;
+
+                          return (
+                            <div
+                              className={`bg-white relative ${shouldRemoveTopPadding ? 'pt-0 pb-4 px-4' : 'p-4'} ${index > 0 && !shouldRemoveTopPadding ? 'mt-6' : ''} ${hasBlueBorder ? 'border-l-4 border-l-[#003F8F]' : ''}`}
+                              style={shouldRemoveTopPadding ? {
+                                marginTop: '2px',
+                                paddingTop: '0',
+                                marginBottom: '0',
+                                paddingBottom: '1rem',
+                                zIndex: 1
+                              } : {}}
+                              onMouseEnter={() => setHoveredExerciseId(exercise.id)}
+                              onMouseLeave={() => setHoveredExerciseId(null)}
+                            >
+                              <div className="flex items-start justify-between mb-3 relative">
+                                <div className="flex-1 relative">
+                                  <input
+                                    type="text"
+                                    value={`${exercise.label}. ${exercise.name}`}
+                                    onChange={(e) => {
+                                      handleExerciseNameChange(exercise.id, e.target.value);
+                                    }}
+                                    onFocus={() => {
+                                      // Show suggestions if there are filtered results
+                                      if (getFilteredSuggestions(exercise.id).length > 0) {
+                                        setShowSuggestionsFor(exercise.id);
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      // Delay hiding suggestions to allow click on suggestion
+                                      setTimeout(() => {
+                                        if (!e.relatedTarget || !e.relatedTarget.closest('.suggestions-dropdown')) {
+                                          setShowSuggestionsFor(null);
+                                        }
+                                      }, 200);
+                                    }}
+                                    className="text-lg font-bold text-[#003F8F] font-[Poppins] bg-transparent border-none focus:outline-none focus:ring-0 flex-1 w-full"
+                                    ref={(el) => {
+                                      if (el) {
+                                        suggestionRefs.current[exercise.id] = el;
+                                      }
+                                    }}
+                                  />
+                                  {/* Suggestions Dropdown */}
+                                  {showSuggestionsFor === exercise.id && getFilteredSuggestions(exercise.id).length > 0 && (
+                                    <div className="suggestions-dropdown absolute top-full left-0 mt-1 bg-white rounded-b-lg shadow-lg border border-gray-200 z-50 max-h-64 overflow-y-auto min-w-[250px]">
+                                      <div className="py-1">
+                                        <div className="px-4 py-2 text-xs font-bold text-[#003F8F] border-b border-gray-200">
+                                          {exercise.label}
+                                        </div>
+                                        {getFilteredSuggestions(exercise.id).map((suggestion, idx) => (
+                                          <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => handleSelectSuggestion(exercise.id, suggestion)}
+                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition border-b border-gray-100 last:border-b-0"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                          >
+                                            {suggestion}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right Side Dark Blue Pill with Icons - Appears on Hover */}
+                              {hoveredExerciseId === exercise.id && (
+                                <div className="absolute top-4 right-4 bg-[#003F8F] rounded-full px-3 py-2 flex flex-col items-center gap-3 z-10">
+                                  {/* Grid Icon - For Reordering (Move Up/Down) */}
+                                  <div
+                                    className="relative"
+                                    ref={menuRef}
+                                  >
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (showReorderMenuFor === exercise.id) {
+                                          setShowReorderMenuFor(null);
+                                        } else {
+                                          setShowReorderMenuFor(exercise.id);
+                                        }
+                                      }}
+                                      className="text-white hover:text-gray-200 transition"
+                                      title="Reorder Exercise"
+                                    >
+                                      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <circle cx="4.5" cy="4.5" r="1.5" fill="white" />
+                                        <circle cx="9" cy="4.5" r="1.5" fill="white" />
+                                        <circle cx="13.5" cy="4.5" r="1.5" fill="white" />
+                                        <circle cx="4.5" cy="9" r="1.5" fill="white" />
+                                        <circle cx="9" cy="9" r="1.5" fill="white" />
+                                        <circle cx="13.5" cy="9" r="1.5" fill="white" />
+                                        <circle cx="4.5" cy="13.5" r="1.5" fill="white" />
+                                        <circle cx="9" cy="13.5" r="1.5" fill="white" />
+                                        <circle cx="13.5" cy="13.5" r="1.5" fill="white" />
+                                      </svg>
+                                    </button>
+                                    {/* Dropdown menu for move up/down */}
+                                    {showReorderMenuFor === exercise.id && (
+                                      <div
+                                        className="absolute right-4 top-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 min-w-[120px]"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const currentIndex = exercises.findIndex(ex => ex.id === exercise.id);
+                                            if (currentIndex > 0) {
+                                              handleMoveExercise(exercise.id, 'up');
+                                              setShowReorderMenuFor(null);
+                                            }
+                                          }}
+                                          disabled={exercises.findIndex(ex => ex.id === exercise.id) === 0}
+                                          className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${exercises.findIndex(ex => ex.id === exercise.id) === 0
+                                            ? 'text-gray-400 cursor-not-allowed'
+                                            : 'text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M8 12V4M4 8L8 4L12 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                          </svg>
+                                          Move Up
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const currentIndex = exercises.findIndex(ex => ex.id === exercise.id);
+                                            if (currentIndex < exercises.length - 1) {
+                                              handleMoveExercise(exercise.id, 'down');
+                                              setShowReorderMenuFor(null);
+                                            }
+                                          }}
+                                          disabled={exercises.findIndex(ex => ex.id === exercise.id) === exercises.length - 1}
+                                          className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${exercises.findIndex(ex => ex.id === exercise.id) === exercises.length - 1
+                                            ? 'text-gray-400 cursor-not-allowed'
+                                            : 'text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M8 4V12M4 8L8 12L12 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                          </svg>
+                                          Move Down
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* Trash Icon - For Deleting */}
+                                  <button
+                                    onClick={() => handleDeleteExercise(exercise.id)}
+                                    className="text-white hover:text-gray-200 transition"
+                                    title="Delete Exercise"
+                                  >
+                                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                      <path d="M3 4.5H15M14.25 4.5V15C14.25 15.3978 14.092 15.7794 13.8107 16.0607C13.5294 16.342 13.1478 16.5 12.75 16.5H5.25C4.85218 16.5 4.47064 16.342 4.18934 16.0607C3.90804 15.7794 3.75 15.3978 3.75 15V4.5M6 4.5V3C6 2.60218 6.15804 2.22064 6.43934 1.93934C6.72064 1.65804 7.10218 1.5 7.5 1.5H10.5C10.8978 1.5 11.2794 1.65804 11.5607 1.93934C11.842 2.22064 12 2.60218 12 3V4.5M7.5 8.25V12.75M10.5 8.25V12.75" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+
+                              <div className="mb-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={exercise.sets || ''}
+                                    onChange={(e) => handleUpdateExercise(exercise.id, 'sets', parseInt(e.target.value) || 0)}
+                                    placeholder="Sets"
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                  />
+                                  <span className="text-gray-700">x</span>
+                                  <input
+                                    type="number"
+                                    value={exercise.reps || ''}
+                                    onChange={(e) => handleUpdateExercise(exercise.id, 'reps', parseInt(e.target.value) || 0)}
+                                    placeholder="Reps"
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                  />
+                                </div>
+                                <input
+                                  type="text"
+                                  value={exercise.notes}
+                                  onChange={(e) => handleUpdateExercise(exercise.id, 'notes', e.target.value)}
+                                  placeholder="Sets, Reps, Rest, Notes"
+                                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                />
+                              </div>
+
+                              {/* Video Links */}
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+
+                                    <h6 className="text-sm font-semibold text-[#4D6080CC]">Video Links</h6>
+                                  </div>
+                                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12.5 8.33333L16.2942 6.43667C16.4212 6.3732 16.5623 6.34323 16.7042 6.34962C16.846 6.35601 16.9839 6.39854 17.1047 6.47317C17.2255 6.5478 17.3252 6.65206 17.3944 6.77606C17.4636 6.90006 17.4999 7.03967 17.5 7.18167V12.8183C17.4999 12.9603 17.4636 13.0999 17.3944 13.2239C17.3252 13.3479 17.2255 13.4522 17.1047 13.5268C16.9839 13.6015 16.846 13.644 16.7042 13.6504C16.5623 13.6568 16.4212 13.6268 16.2942 13.5633L12.5 11.6667V8.33333ZM2.5 6.66667C2.5 6.22464 2.67559 5.80072 2.98816 5.48816C3.30072 5.17559 3.72464 5 4.16667 5H10.8333C11.2754 5 11.6993 5.17559 12.0118 5.48816C12.3244 5.80072 12.5 6.22464 12.5 6.66667V13.3333C12.5 13.7754 12.3244 14.1993 12.0118 14.5118C11.6993 14.8244 11.2754 15 10.8333 15H4.16667C3.72464 15 3.30072 14.8244 2.98816 14.5118C2.67559 14.1993 2.5 13.7754 2.5 13.3333V6.66667Z" stroke="#4D6080" stroke-opacity="0.8" stroke-linecap="round" stroke-linejoin="round" />
+                                  </svg>
+
+                                </div>
+                                <div className="space-y-2">
+                                  {exercise.videoLinks.map((link, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                      <span className="flex-1 text-sm text-[#003F8F]">{link}</span>
+                                      <button
+                                        onClick={() => handleRemoveVideoLink(exercise.id, idx)}
+                                        className="w-5 h-5 bg-[#003F8F] rounded-full flex items-center justify-center hover:bg-[#002F6F] transition"
+                                      >
+                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                          <path d="M2.5 2.5L7.5 7.5M7.5 2.5L2.5 7.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ))}
+                                  {!showExerciseVideoInputs[exercise.id] ? (
+                                    <button
+                                      onClick={() => handleShowExerciseVideoInput(exercise.id)}
+                                      className="w-full flex items-center justify-between bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-xs text-[#003F8F] font-semibold hover:bg-gray-200 transition shadow-sm"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                          <path d="M7 2.5V11.5M2.5 7H11.5" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
+                                        <span>Add Video link</span>
+                                      </div>
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    </button>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <input
+                                        type="text"
+                                        value={newVideoLinks[exercise.id] || ''}
+                                        onChange={(e) => setNewVideoLinks({ ...newVideoLinks, [exercise.id]: e.target.value })}
+                                        onKeyPress={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleAddVideoLink(exercise.id);
+                                          }
+                                        }}
+                                        placeholder="https://"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] bg-white"
+                                        autoFocus
+                                      />
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => handleAddVideoLink(exercise.id)}
+                                          className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition"
+                                        >
+                                          Add
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setShowExerciseVideoInputs({ ...showExerciseVideoInputs, [exercise.id]: false });
+                                            setNewVideoLinks({ ...newVideoLinks, [exercise.id]: '' });
+                                          }}
+                                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Add Exercise Divider - After exercise card */}
                         {showAddExercise && (
                           <div className="relative flex items-center my-4">
                             <div className="flex-1 border-t border-gray-300"></div>
                             <button
                               onClick={handleAddExercise}
-                              className="px-3 py-1 bg-blue-100 text-[#003F8F] rounded-lg text-xs font-semibold transition mx-2 hover:bg-blue-200"
+                              className="bg-blue-100 text-[#003F8F] text-xs font-semibold transition mx-2 hover:bg-blue-200"
+                              style={{
+                                borderRadius: '9999px',
+                                padding: '0.5rem 1.25rem',
+                                height: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                whiteSpace: 'nowrap',
+                                lineHeight: '1.5',
+                                border: 'none',
+                                outline: 'none'
+                              }}
                             >
                               + Exercise
                             </button>
                             <div className="flex-1 border-t border-gray-300"></div>
                           </div>
                         )}
-
-                        {/* Exercise Card - No border, only blue left border for A1/A2 */}
-                        <div
-                          className={`bg-white relative ${isA2AfterA1 ? 'pt-0 pb-4 px-4' : 'p-4'} ${index > 0 && !isA2AfterA1 ? 'mt-6' : ''} ${hasBlueBorder ? 'border-l-4 border-l-[#003F8F]' : ''}`}
-                          style={isA2AfterA1 ? { marginTop: '0', paddingTop: '0' } : {}}
-                          onMouseEnter={() => setHoveredExerciseId(exercise.id)}
-                          onMouseLeave={() => setHoveredExerciseId(null)}
-                        >
-                          <div className="flex items-start justify-between mb-3 relative">
-                            <div className="flex-1 relative">
-                              <input
-                                type="text"
-                                value={`${exercise.label}. ${exercise.name}`}
-                                onChange={(e) => {
-                                  handleExerciseNameChange(exercise.id, e.target.value);
-                                }}
-                                onFocus={() => {
-                                  // Show suggestions if there are filtered results
-                                  if (getFilteredSuggestions(exercise.id).length > 0) {
-                                    setShowSuggestionsFor(exercise.id);
-                                  }
-                                }}
-                                onBlur={(e) => {
-                                  // Delay hiding suggestions to allow click on suggestion
-                                  setTimeout(() => {
-                                    if (!e.relatedTarget || !e.relatedTarget.closest('.suggestions-dropdown')) {
-                                      setShowSuggestionsFor(null);
-                                    }
-                                  }, 200);
-                                }}
-                                className="text-lg font-bold text-[#003F8F] font-[Poppins] bg-transparent border-none focus:outline-none focus:ring-0 flex-1 w-full"
-                                ref={(el) => {
-                                  if (el) {
-                                    suggestionRefs.current[exercise.id] = el;
-                                  }
-                                }}
-                              />
-                              {/* Suggestions Dropdown */}
-                              {showSuggestionsFor === exercise.id && getFilteredSuggestions(exercise.id).length > 0 && (
-                                <div className="suggestions-dropdown absolute top-full left-0 mt-1 bg-white rounded-b-lg shadow-lg border border-gray-200 z-50 max-h-64 overflow-y-auto min-w-[250px]">
-                                  <div className="py-1">
-                                    <div className="px-4 py-2 text-xs font-bold text-[#003F8F] border-b border-gray-200">
-                                      {exercise.label}
-                                    </div>
-                                    {getFilteredSuggestions(exercise.id).map((suggestion, idx) => (
-                                      <button
-                                        key={idx}
-                                        type="button"
-                                        onClick={() => handleSelectSuggestion(exercise.id, suggestion)}
-                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition border-b border-gray-100 last:border-b-0"
-                                        onMouseDown={(e) => e.preventDefault()}
-                                      >
-                                        {suggestion}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right Side Dark Blue Pill with Icons - Appears on Hover */}
-                          {hoveredExerciseId === exercise.id && (
-                            <div className="absolute top-4 right-4 bg-[#003F8F] rounded-full px-3 py-2 flex flex-col items-center gap-3 z-10">
-                              {/* Grid Icon - For Reordering (Move Up/Down) */}
-                              <div
-                                className="relative"
-                                ref={menuRef}
-                              >
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (showReorderMenuFor === exercise.id) {
-                                      setShowReorderMenuFor(null);
-                                    } else {
-                                      setShowReorderMenuFor(exercise.id);
-                                    }
-                                  }}
-                                  className="text-white hover:text-gray-200 transition"
-                                  title="Reorder Exercise"
-                                >
-                                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <circle cx="4.5" cy="4.5" r="1.5" fill="white" />
-                                    <circle cx="9" cy="4.5" r="1.5" fill="white" />
-                                    <circle cx="13.5" cy="4.5" r="1.5" fill="white" />
-                                    <circle cx="4.5" cy="9" r="1.5" fill="white" />
-                                    <circle cx="9" cy="9" r="1.5" fill="white" />
-                                    <circle cx="13.5" cy="9" r="1.5" fill="white" />
-                                    <circle cx="4.5" cy="13.5" r="1.5" fill="white" />
-                                    <circle cx="9" cy="13.5" r="1.5" fill="white" />
-                                    <circle cx="13.5" cy="13.5" r="1.5" fill="white" />
-                                  </svg>
-                                </button>
-                                {/* Dropdown menu for move up/down */}
-                                {showReorderMenuFor === exercise.id && (
-                                  <div
-                                    className="absolute right-4 top-0 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 min-w-[120px]"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const currentIndex = exercises.findIndex(ex => ex.id === exercise.id);
-                                        if (currentIndex > 0) {
-                                          handleMoveExercise(exercise.id, 'up');
-                                          setShowReorderMenuFor(null);
-                                        }
-                                      }}
-                                      disabled={exercises.findIndex(ex => ex.id === exercise.id) === 0}
-                                      className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${exercises.findIndex(ex => ex.id === exercise.id) === 0
-                                        ? 'text-gray-400 cursor-not-allowed'
-                                        : 'text-gray-700 hover:bg-gray-100'
-                                        }`}
-                                    >
-                                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M8 12V4M4 8L8 4L12 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                      Move Up
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        const currentIndex = exercises.findIndex(ex => ex.id === exercise.id);
-                                        if (currentIndex < exercises.length - 1) {
-                                          handleMoveExercise(exercise.id, 'down');
-                                          setShowReorderMenuFor(null);
-                                        }
-                                      }}
-                                      disabled={exercises.findIndex(ex => ex.id === exercise.id) === exercises.length - 1}
-                                      className={`w-full px-4 py-2 text-left text-sm flex items-center gap-2 ${exercises.findIndex(ex => ex.id === exercise.id) === exercises.length - 1
-                                        ? 'text-gray-400 cursor-not-allowed'
-                                        : 'text-gray-700 hover:bg-gray-100'
-                                        }`}
-                                    >
-                                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <path d="M8 4V12M4 8L8 12L12 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                      </svg>
-                                      Move Down
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                              {/* Trash Icon - For Deleting */}
-                              <button
-                                onClick={() => handleDeleteExercise(exercise.id)}
-                                className="text-white hover:text-gray-200 transition"
-                                title="Delete Exercise"
-                              >
-                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M3 4.5H15M14.25 4.5V15C14.25 15.3978 14.092 15.7794 13.8107 16.0607C13.5294 16.342 13.1478 16.5 12.75 16.5H5.25C4.85218 16.5 4.47064 16.342 4.18934 16.0607C3.90804 15.7794 3.75 15.3978 3.75 15V4.5M6 4.5V3C6 2.60218 6.15804 2.22064 6.43934 1.93934C6.72064 1.65804 7.10218 1.5 7.5 1.5H10.5C10.8978 1.5 11.2794 1.65804 11.5607 1.93934C11.842 2.22064 12 2.60218 12 3V4.5M7.5 8.25V12.75M10.5 8.25V12.75" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                              </button>
-                            </div>
-                          )}
-
-                          <div className="mb-3 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={exercise.sets || ''}
-                                onChange={(e) => handleUpdateExercise(exercise.id, 'sets', parseInt(e.target.value) || 0)}
-                                placeholder="Sets"
-                                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
-                              />
-                              <span className="text-gray-700">x</span>
-                              <input
-                                type="number"
-                                value={exercise.reps || ''}
-                                onChange={(e) => handleUpdateExercise(exercise.id, 'reps', parseInt(e.target.value) || 0)}
-                                placeholder="Reps"
-                                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              value={exercise.notes}
-                              onChange={(e) => handleUpdateExercise(exercise.id, 'notes', e.target.value)}
-                              placeholder="Sets, Reps, Rest, Notes"
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
-                            />
-                          </div>
-
-                          {/* Video Links */}
-                          <div className="mb-3">
-                            <h6 className="text-xs font-semibold text-[#003F8F] mb-2">Video Links</h6>
-                            <div className="space-y-2">
-                              {exercise.videoLinks.map((link, idx) => (
-                                <div key={idx} className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
-                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                  <span className="flex-1 text-sm text-[#003F8F]">{link}</span>
-                                  <button
-                                    onClick={() => handleRemoveVideoLink(exercise.id, idx)}
-                                    className="w-5 h-5 bg-[#003F8F] rounded-full flex items-center justify-center hover:bg-[#002F6F] transition"
-                                  >
-                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                      <path d="M2.5 2.5L7.5 7.5M7.5 2.5L2.5 7.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              ))}
-                              {!showExerciseVideoInputs[exercise.id] ? (
-                                <button
-                                  onClick={() => handleShowExerciseVideoInput(exercise.id)}
-                                  className="w-full flex items-center justify-between bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-xs text-[#003F8F] font-semibold hover:bg-gray-200 transition shadow-sm"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                      <path d="M7 2.5V11.5M2.5 7H11.5" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" />
-                                    </svg>
-                                    <span>Add Video link</span>
-                                  </div>
-                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                </button>
-                              ) : (
-                                <div className="space-y-2">
-                                  <input
-                                    type="text"
-                                    value={newVideoLinks[exercise.id] || ''}
-                                    onChange={(e) => setNewVideoLinks({ ...newVideoLinks, [exercise.id]: e.target.value })}
-                                    onKeyPress={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleAddVideoLink(exercise.id);
-                                      }
-                                    }}
-                                    placeholder="https://"
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] bg-white"
-                                    autoFocus
-                                  />
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      onClick={() => handleAddVideoLink(exercise.id)}
-                                      className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition"
-                                    >
-                                      Add
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setShowExerciseVideoInputs({ ...showExerciseVideoInputs, [exercise.id]: false });
-                                        setNewVideoLinks({ ...newVideoLinks, [exercise.id]: '' });
-                                      }}
-                                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     );
                   })}

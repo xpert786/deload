@@ -155,7 +155,7 @@ const WorkoutPlan = ({ onBack }) => {
             <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">John's Weekly Workout Plan</h3>
             <div className="flex items-center gap-2">
               <button
-                onClick={handleAddWorkout}
+                onClick={() => navigate('/coach/ai-program/add-workout')}
                 className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition flex items-center gap-2"
               >
                 <span>+</span>
@@ -173,16 +173,18 @@ const WorkoutPlan = ({ onBack }) => {
             </div>
           </div>
 
-          {/* Day Tabs - Full Width, Connected to White Box */}
-          <div className="flex items-end w-full mb-0">
+          {/* Day Tabs - Full Width */}
+          <div className="flex items-end w-full mb-6 border border-gray-200 rounded-lg overflow-hidden">
             {days.map((day, index) => (
               <button
                 key={day}
                 onClick={() => setSelectedDay(day)}
-                className={`flex-1 py-3 font-semibold text-sm transition relative ${selectedDay === day
-                    ? 'bg-[#003F8F] text-white rounded-t-lg z-10'
-                    : 'bg-white text-gray-700 border-t border-l border-gray-200 border-b-0 rounded-t-lg hover:bg-gray-50'
-                  } ${index === 0 ? 'rounded-tl-lg' : ''} ${index === days.length - 1 ? 'rounded-tr-lg border-r border-gray-200' : 'border-r border-gray-200'}`}
+                className={`flex-1 py-3 font-semibold text-sm transition relative ${
+                  index > 0 ? 'border-l border-gray-200' : ''
+                } ${selectedDay === day
+                    ? 'bg-[#003F8F] text-white z-10'
+                    : 'bg-white text-[#003F8F] hover:bg-gray-50'
+                  }`}
               >
                 {day}
               </button>
@@ -214,16 +216,16 @@ const WorkoutPlan = ({ onBack }) => {
               </div>
             </>
           ) : currentWorkouts.length === 0 && !isRestDay ? (
-            <div className="bg-white rounded-b-lg rounded-tl-none rounded-tr-none p-12 flex flex-col items-center justify-center min-h-[400px] border border-gray-200 border-t-0 border-l-4 border-l-[#FB923C]">
+            <div className="bg-white rounded-b-lg rounded-tl-none rounded-tr-none p-12 flex flex-col items-center justify-center min-h-[400px] border border-gray-200 border-t-0">
               <button
-                onClick={handleAddWorkout}
-                className="w-24 h-24 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center hover:bg-gray-200 transition"
+                onClick={() => navigate('/coach/ai-program/add-workout')}
+                className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
               >
                 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16 8V24M8 16H24" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M16 8V24M8 16H24" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </button>
-              <p className="mt-4 text-gray-600 font-[Inter]">Click to add workout</p>
+              <p className="mt-4 text-gray-500 font-[Inter]">Add Workout</p>
             </div>
           ) : (
             <>
@@ -236,7 +238,7 @@ const WorkoutPlan = ({ onBack }) => {
 
               {/* Exercises Box - Single Main White Box with Border */}
               <div className="bg-white rounded-lg p-6 !border border-[#4D60804D]">
-                {/* Exercises - All in One Main Box, A1 and A2 with Orange Left Border */}
+                {/* Exercises - All in One Main Box, A1 and A2 with Blue Left Border */}
                 <div>
                   {currentWorkouts.map((exercise, index) => {
                     const isA1OrA2 = exercise.label === 'A1' || exercise.label === 'A2';
@@ -247,7 +249,7 @@ const WorkoutPlan = ({ onBack }) => {
                     return (
                       <div
                         key={exercise.id}
-                        className={`bg-white py-4 ${isA1OrA2 ? 'border-l-4 border-l-[#FB923C] pl-4' : 'pl-4'} ${shouldAddSpacing && index > 0 ? 'mt-6' : ''}`}
+                        className={`bg-white py-4 ${isA1OrA2 ? 'border-l-4 border-l-[#003F8F] pl-4' : 'pl-4'} ${shouldAddSpacing && index > 0 ? 'mt-6' : ''}`}
                       >
                         <h5 className="text-lg font-bold text-[#003F8F] font-[Poppins] mb-2">
                           <span className="text-[#003F8F]">{exercise.label}.</span> <span className="text-[#003F8F]">{exercise.name}</span>

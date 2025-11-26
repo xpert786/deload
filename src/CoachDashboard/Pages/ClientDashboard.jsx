@@ -170,23 +170,22 @@ const ClientDashboard = () => {
             </div>
           </div>
         </div>
+      </div>
 
-
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap items-center gap-2 border border-gray-200 rounded-lg w-fit p-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 font-semibold text-sm transition ${activeTab === tab
-                ? 'text-[#FFFFFF] bg-[#003F8F] border border-[#003F8F] rounded-lg'
-                : 'text-[#003F8F] hover:text-[#003F8F]'
-                }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+      {/* Navigation Tabs - Separate from profile header */}
+      <div className="flex flex-wrap items-center gap-2 border border-gray-200 rounded-lg w-fit p-1 bg-white">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 font-semibold text-sm transition ${activeTab === tab
+              ? 'text-[#FFFFFF] bg-[#003F8F] border border-[#003F8F] rounded-lg'
+              : 'text-[#003F8F] hover:text-[#003F8F]'
+              }`}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
       {/* Render Workout Calendar when tab is active */}

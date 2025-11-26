@@ -12,6 +12,7 @@ import Sessions from './Pages/Sessions';
 import ClientWorkoutPlans from './Pages/ClientWorkoutPlans';
 import ClientDashboard from './Pages/ClientDashboard';
 import AIProgram from './Pages/AI-Progress/AIProgram';
+import AddWorkout from './Pages/AI-Progress/AddWorkout';
 
 export default function CoachRoutes() {
   return (
@@ -35,6 +36,7 @@ export default function CoachRoutes() {
         <Route path="messages" element={<Messages />} />
         <Route path="messages/:clientId" element={<Messages />} />
         <Route path="ai-program" element={<AIProgram />} />
+        <Route path="ai-program/add-workout" element={<AddWorkout />} />
         <Route path="settings" element={<CoachSettings />} />
       </Route>
     </Routes>
