@@ -3,10 +3,10 @@ import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from './Components/AdminLayout';
 import AdminDashboard from './Pages/AdminDashboard';
-import AllClients from './Pages/AllClients';
+import UserManagement from './Pages/UsertMangements/Usermangements';
+import UserDetails from './Pages/UsertMangements/UserDetails';
 import AllCoaches from './Pages/AllCoaches';
-import SystemSettings from './Pages/SystemSettings';
-import Reports from './Pages/Reports';
+
 
 export default function AdminRoutes() {
   return (
@@ -21,10 +21,10 @@ export default function AdminRoutes() {
       >
         <Route index element={<AdminDashboard />} />
         <Route path="dashboard" element={<AdminDashboard />} />
-        <Route path="clients" element={<AllClients />} />
+        <Route path="clients" element={<UserManagement />} />
+        <Route path="clients/:userId" element={<UserDetails />} />
         <Route path="coaches" element={<AllCoaches />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="settings" element={<SystemSettings />} />
+     
       </Route>
     </Routes>
   );

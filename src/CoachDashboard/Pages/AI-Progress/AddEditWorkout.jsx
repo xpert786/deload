@@ -310,21 +310,7 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  setIsWorkoutDeleted(false);
-                  setExercises([
-                    {
-                      id: 1,
-                      label: 'A',
-                      name: 'Exercise Title',
-                      sets: 0,
-                      reps: 0,
-                      notes: 'Sets, Reps, Rest, Notes',
-                      videoLinks: [],
-                      isSuperset: false
-                    }
-                  ]);
-                  setWorkoutName('Full Body');
-                  setFullBodyVideoLinks([]);
+                  navigate('/coach/ai-program/add-workout');
                 }}
                 className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition flex items-center gap-2"
               >

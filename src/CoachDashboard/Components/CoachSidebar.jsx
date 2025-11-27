@@ -27,9 +27,15 @@ export default function CoachSidebar({ isOpen }) {
   };
 
   return (
-    <div className={`h-[calc(100vh-70px)] bg-[#326DB7] flex flex-col font-[BasisGrotesquePro] overflow-hidden shadow-lg transition-all duration-300 ${
-      isOpen ? 'w-[260px]' : 'w-[80px] lg:w-[80px]'
-    }`}>
+    <div 
+      className={`h-[calc(100vh-70px)] flex flex-col font-[BasisGrotesquePro] overflow-hidden shadow-lg transition-all duration-300 ${
+        isOpen ? 'w-[260px]' : 'w-[80px] lg:w-[80px]'
+      }`}
+      style={{
+        background: 'linear-gradient(to bottom, #003F8F, #74A8EA)'
+      }}
+      
+    >
       {/* --- Navigation Links --- */}
       <div className="flex-1 flex flex-col gap-2 px-2 lg:px-4 pt-13 pb-4">
         <Link
@@ -51,7 +57,7 @@ export default function CoachSidebar({ isOpen }) {
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
             <WorkOutPlan />
           </span>
-          {isOpen && <span className="whitespace-nowrap">My Clients</span>}
+          {isOpen && <span className="whitespace-nowrap">Clients</span>}
         </Link>
 
         <Link
@@ -73,7 +79,7 @@ export default function CoachSidebar({ isOpen }) {
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
             <Chat />
           </span>
-          {isOpen && <span className="whitespace-nowrap">Messages</span>}
+          {isOpen && <span className="whitespace-nowrap">Chat</span>}
         </Link>
 
         <Link

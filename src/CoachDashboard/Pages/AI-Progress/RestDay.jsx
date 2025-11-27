@@ -1,6 +1,8 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const RestDay = ({ onBack, onToggle, day = 'Mon' }) => {
+  const navigate = useNavigate();
   return (
     <div className="h-screen flex flex-col bg-[#F7F7F7]">
       {/* Header */}
@@ -16,8 +18,12 @@ const RestDay = ({ onBack, onToggle, day = 'Mon' }) => {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">John's Weekly Workout Plan</h3>
           <div className="flex items-center gap-2">
-            <button className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition">
-              + Add Workout
+            <button 
+              onClick={() => navigate('/coach/ai-program/add-workout')}
+              className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition flex items-center gap-2"
+            >
+              <span>+</span>
+              Add Workout
             </button>
             <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition">
               Edit

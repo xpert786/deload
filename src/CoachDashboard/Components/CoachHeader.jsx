@@ -1,28 +1,19 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DloadLogo from "../../assets/DloadLogo.png";
-import { BellIcon, SearchIcon, TodayMessageIcon, PercentageTodayIcon, AvgSession } from '../../ClientDashboard/Components/icons';
+import { BellIcon, SearchIcon } from '../../ClientDashboard/Components/icons';
 import ProfileLogo from "../../assets/ProfileLogo.png";
 import AddNewClientModal from './AddNewClientModal';
+import NotificationsModal from './NotificationsModal';
 
 const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
   const { user } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
 
-  const notifications = {
-    today: [
-      { title: 'Mike Ross - Great! I Finish His Work Out.', time: '1 Hrs Ago', icon: <TodayMessageIcon /> },
-      { title: 'John Doe - 50% Progress', time: '2 Hrs Ago', icon: <PercentageTodayIcon /> }
-    ],
-    yesterday: [
-      { title: '7:00 AM - John Doe: Send You A Message', time: 'Yesterday', icon: <AvgSession /> },
-      { title: '10:00 AM - Sarah Lee: Started Cardio & Core Session', time: 'Yesterday', icon: <AvgSession /> }
-    ]
-  };
-
   return (
-    <div className='flex justify-between bg-[#FFFFFF] shadow-sm h-[70px] min-h-[70px]'>
+    <>
+      <div className='flex justify-between bg-[#FFFFFF] shadow-sm h-[70px] min-h-[70px]'>
       {/* Left Section Wrapper */}
       <div className="flex items-center gap-4">
 
@@ -60,8 +51,10 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
       {/* Search Bar */}
       <div
         className={`relative transition-all duration-300 flex items-center
-  ${isSidebarOpen ? 'ml-4' : 'ml-2 lg:ml-20'}
-  w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg`}
+  ${isSidebarOpen 
+    ? 'ml-[28px] sm:ml-[36px]' 
+    : 'ml-[28px] sm:ml-[36px] lg:ml-[36px]'}
+  w-auto max-w-[240px] sm:max-w-[280px] md:max-w-[320px] lg:max-w-[360px]`}
       >
 
         {/* Icon Positioned Inside Input */}
@@ -73,7 +66,7 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
         <input
           type="text"
           placeholder="Search here..."
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg
+          className="w-[240px] sm:w-[280px] md:w-[320px] lg:w-[360px] pl-10 pr-4 py-2 border border-gray-300 rounded-lg
     focus:outline-none focus:ring-2 focus:ring-blue-500
     focus:border-transparent text-sm"
         />
@@ -147,75 +140,22 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
           </svg>
         </button>
 
-        <div
-          className="relative"
-          onMouseEnter={() => setShowNotifications(true)}
-          onMouseLeave={() => setShowNotifications(false)}
-        >
-          <div className="w-9 h-9 sm:w-10 sm:h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-50 cursor-pointer">
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowNotifications(!showNotifications);
+            }}
+            className="w-9 h-9 sm:w-10 sm:h-10 border border-gray-300 rounded-lg flex items-center justify-center hover:bg-gray-50 cursor-pointer focus:outline-none"
+          >
             <BellIcon />
-          </div>
+          </button>
 
-          {/* Notifications Dropdown */}
-          {showNotifications && (
-            <div className="absolute right-0 top-full mt-2 w-[380px] sm:w-[420px] bg-white rounded-2xl shadow-xl border border-[#E5EDFF] z-50 overflow-hidden">
-              {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-[#E5EDFF]">
-                <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Notifications</h3>
-                <button
-                  onClick={() => setShowNotifications(false)}
-                  className="text-gray-500 hover:text-gray-700 text-2xl font-semibold w-8 h-8 flex items-center justify-center"
-                >
-                  ×
-                </button>
-              </div>
-
-              {/* Content */}
-              <div className="max-h-[500px] overflow-y-auto">
-                {/* Today Section */}
-                <div className="p-4">
-                  <p className="text-xs font-semibold text-[#0A3D91] mb-3">Today</p>
-                  <div className="space-y-3">
-                    {notifications.today.map((note, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between px-4 py-3 border border-[#E5EDFF] rounded-xl bg-white shadow-sm gap-4 hover:bg-[#F5F8FF] transition"
-                      >
-                        <div className="flex items-center gap-3 text-[#0A3D91] flex-1 min-w-0">
-                          <span className="w-7 h-7 rounded-xl border border-[#E5EDFF] flex items-center justify-center text-[13px] flex-shrink-0">
-                            {note.icon}
-                          </span>
-                          <span className="font-semibold text-sm truncate">{note.title}</span>
-                        </div>
-                        <span className="text-xs text-[#0A3D91] whitespace-nowrap flex-shrink-0">{note.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Yesterday Section */}
-                <div className="p-4 pt-2 border-t border-[#E5EDFF]">
-                  <p className="text-xs font-semibold text-[#0A3D91] mb-3">Yesterday</p>
-                  <div className="space-y-3">
-                    {notifications.yesterday.map((note, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between px-4 py-3 border border-[#E5EDFF] rounded-xl bg-white shadow-sm gap-4 hover:bg-[#F5F8FF] transition"
-                      >
-                        <div className="flex items-center gap-3 text-[#0A3D91] flex-1 min-w-0">
-                          <span className="w-7 h-7 rounded-xl border border-[#E5EDFF] flex items-center justify-center text-[13px] flex-shrink-0">
-                            {note.icon}
-                          </span>
-                          <span className="font-semibold text-sm truncate">{note.title}</span>
-                        </div>
-                        <span className="text-xs text-[#0A3D91] whitespace-nowrap flex-shrink-0">{note.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Notifications Modal */}
+          <NotificationsModal 
+            isOpen={showNotifications} 
+            onClose={() => setShowNotifications(false)} 
+          />
         </div>
 
         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden">
@@ -233,6 +173,7 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
         onClose={() => setShowAddClientModal(false)}
       />
     </div>
+    </>
   );
 };
 
