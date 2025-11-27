@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Chat, Home, Settings, WorkOutPlan, Reminders } from '../../ClientDashboard/Components/icons';
+import { Chat, Home, Settings, ClientsIcon, Reminders } from '../../ClientDashboard/Components/icons';
 import { useAuth } from '../../context/AuthContext';
 
 export default function CoachSidebar({ isOpen }) {
@@ -55,7 +55,7 @@ export default function CoachSidebar({ isOpen }) {
           title={!isOpen ? "My Clients" : ""}
         >
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
-            <WorkOutPlan />
+            <ClientsIcon />
           </span>
           {isOpen && <span className="whitespace-nowrap">Clients</span>}
         </Link>
