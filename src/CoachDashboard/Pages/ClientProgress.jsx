@@ -38,10 +38,10 @@ const ClientProgress = () => {
       {/* Weekly/Monthly Target Toggle */}
       <div className="bg-white rounded-3xl p-6 space-y-6">
         <div className="flex items-center gap-3">
-          <div className="flex items-center rounded-lg border border-[#CBD8FF] overflow-hidden">
+          <div className="flex items-center rounded-lg border border-[#CBD8FF] overflow-hidden p-2">
             <button
               onClick={() => setTargetType('weekly')}
-              className={`px-5 py-2 text-sm font-semibold transition ${
+              className={`px-5 py-2 text-sm font-semibold transition rounded-lg ${
                 targetType === 'weekly'
                   ? 'bg-[#003F8F] text-white'
                   : 'bg-white text-[#0D4FB8]'
@@ -51,7 +51,7 @@ const ClientProgress = () => {
             </button>
             <button
               onClick={() => setTargetType('monthly')}
-              className={`px-5 py-2 text-sm font-semibold transition ${
+              className={`px-5 py-2 text-sm font-semibold transition rounded-lg ml-3 ${
                 targetType === 'monthly'
                   ? 'bg-[#003F8F] text-white'
                   : 'bg-white text-[#0D4FB8]'
@@ -69,7 +69,7 @@ const ClientProgress = () => {
             .map((client) => (
               <div
                 key={client.name}
-                className="rounded-2xl border border-[#E5EDFF] bg-white p-4 space-y-2 shadow-sm"
+                className="rounded-2xl border border-[#E5EDFF] bg-white p-4 space-y-2 "
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-3">

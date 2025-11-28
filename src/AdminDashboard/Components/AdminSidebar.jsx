@@ -56,13 +56,13 @@ export default function AdminSidebar({ isOpen }) {
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
             <SidebarIcon />
           </span>
-          {isOpen && <span className="whitespace-nowrap">User Management</span>}
+          {isOpen && <span className="whitespace-nowrap">Coach Management</span>}
         </Link>
 
         <Link
-          to="/admin/coaches"
-          className={linkClass("/admin/coaches")}
-          title={!isOpen ? "All Coaches" : ""}
+          to="/admin/billing"
+          className={linkClass("/admin/billing")}
+          title={!isOpen ? "Billing & Subscription" : ""}
         >
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
             <SidebarIcon  />

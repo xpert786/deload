@@ -89,32 +89,7 @@ const AdminHeader = ({ isSidebarOpen, toggleSidebar }) => {
           </svg>
         </button>
 
-        {/* Add New Client Button */}
-        <button
-          onClick={() => setShowAddClientModal(true)}
-          className="hidden sm:flex items-center gap-2 px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition-all duration-200 border border-[#003F8F] relative"
-          style={{
-            boxShadow: '0 0 0 1px rgba(59, 130, 246, 0.3), 0 0 8px rgba(59, 130, 246, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1)'
-          }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="flex-shrink-0"
-          >
-            <path
-              d="M8 3V13M3 8H13"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span className="whitespace-nowrap">Add New Client</span>
-        </button>
+    
 
         {/* Mobile Add Button - Icon Only */}
         <button
@@ -165,11 +140,7 @@ const AdminHeader = ({ isSidebarOpen, toggleSidebar }) => {
         </div>
       </div>
 
-      {/* Add New Client Modal */}
-      <AddNewClientModal
-        isOpen={showAddClientModal}
-        onClose={() => setShowAddClientModal(false)}
-      />
+     
     </div>
     </>
   );

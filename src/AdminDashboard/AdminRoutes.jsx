@@ -6,6 +6,7 @@ import AdminDashboard from './Pages/AdminDashboard';
 import UserManagement from './Pages/UsertMangements/Usermangements';
 import UserDetails from './Pages/UsertMangements/UserDetails';
 import AllCoaches from './Pages/AllCoaches';
+import BillingSubscriptions from './Pages/BillingSubscriptions';
 
 
 export default function AdminRoutes() {
@@ -24,7 +25,7 @@ export default function AdminRoutes() {
         <Route path="clients" element={<UserManagement />} />
         <Route path="clients/:userId" element={<UserDetails />} />
         <Route path="coaches" element={<AllCoaches />} />
-     
+        <Route path="billing" element={<BillingSubscriptions />} />
       </Route>
     </Routes>
   );

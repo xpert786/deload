@@ -31,7 +31,8 @@ const UserDetails = () => {
         joinDate: 'June 12, 2023',
         activeCoach: '24',
         passwordLastChanged: '30 days ago',
-        activeSessions: '2'
+        activeSessions: '2',
+        profilePicture: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=faces'
     };
 
     const handleToggle = (setting) => {
@@ -71,12 +72,24 @@ const UserDetails = () => {
             <div className="bg-white rounded-lg p-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                     {/* Profile Picture */}
-                    <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                        <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="30" cy="30" r="30" fill="#E5E7EB" />
-                            <path d="M30 20C33.3137 20 36 22.6863 36 26C36 29.3137 33.3137 32 30 32C26.6863 32 24 29.3137 24 26C24 22.6863 26.6863 20 30 20Z" fill="#9CA3AF" />
-                            <path d="M20 42C20 36.4772 24.4772 32 30 32C35.5228 32 40 36.4772 40 42V44H20V42Z" fill="#9CA3AF" />
-                        </svg>
+                    <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
+                        {userData.profilePicture ? (
+                            <img 
+                                src={userData.profilePicture} 
+                                alt={userData.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = 'data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg"%3E%3Ccircle cx="30" cy="30" r="30" fill="%23E5E7EB" /%3E%3Cpath d="M30 20C33.3137 20 36 22.6863 36 26C36 29.3137 33.3137 32 30 32C26.6863 32 24 29.3137 24 26C24 22.6863 26.6863 20 30 20Z" fill="%239CA3AF" /%3E%3Cpath d="M20 42C20 36.4772 24.4772 32 30 32C35.5228 32 40 36.4772 40 42V44H20V42Z" fill="%239CA3AF" /%3E%3C/svg%3E';
+                                }}
+                            />
+                        ) : (
+                            <svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="30" cy="30" r="30" fill="#E5E7EB" />
+                                <path d="M30 20C33.3137 20 36 22.6863 36 26C36 29.3137 33.3137 32 30 32C26.6863 32 24 29.3137 24 26C24 22.6863 26.6863 20 30 20Z" fill="#9CA3AF" />
+                                <path d="M20 42C20 36.4772 24.4772 32 30 32C35.5228 32 40 36.4772 40 42V44H20V42Z" fill="#9CA3AF" />
+                            </svg>
+                        )}
                     </div>
 
                     {/* User Info */}
@@ -96,7 +109,7 @@ const UserDetails = () => {
 
                     {/* Action Buttons */}
                     <div className="flex gap-3">
-                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-[#003F8F] hover:bg-gray-50 transition flex items-center gap-2">
+                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-[#003F8F] hover:bg-gray-50 transition flex items-center gap-2 cursor-pointer">
                             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M12.3562 4.05611L13.944 5.64386M13.377 2.65736L9.08175 6.95261C8.85916 7.17375 8.70768 7.45632 8.64675 7.76411L8.25 9.75011L10.236 9.35261C10.5435 9.29111 10.8255 9.14036 11.0475 8.91836L15.3427 4.62311C15.4718 4.49404 15.5742 4.34081 15.6441 4.17217C15.7139 4.00353 15.7499 3.82278 15.7499 3.64024C15.7499 3.4577 15.7139 3.27695 15.6441 3.10831C15.5742 2.93967 15.4718 2.78644 15.3427 2.65736C15.2137 2.52829 15.0604 2.4259 14.8918 2.35605C14.7232 2.2862 14.5424 2.25024 14.3599 2.25024C14.1773 2.25024 13.9966 2.2862 13.8279 2.35605C13.6593 2.4259 13.5061 2.52829 13.377 2.65736Z" stroke="#003F8F" stroke-linecap="round" stroke-linejoin="round" />
                                 <path d="M14.25 11.25V13.5C14.25 13.8978 14.092 14.2794 13.8107 14.5607C13.5294 14.842 13.1478 15 12.75 15H4.5C4.10218 15 3.72064 14.842 3.43934 14.5607C3.15804 14.2794 3 13.8978 3 13.5V5.25C3 4.85218 3.15804 4.47064 3.43934 4.18934C3.72064 3.90804 4.10218 3.75 4.5 3.75H6.75" stroke="#003F8F" stroke-linecap="round" stroke-linejoin="round" />
@@ -104,7 +117,7 @@ const UserDetails = () => {
 
                             Edit
                         </button>
-                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-red-600 hover:bg-gray-50 transition flex items-center gap-2">
+                        <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-red-600 hover:bg-gray-50 transition flex items-center gap-2 cursor-pointer">
                             <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <g clip-path="url(#clip0_713_17382)">
                                     <path d="M11.7534 2.56226H0.591797" stroke="#E53E3E" stroke-linecap="round" />
@@ -128,7 +141,7 @@ const UserDetails = () => {
             <div className="bg-white border border-gray-300 rounded-lg p-1 inline-flex">
                 <button
                     onClick={() => setActiveTab('personal')}
-                    className={`px-6 py-3 rounded-lg text-sm font-semibold transition ${activeTab === 'personal'
+                    className={`px-6 py-3 rounded-lg text-sm font-semibold transition cursor-pointer ${activeTab === 'personal'
                             ? 'bg-[#003F8F] text-white'
                             : 'bg-transparent text-[#003F8F] hover:bg-gray-50'
                         }`}
@@ -137,7 +150,7 @@ const UserDetails = () => {
                 </button>
                 <button
                     onClick={() => setActiveTab('subscription')}
-                    className={`px-6 py-3 rounded-lg text-sm font-semibold transition ${activeTab === 'subscription'
+                    className={`px-6 py-3 rounded-lg text-sm font-semibold transition cursor-pointer ${activeTab === 'subscription'
                             ? 'bg-[#003F8F] text-white'
                             : 'bg-transparent text-[#003F8F] hover:bg-gray-50'
                         }`}
@@ -206,7 +219,7 @@ const UserDetails = () => {
                                     </div>
                                     <button
                                         onClick={() => handleToggle('twoFactor')}
-                                        className={`relative w-12 h-6 rounded-full transition ${twoFactorAuth ? 'bg-orange-500' : 'bg-gray-300'
+                                        className={`relative w-12 h-6 rounded-full transition cursor-pointer ${twoFactorAuth ? 'bg-orange-500' : 'bg-gray-300'
                                             }`}
                                     >
                                         <span
@@ -228,7 +241,7 @@ const UserDetails = () => {
                                     </div>
                                     <button
                                         onClick={() => handleToggle('loginNotifications')}
-                                        className={`relative w-12 h-6 rounded-full transition ${loginNotifications ? 'bg-orange-500' : 'bg-gray-300'
+                                        className={`relative w-12 h-6 rounded-full transition cursor-pointer ${loginNotifications ? 'bg-orange-500' : 'bg-gray-300'
                                             }`}
                                     >
                                         <span
@@ -246,7 +259,7 @@ const UserDetails = () => {
                                             Last changed {userData.passwordLastChanged}
                                         </p>
                                     </div>
-                                    <button className="px-4 py-2 cursor-pointer  !border border-[#4D6080CC] text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition">
+                                    <button className="px-4 py-2 cursor-pointer !border border-[#4D6080CC] text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition">
                                         Change Password
                                     </button>
                                 </div>
@@ -259,7 +272,7 @@ const UserDetails = () => {
                                             {userData.activeSessions} devices currently active
                                         </p>
                                     </div>
-                                    <button className="px-4 py-2 cursor-pointer  !border border-[#4D6080CC] text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition">
+                                    <button className="px-4 py-2 cursor-pointer !border border-[#4D6080CC] text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-200 transition">
                                         Manage Session
                                     </button>
                                 </div>
@@ -289,7 +302,7 @@ const UserDetails = () => {
                                         </div>
                                         <button
                                             onClick={() => handleToggle(item.key)}
-                                            className={`relative w-12 h-6 rounded-full transition ${item.state ? 'bg-orange-500' : 'bg-gray-300'
+                                            className={`relative w-12 h-6 rounded-full transition cursor-pointer ${item.state ? 'bg-orange-500' : 'bg-gray-300'
                                                 }`}
                                         >
                                             <span
@@ -310,18 +323,20 @@ const UserDetails = () => {
                 )}
             </div>
 
-            {/* Bottom Action Buttons */}
-            <div className="flex justify-end gap-3 pb-6">
-                <button
-                    onClick={() => navigate('/admin/clients')}
-                    className="px-6 py-2 bg-gray-100 text-gray-700 !border border-[#4D6080CC] rounded-lg text-sm font-semibold hover:bg-gray-200 transition"
-                >
-                    Cancel
-                </button>
-                <button className="px-6 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition">
-                    Save changes
-                </button>
-            </div>
+            {/* Bottom Action Buttons - Only show for Personal Info tab */}
+            {activeTab === 'personal' && (
+                <div className="flex justify-end gap-3 pb-6">
+                    <button
+                        onClick={() => navigate('/admin/clients')}
+                        className="px-6 py-2 bg-gray-100 text-gray-700 !border border-[#4D6080CC] rounded-lg text-sm font-semibold hover:bg-gray-200 transition cursor-pointer"
+                    >
+                        Cancel
+                    </button>
+                    <button className="px-6 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer">
+                        Save changes
+                    </button>
+                </div>
+            )}
         </div>
     );
 };

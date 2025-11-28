@@ -13,7 +13,9 @@ const UserManagement = () => {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showDateDropdown, setShowDateDropdown] = useState(false);
-  
+  const [showAddCoach, setShowAddCoach] = useState(false);
+
+
   const statusDropdownRef = useRef(null);
   const sortDropdownRef = useRef(null);
   const dateDropdownRef = useRef(null);
@@ -83,18 +85,22 @@ const UserManagement = () => {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-[#003F8F] font-[BasisGrotesquePro]">
-              User Management
+              Coach Management
             </h1>
             <p className="text-sm sm:text-base text-[#4D6080] font-[Inter] mt-2">
-              Manage all users, coaches, and clients in the Deload Fitness platform.
+              Manage coaches in the Deload Fitness platform.
             </p>
           </div>
-          <button className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition flex items-center gap-2 whitespace-nowrap">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8 3V13M3 8H13" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <button
+            onClick={() => setShowAddCoach(true)}
+            className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition flex items-center gap-2 whitespace-nowrap"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16">
+              <path d="M8 3V13M3 8H13" stroke="white" strokeWidth="2" strokeLinecap="round" />
             </svg>
             Add New Coach
           </button>
+
         </div>
       </div>
 
@@ -150,9 +156,8 @@ const UserManagement = () => {
                           setStatusFilter(option);
                           setShowStatusDropdown(false);
                         }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition ${
-                          statusFilter === option ? 'text-[#003F8F] font-semibold bg-gray-50' : 'text-gray-700'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition ${statusFilter === option ? 'text-[#003F8F] font-semibold bg-gray-50' : 'text-gray-700'
+                          }`}
                       >
                         {option}
                       </button>
@@ -192,9 +197,8 @@ const UserManagement = () => {
                           setSortBy(option);
                           setShowSortDropdown(false);
                         }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition ${
-                          sortBy === option ? 'text-[#003F8F] font-semibold bg-gray-50' : 'text-gray-700'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition ${sortBy === option ? 'text-[#003F8F] font-semibold bg-gray-50' : 'text-gray-700'
+                          }`}
                       >
                         {option}
                       </button>
@@ -234,9 +238,8 @@ const UserManagement = () => {
                           setRegistrationDateFilter(option);
                           setShowDateDropdown(false);
                         }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition ${
-                          registrationDateFilter === option ? 'text-[#003F8F] font-semibold bg-gray-50' : 'text-gray-700'
-                        }`}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition ${registrationDateFilter === option ? 'text-[#003F8F] font-semibold bg-gray-50' : 'text-gray-700'
+                          }`}
                       >
                         {option}
                       </button>
@@ -266,9 +269,8 @@ const UserManagement = () => {
             <div
               key={user.id}
               onClick={() => setSelectedRow(user.id)}
-              className={`grid grid-cols-6 gap-2 sm:gap-4 items-center px-4 py-4 rounded-lg border border-gray-200 transition cursor-pointer min-w-[800px] ${
-                selectedRow === user.id ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'
-              }`}
+              className={`grid grid-cols-6 gap-2 sm:gap-4 items-center px-4 py-4 rounded-lg border border-gray-200 transition cursor-pointer min-w-[800px] ${selectedRow === user.id ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'
+                }`}
             >
               <div>
                 <p className="text-sm font-semibold text-[#003F8F] font-[Inter]">{user.id}</p>
@@ -337,13 +339,12 @@ const UserManagement = () => {
               key={index}
               onClick={() => typeof page === 'number' && setCurrentPage(page)}
               disabled={page === '...'}
-              className={`w-8 h-8 flex items-center justify-center rounded text-sm font-medium transition ${
-                page === currentPage
-                  ? 'bg-[#003F8F] text-white'
-                  : page === '...'
+              className={`w-8 h-8 flex items-center justify-center rounded text-sm font-medium transition ${page === currentPage
+                ? 'bg-[#003F8F] text-white'
+                : page === '...'
                   ? 'text-gray-400 cursor-default'
                   : 'text-gray-600 hover:bg-gray-50'
-              }`}
+                }`}
             >
               {page}
             </button>
@@ -359,6 +360,121 @@ const UserManagement = () => {
           </button>
         </div>
       </div>
+
+
+
+
+
+      {showAddCoach && (
+        <div className="fixed inset-0 bg-black/60 bg-opacity-40  flex items-center justify-center z-50">
+
+          <div className="bg-white w-[90%] max-w-xl rounded-xl shadow-lg p-6 border border-gray-200 relative max-h-[90vh] overflow-auto">
+
+            {/* Close Button */}
+            <button
+              onClick={() => setShowAddCoach(false)}
+              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 cursor-pointer mt-3"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="20" height="20" rx="10" fill="#4D6080" fill-opacity="0.8" />
+                <path d="M13.3888 7.49593C13.4485 7.43831 13.4962 7.36936 13.529 7.29313C13.5618 7.21689 13.579 7.13489 13.5798 7.0519C13.5806 6.96891 13.5648 6.88661 13.5334 6.80978C13.502 6.73296 13.4556 6.66315 13.397 6.60444C13.3383 6.54573 13.2686 6.49929 13.1918 6.46783C13.115 6.43637 13.0327 6.42051 12.9497 6.4212C12.8667 6.42188 12.7847 6.43908 12.7084 6.4718C12.6322 6.50452 12.5632 6.5521 12.5055 6.61177L10.0005 9.11593L7.49632 6.61177C7.4391 6.55036 7.3701 6.50111 7.29343 6.46695C7.21677 6.43279 7.13401 6.41442 7.05009 6.41294C6.96617 6.41146 6.88281 6.4269 6.80499 6.45833C6.72716 6.48976 6.65647 6.53655 6.59712 6.5959C6.53777 6.65525 6.49098 6.72594 6.45955 6.80377C6.42812 6.88159 6.41268 6.96495 6.41416 7.04887C6.41564 7.13279 6.43401 7.21555 6.46817 7.29221C6.50233 7.36888 6.55158 7.43788 6.61299 7.4951L9.11549 10.0001L6.61132 12.5043C6.50092 12.6227 6.44082 12.7795 6.44367 12.9414C6.44653 13.1033 6.51212 13.2578 6.62663 13.3723C6.74115 13.4868 6.89563 13.5524 7.05755 13.5552C7.21947 13.5581 7.37617 13.498 7.49465 13.3876L10.0005 10.8834L12.5047 13.3884C12.6231 13.4988 12.7798 13.5589 12.9418 13.5561C13.1037 13.5532 13.2582 13.4876 13.3727 13.3731C13.4872 13.2586 13.5528 13.1041 13.5556 12.9422C13.5585 12.7803 13.4984 12.6236 13.388 12.5051L10.8855 10.0001L13.3888 7.49593Z" fill="white" />
+              </svg>
+
+            </button>
+
+            {/* Title */}
+            <h2 className="text-xl font-bold text-[#003F8F] mb-5">
+              Add New Coach
+            </h2>
+
+            {/* Form */}
+            <div className="space-y-5">
+
+              {/* Name */}
+              <div>
+                <label className="text-sm font-semibold text-[#003F8F]">Enter Name</label>
+                <input
+                  type="text"
+                  placeholder="Enter Plan name"
+                  className="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                />
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="text-sm font-semibold text-[#003F8F]">Email</label>
+                <input
+                  type="email"
+                  placeholder="Enter email"
+                  className="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label className="text-sm font-semibold text-[#003F8F]">Phone</label>
+                <input
+                  type="text"
+                  placeholder="+1"
+                  className="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="text-sm font-semibold text-[#003F8F]">Address</label>
+                <input
+                  type="text"
+                  placeholder="Add address"
+                  className="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                />
+              </div>
+
+              {/* Coaching Categories */}
+              <div>
+                <label className="text-sm font-semibold text-[#003F8F]">
+                  Coaching Categories (choose one or more)
+                </label>
+
+                <div className="flex gap-2 flex-wrap mt-2 text-sm text-[#003F8F] ">
+                  <span className="px-3 py-1 bg-[#FFFFFF80] !border border-[#4D60804D] rounded-full">Fitness</span>
+                  <span className="px-3 py-1 bg-[#FFFFFF80] !border border-[#4D60804D]  rounded-full">Life Coaching</span>
+                  <span className="px-3 py-1 bg-[#003F8F] text-white rounded-full">Yoga</span>
+                  <span className="px-3 py-1 bg-[#FFFFFF80] !border border-[#4D60804D]  rounded-full">Sports</span>
+                  <span className="px-3 py-1 bg-[#FFFFFF80] !border border-[#4D60804D]  rounded-full">Nutrition</span>
+                </div>
+              </div>
+
+              {/* Years of Experience */}
+              <div>
+                <label className="text-sm font-semibold text-[#003F8F]">
+                  Years of experience
+                </label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  className="w-full mt-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                />
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowAddCoach(false)}
+                className="px-4 py-2 !border border-[#4D6080CC] rounded-lg text-sm font-semibold hover:bg-gray-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button className="px-5 py-2 bg-[#003F8F] text-white text-sm font-semibold rounded-lg hover:bg-[#002A6A] cursor-pointer">
+                Add Coach
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

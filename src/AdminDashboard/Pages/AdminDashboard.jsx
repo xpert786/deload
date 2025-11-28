@@ -190,7 +190,7 @@ const AdminDashboard = () => {
               <div className="text-xs sm:text-sm font-semibold text-gray-600 font-[Inter] min-w-0">Registration Date</div>
               <div className="text-xs sm:text-sm font-semibold text-gray-600 font-[Inter] min-w-0 ml-3">Clients</div>
               <div className="text-xs sm:text-sm font-semibold text-gray-600 font-[Inter] min-w-0">Status</div>
-              <div className="text-xs sm:text-sm font-semibold text-gray-600 font-[Inter] min-w-0">Action</div>
+             
             </div>
 
             {/* Table Rows */}
@@ -205,26 +205,7 @@ const AdminDashboard = () => {
                   </div>
                   <div className="text-xs sm:text-sm font-semibold text-[#003F8F] font-[Inter] min-w-0 truncate">{coach.time}</div>
                   <div className="min-w-0">{getStatusBadge(coach.status)}</div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1 sm:gap-2">
-                      <button className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center hover:bg-gray-50 transition cursor-pointer flex-shrink-0">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="sm:w-6 sm:h-6">
-                          <rect width="24" height="24" rx="4" fill="white" fillOpacity="0.5" />
-                          <rect x="0.25" y="0.25" width="23.5" height="23.5" rx="3.75" stroke="#4D6080" strokeOpacity="0.3" strokeWidth="0.5" />
-                          <path d="M16.7218 8.66406H7.27734" stroke="#003F8F" strokeLinecap="round" />
-                          <path d="M8.94336 8.66667H9.00447C9.22805 8.66095 9.4447 8.5879 9.62609 8.45706C9.80748 8.32622 9.94517 8.14369 10.0211 7.93333L10.04 7.87611L10.0939 7.71444C10.14 7.57611 10.1634 7.50722 10.1939 7.44833C10.254 7.33299 10.3403 7.23333 10.4458 7.15731C10.5514 7.08129 10.6733 7.03103 10.8017 7.01056C10.8667 7 10.9395 7 11.085 7H12.9128C13.0584 7 13.1311 7 13.1961 7.01056C13.3246 7.03103 13.4464 7.08129 13.552 7.15731C13.6575 7.23333 13.7438 7.33299 13.8039 7.44833C13.8345 7.50722 13.8578 7.57611 13.9039 7.71444L13.9578 7.87611C14.0282 8.11015 14.1738 8.31445 14.3721 8.45737C14.5703 8.60029 14.8102 8.67385 15.0545 8.66667" stroke="#003F8F" />
-                          <path d="M8.20312 10.0547L8.45868 13.888C8.55701 15.3625 8.6059 16.0997 9.08646 16.5491C9.56757 16.9991 10.3065 16.9991 11.7842 16.9991H12.2142C13.6926 16.9991 14.4315 16.9986 14.912 16.5491C15.3926 16.0997 15.442 15.3625 15.5403 13.888L15.7953 10.0547" stroke="#003F8F" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                      <button className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-[#003F8F] rounded hover:bg-[#002F6F] transition cursor-pointer flex-shrink-0">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="sm:w-6 sm:h-6">
-                          <rect width="24" height="24" rx="4" fill="#003F8F" />
-                          <path d="M6.16602 11.9974C6.16602 11.9974 7.91602 7.91406 11.9993 7.91406C16.0827 7.91406 17.8327 11.9974 17.8327 11.9974C17.8327 11.9974 16.0827 16.0807 11.9993 16.0807C7.91602 16.0807 6.16602 11.9974 6.16602 11.9974Z" stroke="white" strokeLinecap="round" strokeLinejoin="round" />
-                          <path d="M12 13.75C12.9665 13.75 13.75 12.9665 13.75 12C13.75 11.0335 12.9665 10.25 12 10.25C11.0335 10.25 10.25 11.0335 10.25 12C10.25 12.9665 11.0335 13.75 12 13.75Z" stroke="white" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
+                 
                 </div>
               </div>
             ))}
