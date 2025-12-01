@@ -1,11 +1,19 @@
 import React, { useState, useRef } from "react";
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import DloadLogo from "../../assets/DloadLogo.png";
 import ClientRegisterImg from "../../assets/ClientRegisterImg.png";
 
+// Use API URL from .env file only
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
 const ClientRegister = () => {
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -19,7 +27,6 @@ const ClientRegister = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
-  const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleInputChange = (e) => {
@@ -34,13 +41,15 @@ const ClientRegister = () => {
   const handleImageSelect = (event) => {
     const file = event.target.files[0];
     if (file) {
+      // Store the actual file for API submission
+      setFormData(prev => ({
+        ...prev,
+        profileImage: file
+      }));
+      // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
         setSelectedImage(e.target.result);
-        setFormData(prev => ({
-          ...prev,
-          profileImage: e.target.result
-        }));
       };
       reader.readAsDataURL(file);
     }
@@ -65,36 +74,165 @@ const ClientRegister = () => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
     setStep(2);
   };
 
   const handleStep2Submit = async (e) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
 
-    // Register user
-    const userData = {
-      name: formData.name,
-      email: formData.email,
-      password: formData.password,
-      phone: formData.phone || '+1234567890',
-      role: 'client',
-      location: formData.location,
-      bio: formData.bio,
-      profileImage: formData.profileImage
-    };
+    try {
+      // Create FormData for file upload
+      const submitData = new FormData();
+      submitData.append('fullname', formData.name);
+      submitData.append('email', formData.email);
+      submitData.append('password', formData.password);
+      submitData.append('confirm_password', formData.confirmPassword);
+      submitData.append('phone_number', formData.phone || '');
+      submitData.append('city', formData.location || '');
+      submitData.append('short_bio', formData.bio || '');
 
-    const result = register(userData);
+      // Add profile photo if exists
+      if (formData.profileImage) {
+        submitData.append('profile_photo', formData.profileImage);
+      }
 
-    if (result.success) {
-      navigate('/client/dashboard');
-    } else {
-      setError(result.error || 'Registration failed');
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      const apiUrl = `${baseUrl}/signup/`;
+      
+      console.log('API URL:', apiUrl);
+      console.log('Sending data:', {
+        fullname: formData.name,
+        email: formData.email,
+        phone_number: formData.phone,
+        city: formData.location,
+        has_profile_photo: !!formData.profileImage
+      });
+
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          body: submitData,
+        });
+      } catch (fetchError) {
+        console.error('Fetch error:', fetchError);
+        if (fetchError.message.includes('Failed to fetch') || fetchError.message.includes('NetworkError')) {
+          setError('Network Error: Cannot connect to the server. This is likely a CORS issue.\n\nSolution: The backend server needs to allow requests from http://localhost:5173. Please add CORS headers on the backend.');
+        } else {
+          setError(`Network error: ${fetchError.message || 'Unable to connect to the server. Please check your internet connection and ensure the server is running.'}`);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Check if response exists
+      if (!response) {
+        setError('No response from server. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Parse response
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('Response status:', response.status);
+        console.log('Response text:', responseText);
+        
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        if (response.status === 400) {
+          setError('Invalid request. Please check all fields are filled correctly.');
+        } else if (response.status === 0 || response.status >= 500) {
+          setError('Server error. Please try again later.');
+        } else if (response.status === 404) {
+          setError('API endpoint not found. Please check the API URL.');
+        } else {
+          setError(`Request failed with status ${response.status}. Please try again.`);
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (response.ok) {
+        setSuccess(true);
+        // Store user data in localStorage
+        const userData = {
+          id: result.data.id,
+          fullname: result.data.fullname,
+          email: result.data.email,
+          phone_number: result.data.phone_number,
+          city: result.data.city,
+          role: 'client',
+          ...result.data
+        };
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Navigate to client dashboard after 2 seconds
+        setTimeout(() => {
+          navigate('/client/dashboard');
+        }, 2000);
+      } else {
+        // Handle different error formats
+        let errorMessage = 'Registration failed. Please try again.';
+        let errorDetails = [];
+        
+        if (result.message) {
+          errorMessage = result.message;
+        } else if (result.error) {
+          errorMessage = result.error;
+        } else if (result.detail) {
+          errorMessage = result.detail;
+        }
+        
+        // Extract detailed validation errors
+        if (result.errors && typeof result.errors === 'object') {
+          Object.keys(result.errors).forEach((field) => {
+            const fieldErrors = result.errors[field];
+            if (Array.isArray(fieldErrors)) {
+              fieldErrors.forEach((err) => {
+                errorDetails.push(`${field}: ${err}`);
+              });
+            } else if (typeof fieldErrors === 'string') {
+              errorDetails.push(`${field}: ${fieldErrors}`);
+            }
+          });
+        }
+        
+        // Combine error message with details
+        if (errorDetails.length > 0) {
+          errorMessage = errorMessage + '\n\n' + errorDetails.join('\n');
+        }
+        
+        setError(errorMessage);
+        console.error('API Error Response:', result);
+      }
+    } catch (err) {
+      console.error('Registration error:', err);
+      console.error('Error details:', {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+      });
+      
+      // Handle CORS and network errors
+      if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('Failed to fetch'))) {
+        setError('Network/CORS Error: Unable to connect to the server. This could be due to:\n1. CORS issue - Backend needs to allow requests from http://localhost:5173\n2. Server is down or unreachable\n3. Network connectivity issue\n\nPlease check the API URL in .env file and ensure the backend server is running and configured for CORS.');
+      } else if (err.message) {
+        setError(`Error: ${err.message}`);
+      } else {
+        setError('Network error. Please check your connection and try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -111,7 +249,13 @@ const ClientRegister = () => {
     });
     setSelectedImage(null);
     setError('');
+    setSuccess(false);
+    setLoading(false);
     setStep(1);
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -132,8 +276,14 @@ const ClientRegister = () => {
             <h2 className="text-2xl font-medium font-[Poppins] mb-6" style={{ color: '#003F8F' }}>Client Registration</h2>
             
             {error && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm whitespace-pre-line">
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                Registration successful! Redirecting to dashboard...
               </div>
             )}
 
@@ -312,21 +462,10 @@ const ClientRegister = () => {
                     }}
                   ></textarea>
                 </div>
-                <div className="flex justify-end gap-3 font-medium ">
-                  <button
-                    type="submit"
-                    className="px-6 py-2 rounded-md font-medium font-[Inter] transition-colors hover:opacity-90"
-                    style={{ 
-                      backgroundColor: '#003F8F',
-                      color: 'white',
-                      fontFamily: 'Inter',
-                    }}
-                  >
-                    Create Account
-                  </button>
+                <div className="flex justify-between gap-3 font-medium ">
                   <button
                     type="button"
-                    onClick={handleReset}
+                    onClick={() => setStep(1)}
                     className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50"
                     style={{ 
                       backgroundColor: 'white',
@@ -335,8 +474,35 @@ const ClientRegister = () => {
                       fontFamily: 'Inter',
                     }}
                   >
-                    Reset
+                    Back
                   </button>
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={loading || success}
+                      className="px-6 py-2 rounded-md font-medium font-[Inter] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ 
+                        backgroundColor: '#003F8F',
+                        color: 'white',
+                        fontFamily: 'Inter',
+                      }}
+                    >
+                      {loading ? 'Creating...' : success ? 'Success!' : 'Create Account'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50"
+                      style={{ 
+                        backgroundColor: 'white',
+                        border: '1px solid #003F8F',
+                        color: '#003F8F',
+                        fontFamily: 'Inter',
+                      }}
+                    >
+                      Reset
+                    </button>
+                  </div>
                 </div>
                 
                 {/* Login Link */}

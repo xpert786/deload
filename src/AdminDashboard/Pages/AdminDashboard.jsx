@@ -1,12 +1,109 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from 'recharts';
 import { ClientIcon, WorkOutPlan, ActivesIcon, MonthlyIcon } from '../../ClientDashboard/Components/icons';
 
+// Use API URL from .env file only
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showAllCoaches, setShowAllCoaches] = useState(false);
+  const [showAllActivity, setShowAllActivity] = useState(false);
 
-  // User Growth Data
+  // Fetch dashboard data from API
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      try {
+        // Get authentication token
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+
+        if (user) {
+          token = user.token || user.access_token || user.authToken || user.accessToken;
+        }
+
+        if (!token && storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+
+        if (!token) {
+          token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+        }
+
+        const isValidToken = token &&
+          typeof token === 'string' &&
+          token.trim().length > 0 &&
+          token.trim() !== 'null' &&
+          token.trim() !== 'undefined' &&
+          token.trim() !== '';
+
+        // Ensure API_BASE_URL doesn't have trailing slash
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        const apiUrl = `${baseUrl}/overview/`;
+
+        // Prepare headers
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        if (isValidToken) {
+          headers['Authorization'] = `Bearer ${token.trim()}`;
+        }
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: headers,
+          credentials: 'include',
+        });
+
+        let result;
+        try {
+          const responseText = await response.text();
+
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse dashboard response:', parseError);
+          setError('Failed to parse server response. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        if (response.ok && result.data) {
+          setDashboardData(result.data);
+        } else {
+          console.error('Failed to fetch dashboard data:', result);
+          setError(result.message || 'Failed to fetch dashboard data. Please try again.');
+        }
+      } catch (err) {
+        console.error('Fetch dashboard error:', err);
+        setError('Network error: Unable to fetch dashboard data. Please check your connection.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user]);
+
+  // User Growth Data (Static - not in API)
   const userGrowthData = [
     { month: 'Jan', newClients: 600, other: 50 },
     { month: 'Feb', newClients: 700, other: 70 },
@@ -16,7 +113,7 @@ const AdminDashboard = () => {
     { month: 'Jun', newClients: 1150, other: 120 }
   ];
 
-  // Revenue Data
+  // Revenue Data (Static - not in API)
   const revenueData = [
     { month: 'Jan', revenue: 6500 },
     { month: 'Feb', revenue: 7800 },
@@ -26,20 +123,50 @@ const AdminDashboard = () => {
     { month: 'Jun', revenue: 10500 }
   ];
 
-  // Recent Coach Registrations
-  const recentCoaches = [
-    { id: 'C101', name: 'Jane Doe', time: '2 min ago', status: 'Active' },
-    { id: 'C102', name: 'John Smith', time: '5 min ago', status: 'Inactive' },
-    { id: 'C103', name: 'Emily White', time: '10 min ago', status: 'Active' },
-    { id: 'C104', name: 'Michael Brown', time: '15 min ago', status: 'Pending' }
-  ];
+  // Map API data to UI format
+  const recentCoaches = dashboardData?.recent?.recent_register_coaches?.map((coach) => ({
+    id: coach.id,
+    name: coach.fullname,
+    time: coach.joined_ago || 'N/A',
+    status: 'Active' // Default status, API doesn't provide status
+  })) || [];
 
-  // Recent Activity
-  const recentActivity = [
-    { type: 'New User Registration', description: 'Jennifer Lopez signed up as a client', time: '10 minutes ago', icon: '👤' },
-    { type: 'Subscription Renewal', description: 'Coach Sarah renewed her monthly subscription', time: '2 hours ago', icon: '💰' },
-    { type: 'New User Registration', description: 'Jennifer Lopez signed up as a client', time: '10 minutes ago', icon: '👤' }
-  ];
+  // Helper function to get name only (exclude email)
+  const getNameOnly = (activity) => {
+    // Check if fullname exists and is not an email
+    if (activity.fullname && typeof activity.fullname === 'string' && !activity.fullname.includes('@')) {
+      return activity.fullname;
+    }
+    // Check if username exists and is not an email
+    if (activity.username && typeof activity.username === 'string' && !activity.username.includes('@')) {
+      return activity.username;
+    }
+    // If fullname is an email, extract name from it
+    if (activity.fullname && typeof activity.fullname === 'string' && activity.fullname.includes('@')) {
+      const nameFromEmail = activity.fullname.split('@')[0];
+      return nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+    }
+    // If username is an email, extract name from it
+    if (activity.username && typeof activity.username === 'string' && activity.username.includes('@')) {
+      const nameFromEmail = activity.username.split('@')[0];
+      return nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+    }
+    // If email field exists, extract name from it
+    if (activity.email && typeof activity.email === 'string' && activity.email.includes('@')) {
+      const nameFromEmail = activity.email.split('@')[0];
+      return nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+    }
+    // If no valid name found, return 'User'
+    return 'User';
+  };
+
+  // Map recent activity from API
+  const recentActivity = dashboardData?.recent?.recent_activity?.map((activity) => ({
+    type: activity.role === 'coach' ? 'New User Registration' : 'New User Registration',
+    description: `${getNameOnly(activity)} signed up as a ${activity.role}`,
+    time: activity.joined_ago || 'N/A',
+    icon: activity.role === 'coach' ? '👤' : '💰'
+  })) || [];
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -53,6 +180,26 @@ const AdminDashboard = () => {
       </span>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7]">
+        <div className="flex items-center justify-center py-20">
+          <div className="text-lg text-gray-500">Loading dashboard...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7]">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7]">
@@ -71,7 +218,9 @@ const AdminDashboard = () => {
               <ClientIcon />
             </div>
           </div>
-          <p className="text-xl font-bold text-[#003F8F] font-[Inter]">2,450</p>
+          <p className="text-xl font-bold text-[#003F8F] font-[Inter]">
+            {dashboardData?.counts?.total_users?.toLocaleString() || '0'}
+          </p>
         </div>
 
         {/* Active Coaches */}
@@ -84,7 +233,9 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
-          <p className="text-xl font-bold text-[#003F8F] font-[Inter]">42</p>
+          <p className="text-xl font-bold text-[#003F8F] font-[Inter]">
+            {dashboardData?.active?.active_coaches || dashboardData?.counts?.total_coaches || '0'}
+          </p>
         </div>
 
         {/* Active Clients */}
@@ -97,10 +248,12 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
-          <p className="text-xl font-bold text-[#003F8F] font-[Inter]">1,162</p>
+          <p className="text-xl font-bold text-[#003F8F] font-[Inter]">
+            {dashboardData?.active?.active_clients || dashboardData?.counts?.total_clients || '0'}
+          </p>
         </div>
 
-        {/* Monthly Revenue */}
+        {/* Monthly Revenue (Static - not in API) */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium text-[#4D6080CC] font-[Inter]">Monthly Revenue</h3>
@@ -175,14 +328,19 @@ const AdminDashboard = () => {
 
       {/* Bottom Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Coach Registrations */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-[#003F8F] font-[BasisGrotesquePro]">Recent Coach Registrations</h3>
-            <button className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer">
-              View All
-            </button>
-          </div>
+         {/* Recent Coach Registrations */}
+         <div className="bg-white rounded-lg shadow-sm p-6">
+           <div className="flex items-center justify-between mb-4">
+             <h3 className="text-lg font-semibold text-[#003F8F] font-[BasisGrotesquePro]">Recent Coach Registrations</h3>
+             {recentCoaches.length > 0 && (
+               <button 
+                 onClick={() => setShowAllCoaches(!showAllCoaches)}
+                 className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer"
+               >
+                 View All
+               </button>
+             )}
+           </div>
           <div className="space-y-3">
             {/* Table Header */}
             <div className="grid grid-cols-5 gap-2 sm:gap-3 md:gap-4 px-2 sm:px-4 py-3 border-b border-gray-200">
@@ -193,30 +351,47 @@ const AdminDashboard = () => {
              
             </div>
 
-            {/* Table Rows */}
-            {recentCoaches.map((coach) => (
-              <div key={coach.id} className="bg-white border border-gray-200 rounded-lg p-2 sm:p-4  transition">
-                <div className="grid grid-cols-5 gap-2 sm:gap-3 md:gap-4 items-center">
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm font-semibold text-[#003F8F] font-[Inter] truncate">{coach.id}</p>
+             {/* Table Rows */}
+             {recentCoaches.length === 0 ? (
+               <div className="text-center py-4 text-gray-500 text-sm">No recent coach registrations</div>
+             ) : (
+               (showAllCoaches ? recentCoaches : recentCoaches.slice(0, 4)).map((coach) => (
+                <div key={coach.id} className="bg-white border border-gray-200 rounded-lg p-2 sm:p-4  transition">
+                  <div className="grid grid-cols-5 gap-2 sm:gap-3 md:gap-4 items-center">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-semibold text-[#003F8F] font-[Inter] truncate">{coach.id}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-semibold text-[#003F8F] font-[Inter] truncate">{coach.name}</p>
+                    </div>
+                    <div className="text-xs sm:text-sm font-semibold text-[#003F8F] font-[Inter] min-w-0 truncate">{coach.time}</div>
+                    <div className="min-w-0">{getStatusBadge(coach.status)}</div>
+                   
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm font-semibold text-[#003F8F] font-[Inter] truncate">{coach.name}</p>
-                  </div>
-                  <div className="text-xs sm:text-sm font-semibold text-[#003F8F] font-[Inter] min-w-0 truncate">{coach.time}</div>
-                  <div className="min-w-0">{getStatusBadge(coach.status)}</div>
-                 
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-[#003F8F] mb-4 font-[BasisGrotesquePro]">Recent Activity</h3>
-          <div className="space-y-3">
-            {recentActivity.map((activity, index) => (
+         {/* Recent Activity */}
+         <div className="bg-white rounded-lg p-6">
+           <div className="flex items-center justify-between mb-4">
+             <h3 className="text-lg font-semibold text-[#003F8F] font-[BasisGrotesquePro]">Recent Activity</h3>
+             {recentActivity.length > 0 && (
+               <button 
+                 onClick={() => setShowAllActivity(!showAllActivity)}
+                 className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer"
+               >
+                 View All
+               </button>
+             )}
+           </div>
+           <div className="space-y-3">
+             {recentActivity.length === 0 ? (
+               <div className="text-center py-4 text-gray-500 text-sm">No recent activity</div>
+             ) : (
+               (showAllActivity ? recentActivity : recentActivity.slice(0, 4)).map((activity, index) => (
               <div key={index} className="bg-white !border border-[#4D60804D] rounded-lg p-4 transition">
                 <div className="flex items-start gap-3">
                   <div className=" flex items-center justify-center flex-shrink-0">
@@ -240,7 +415,8 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

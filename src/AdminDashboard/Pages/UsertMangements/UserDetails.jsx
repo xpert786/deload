@@ -74,8 +74,8 @@ const UserDetails = () => {
                     {/* Profile Picture */}
                     <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer">
                         {userData.profilePicture ? (
-                            <img 
-                                src={userData.profilePicture} 
+                            <img
+                                src={userData.profilePicture}
                                 alt={userData.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
@@ -142,8 +142,8 @@ const UserDetails = () => {
                 <button
                     onClick={() => setActiveTab('personal')}
                     className={`px-6 py-3 rounded-lg text-sm font-semibold transition cursor-pointer ${activeTab === 'personal'
-                            ? 'bg-[#003F8F] text-white'
-                            : 'bg-transparent text-[#003F8F] hover:bg-gray-50'
+                        ? 'bg-[#003F8F] text-white'
+                        : 'bg-transparent text-[#003F8F] hover:bg-gray-50'
                         }`}
                 >
                     Personal Info
@@ -151,8 +151,8 @@ const UserDetails = () => {
                 <button
                     onClick={() => setActiveTab('subscription')}
                     className={`px-6 py-3 rounded-lg text-sm font-semibold transition cursor-pointer ${activeTab === 'subscription'
-                            ? 'bg-[#003F8F] text-white'
-                            : 'bg-transparent text-[#003F8F] hover:bg-gray-50'
+                        ? 'bg-[#003F8F] text-white'
+                        : 'bg-transparent text-[#003F8F] hover:bg-gray-50'
                         }`}
                 >
                     Subscription Info
@@ -187,10 +187,7 @@ const UserDetails = () => {
                                         <p className="text-sm font-semibold text-[#003F8F] font-[Inter] mb-1">Phone</p>
                                         <p className="text-sm text-gray-800 font-[Inter]">{userData.phone}</p>
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-semibold text-[#003F8F] font-[Inter] mb-1">Active Coach</p>
-                                        <p className="text-sm text-gray-800 font-[Inter]">{userData.activeCoach}</p>
-                                    </div>
+                                    
                                 </div>
 
                                 {/* Column 3: Address */}
@@ -279,41 +276,7 @@ const UserDetails = () => {
                             </div>
                         </div>
 
-                        {/* Notification Preferences Section */}
-                        <div className="bg-white rounded-lg p-6">
-                            <h2 className="text-xl font-bold text-[#003F8F] font-[BasisGrotesquePro] mb-6">
-                                Notification Preferences
-                            </h2>
-                            <div className="space-y-6">
-                                {[
-                                    { key: 'accountActivity', label: 'Account Activity', desc: 'Get notified about important account activities.', state: accountActivity },
-                                    { key: 'securityAlerts', label: 'Security Alerts', desc: 'Receive security and privacy notifications.', state: securityAlerts },
-                                    { key: 'platformUpdates', label: 'Platform Updates', desc: 'News about new features and improvements.', state: platformUpdates },
-                                    { key: 'newUserRegistrations', label: 'New User Registrations', desc: 'Get notified when new users join the platform.', state: newUserRegistrations },
-                                    { key: 'paymentIssues', label: 'Payment Issues', desc: 'Alerts for failed payments and billing issues.', state: paymentIssues },
-                                    { key: 'systemAlerts', label: 'System Alerts', desc: 'Important system notifications and maintenance.', state: systemAlerts }
-                                ].map((item) => (
-                                    <div key={item.key} className="flex items-center justify-between">
-                                        <div className="flex-1">
-                                            <p className="text-sm font-semibold text-[#003F8F] font-[Inter] mb-1">
-                                                {item.label}
-                                            </p>
-                                            <p className="text-sm text-gray-600 font-[Inter]">{item.desc}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => handleToggle(item.key)}
-                                            className={`relative w-12 h-6 rounded-full transition cursor-pointer ${item.state ? 'bg-orange-500' : 'bg-gray-300'
-                                                }`}
-                                        >
-                                            <span
-                                                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${item.state ? 'translate-x-6' : 'translate-x-0'
-                                                    }`}
-                                            />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+
                     </>
                 )}
 
@@ -325,16 +288,18 @@ const UserDetails = () => {
 
             {/* Bottom Action Buttons - Only show for Personal Info tab */}
             {activeTab === 'personal' && (
-                <div className="flex justify-end gap-3 pb-6">
-                    <button
-                        onClick={() => navigate('/admin/clients')}
-                        className="px-6 py-2 bg-gray-100 text-gray-700 !border border-[#4D6080CC] rounded-lg text-sm font-semibold hover:bg-gray-200 transition cursor-pointer"
-                    >
-                        Cancel
-                    </button>
-                    <button className="px-6 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer">
-                        Save changes
-                    </button>
+                <div className="bg-white rounded-lg p-6">
+                    <div className="flex justify-end gap-3">
+                        <button
+                            onClick={() => navigate('/admin/clients')}
+                            className="px-6 py-2 bg-white text-[#003F8F] !border border-[#003F8F] rounded-lg text-sm font-semibold hover:bg-gray-50 transition cursor-pointer"
+                        >
+                            Cancel
+                        </button>
+                        <button className="px-6 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer">
+                            Save changes
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

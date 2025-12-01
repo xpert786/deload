@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Chat, Home, Reminders, Settings, WorkOut, WorkOutPlan } from "./icons";
+import { Chat, Home, Reminders, Settings, WorkOut, } from "./icons";
 import { useAuth } from "../../context/AuthContext";
 
 export default function Sidebar({ isOpen }) {
@@ -27,9 +27,12 @@ export default function Sidebar({ isOpen }) {
   };
 
   return (
-    <div className={`h-[calc(100vh-70px)] bg-[#326DB7] flex flex-col font-[BasisGrotesquePro] overflow-hidden shadow-lg transition-all duration-300 ${
+    <div className={`h-[calc(100vh-70px)] flex flex-col font-[BasisGrotesquePro] overflow-hidden shadow-lg transition-all duration-300 ${
       isOpen ? 'w-[260px]' : 'w-[80px] lg:w-[80px]'
-    }`}>
+    }`}
+    style={{
+      background: 'linear-gradient(to bottom, #003F8F, #74A8EA)'
+    }}>
       {/* --- Navigation Links --- */}
       <div className="flex-1 flex flex-col gap-2 px-2 lg:px-4 pt-13 pb-4">
         {/* Dashboard */}
@@ -61,7 +64,12 @@ export default function Sidebar({ isOpen }) {
           title={!isOpen ? "Workout Plan" : ""}
         >
           <span className="w-[30px] h-[30px] flex items-center justify-center rounded-full flex-shrink-0">
-            <WorkOutPlan />
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2.08301 7.91671H17.9163M2.08301 7.91671V17.0834C2.08301 17.3044 2.17081 17.5163 2.32709 17.6726C2.48337 17.8289 2.69533 17.9167 2.91634 17.9167H17.083C17.304 17.9167 17.516 17.8289 17.6723 17.6726C17.8285 17.5163 17.9163 17.3044 17.9163 17.0834V7.91671M2.08301 7.91671V4.16671C2.08301 3.94569 2.17081 3.73373 2.32709 3.57745C2.48337 3.42117 2.69533 3.33337 2.91634 3.33337H17.083C17.304 3.33337 17.516 3.42117 17.6723 3.57745C17.8285 3.73373 17.9163 3.94569 17.9163 4.16671V7.91671" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+<path d="M6.66602 12.9167L9.16602 15.4167L14.166 10.4167" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M6.66602 2.08337V5.41671M13.3327 2.08337V5.41671" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
+
           </span>
           {isOpen && <span className="whitespace-nowrap">Workout Plan</span>}
         </Link>

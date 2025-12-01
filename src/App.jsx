@@ -25,15 +25,18 @@ const App = () => {
         path="/"
         element={
           isAuthenticated ? (
-            user?.role === 'client' ? (
-              <Navigate to="/client/dashboard" replace />
-            ) : user?.role === 'coach' ? (
-              <Navigate to="/coach/dashboard" replace />
-            ) : user?.role === 'admin' ? (
-              <Navigate to="/admin/dashboard" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
+            (() => {
+              const userRole = user?.role?.toLowerCase();
+              if (userRole === 'client') {
+                return <Navigate to="/client/dashboard" replace />;
+              } else if (userRole === 'coach') {
+                return <Navigate to="/coach/dashboard" replace />;
+              } else if (userRole === 'admin') {
+                return <Navigate to="/admin/dashboard" replace />;
+              } else {
+                return <Navigate to="/login" replace />;
+              }
+            })()
           ) : (
             <Navigate to="/login" replace />
           )

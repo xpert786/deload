@@ -16,16 +16,21 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
-    // Redirect based on user role
-    if (user.role === 'client') {
+  // Normalize role to lowercase for comparison
+  const userRole = user?.role?.toLowerCase();
+  const normalizedAllowedRoles = allowedRoles.map(role => role.toLowerCase());
+  
+  if (allowedRoles.length > 0 && !normalizedAllowedRoles.includes(userRole)) {
+    // Redirect based on user role to their appropriate dashboard
+    if (userRole === 'client') {
       return <Navigate to="/client/dashboard" replace />;
-    } else if (user.role === 'coach') {
+    } else if (userRole === 'coach') {
       return <Navigate to="/coach/dashboard" replace />;
-    } else if (user.role === 'admin') {
+    } else if (userRole === 'admin') {
       return <Navigate to="/admin/dashboard" replace />;
     }
-    return <Navigate to="/" replace />;
+    // If role doesn't match and user is authenticated, redirect to login
+    return <Navigate to="/login" replace />;
   }
 
   return children;

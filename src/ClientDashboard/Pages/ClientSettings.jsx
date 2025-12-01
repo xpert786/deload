@@ -18,7 +18,7 @@ const ClientSettings = () => {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 bg-[#F3F7FF]">
+    <div className="space-y-6 px-4 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6 bg-[#F3F7FF]">
       {/* Page Header */}
       <div>
         <h2 className="text-2xl font-medium text-[#003F8F] font-[Poppins]">
@@ -31,7 +31,7 @@ const ClientSettings = () => {
         <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-4 sm:mb-6">
           Profile Settings
         </h2>
-        
+
         <div className="space-y-4 sm:space-y-6">
           {/* Profile Picture */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -55,7 +55,7 @@ const ClientSettings = () => {
                 onChange={handleImageChange}
                 className="hidden"
               />
-              <span className="inline-block px-4 py-2 border-2 border-[#60A5FA] text-[#003F8F] rounded-lg font-medium font-[Inter] hover:bg-[#60A5FA]/10 transition-colors">
+              <span className="inline-block  bg-[#4D60801A] px-4 py-2 border-2 border-[#60A5FA] text-[#003F8F] rounded-lg font-medium font-[Inter] hover:bg-[#60A5FA]/10 transition-colors">
                 Choose Picture
               </span>
             </label>
@@ -126,7 +126,7 @@ const ClientSettings = () => {
         <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-4 sm:mb-6">
           Account Settings
         </h2>
-        
+
         <div className="space-y-4 sm:space-y-6">
           {/* New Password Input */}
           <div>
@@ -152,42 +152,42 @@ const ClientSettings = () => {
         <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-4 sm:mb-6">
           App Preferences
         </h2>
-        
+
         <div className="flex items-center justify-between">
-  {/* Left: Label */}
-  <label className="text-sm font-medium text-[#003F8F] font-[Inter]">
-    Units
-  </label>
+          {/* Left: Label */}
+          <label className="text-sm font-medium text-[#003F8F] font-[Inter]">
+            Units
+          </label>
 
-  {/* Right: Radio buttons */}
-  <div className="flex gap-6">
-    <label className="flex items-center gap-2 cursor-pointer">
-      <input
-        type="radio"
-        name="units"
-        value="kg"
-        checked={units === 'kg'}
-        onChange={(e) => setUnits(e.target.value)}
-        className="w-5 h-5 accent-[#FB923C] cursor-pointer"
-        style={{ accentColor: '#FB923C' }}
-      />
-      <span className="text-sm sm:text-base text-[#003F8F] font-[Inter]">Kg</span>
-    </label>
+          {/* Right: Radio buttons */}
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="units"
+                value="kg"
+                checked={units === 'kg'}
+                onChange={(e) => setUnits(e.target.value)}
+                className="w-5 h-5 accent-[#FB923C] cursor-pointer"
+                style={{ accentColor: '#FB923C' }}
+              />
+              <span className="text-sm sm:text-base text-[#003F8F] font-[Inter]">Kg</span>
+            </label>
 
-    <label className="flex items-center gap-2 cursor-pointer">
-      <input
-        type="radio"
-        name="units"
-        value="lbs"
-        checked={units === 'lbs'}
-        onChange={(e) => setUnits(e.target.value)}
-        className="w-5 h-5 accent-[#FB923C] cursor-pointer"
-        style={{ accentColor: '#FB923C' }}
-      />
-      <span className="text-sm sm:text-base text-[#003F8F] font-[Inter]">lbs</span>
-    </label>
-  </div>
-</div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="units"
+                value="lbs"
+                checked={units === 'lbs'}
+                onChange={(e) => setUnits(e.target.value)}
+                className="w-5 h-5 accent-[#FB923C] cursor-pointer"
+                style={{ accentColor: '#FB923C' }}
+              />
+              <span className="text-sm sm:text-base text-[#003F8F] font-[Inter]">lbs</span>
+            </label>
+          </div>
+        </div>
 
       </div>
     </div>

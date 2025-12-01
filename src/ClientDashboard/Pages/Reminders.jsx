@@ -53,7 +53,7 @@ const ReminderCard = ({ reminder }) => (
 
 const Reminders = () => {
   return (
-    <div className="space-y-6 p-4 sm:p-6 bg-[#F7F7F7]">
+    <div className="space-y-6 px-4 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6 bg-[#F7F7F7]">
       <div>
         <h1 className="text-2xl sm:text-3xl font-medium text-[#003F8F] font-[Poppins]">
           Reminders

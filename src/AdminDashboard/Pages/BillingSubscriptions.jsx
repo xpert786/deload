@@ -429,7 +429,7 @@ const BillingSubscriptions = () => {
           {/* Add New Plan Button */}
           <button
             onClick={() => setShowAddPlanModal(true)}
-            className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002A6A] transition flex items-center gap-2"
+            className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002A6A] transition flex items-center gap-2 cursor-pointer"
           >
             <svg width="16" height="16" viewBox="0 0 16 16">
               <path d="M8 3V13M3 8H13" stroke="white" strokeWidth="2" strokeLinecap="round" />
@@ -747,12 +747,12 @@ const BillingSubscriptions = () => {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setShowAddPlanModal(false)}
-                className="px-4 py-2 !border border-[#4D6080CC] rounded-lg text-sm font-semibold hover:bg-gray-100"
+                className="px-4 py-2 !border border-[#4D6080CC] rounded-lg text-sm font-semibold hover:bg-gray-100 cursor-pointer"
               >
                 Cancel
               </button>
 
-              <button className="px-5 py-2 bg-[#003F8F] text-white text-sm font-semibold rounded-lg hover:bg-[#002A6A]">
+              <button className="px-5 py-2 bg-[#003F8F] text-white text-sm font-semibold rounded-lg hover:bg-[#002A6A] cursor-pointer">
                 Create Plan
               </button>
             </div>

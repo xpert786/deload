@@ -419,7 +419,7 @@
 // export default CoachDashboard;
 
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -480,29 +480,121 @@ const CoachDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // Calendar state management
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+    return today;
+  }); // Default to today
+  const [weekOffset, setWeekOffset] = useState(0); // For week navigation
+
+  // Selected session (for row highlight on click)
+  const [selectedSessionIndex, setSelectedSessionIndex] = useState(null);
+
+  // Selected target tab for Client Progress (weekly / monthly)
+  const [selectedTarget, setSelectedTarget] = useState("weekly");
+
+  // Generate week dates based on weekOffset
+  const weekDates = useMemo(() => {
+    const dates = [];
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    
+    // Calculate the start of the current week (Monday)
+    // getDay() returns 0 (Sunday) to 6 (Saturday)
+    const day = startOfWeek.getDay();
+    // Calculate days to subtract to get to Monday (day 1)
+    // Sunday (0) -> subtract 6, Monday (1) -> subtract 0, Tuesday (2) -> subtract 1, etc.
+    const daysToSubtract = day === 0 ? 6 : day - 1;
+    startOfWeek.setDate(startOfWeek.getDate() - daysToSubtract);
+    
+    // Reset time to start of day for consistency
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    // Add week offset (7 days per week)
+    startOfWeek.setDate(startOfWeek.getDate() + (weekOffset * 7));
+    
+    // Generate 7 days starting from Monday
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      date.setHours(0, 0, 0, 0); // Reset time for consistency
+      dates.push(date);
+    }
+    
+    return dates;
+  }, [weekOffset]);
+
+  // Format date to "Mon 21" format
+  const formatDate = (date) => {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayName = dayNames[date.getDay()];
+    const dayNumber = date.getDate();
+    return { dayName, dayNumber, fullDate: date };
+  };
+
+  // Handle date selection
+  const handleDateClick = (date) => {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    setSelectedDate(normalizedDate);
+    // You can add additional logic here, like fetching sessions for the selected date
+    console.log('Selected date:', normalizedDate.toISOString().split('T')[0]);
+  };
+
+  // Handle week navigation
+  const handlePreviousWeek = () => {
+    setWeekOffset(prev => prev - 1);
+  };
+
+  const handleNextWeek = () => {
+    setWeekOffset(prev => prev + 1);
+  };
+
+  // Check if a date is selected
+  const isDateSelected = (date) => {
+    // Normalize both dates to start of day for accurate comparison
+    const date1 = new Date(date);
+    date1.setHours(0, 0, 0, 0);
+    const date2 = new Date(selectedDate);
+    date2.setHours(0, 0, 0, 0);
+    return date1.getTime() === date2.getTime();
+  };
+
   return (
     <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F] overflow-x-hidden">
 
-      {/* HERO SECTION */}
-      <div className="bg-[#326DB7] rounded-lg p-6 text-white relative overflow-hidden">
-        <div className="flex justify-between items-start relative z-10">
-          <div>
-            <h1 className="text-2xl font-medium font-[Poppins]">Welcome back, {user?.name?.split(" ")[0] || "John"}!</h1>
-            <p className="text-sm font-[Inter] mt-2">You're on a 7-day streak! Ready to crush today's workout?</p>
-          </div>
+    
 
-          <img
-            src={ManImage}
-            className="hidden sm:block h-32 w-auto object-contain"
-            alt="hero"
-          />
-        </div>
+            {/* Hero */}
+            <div className="rounded-lg p-6 text-white relative" style={{ background: 'linear-gradient(to right, #003F8F, #0DC7F5)' }}>
+    <div className="relative flex justify-between items-start">
+      <div>
+        <h1 className="text-2xl font-medium font-[Poppins] mb-2">
+          Hello, {user?.name?.split(' ')[0] || 'John'}!
+        </h1>
+        <p className="text-sm font-[Inter] mb-4">
+          You're on a 7-day streak! Ready to crush today's workout?
+        </p>
+      </div>
 
-        <div
-          className="absolute inset-0 bg-cover bg-right-bottom sm:hidden opacity-30"
-          style={{ backgroundImage: `url(${ManImage})` }}
+      {/* Image shown only on larger screens and moved above parent */}
+      <div className="hidden sm:flex sm:absolute sm:right-0 sm:-top-15 sm:items-end mt-3 mb-6">
+        <img
+          src={ManImage}
+          alt="Fitness"
+          className="h-full w-auto object-cover opacity-90"
+          style={{ maxHeight: '150px' }}
         />
       </div>
+    </div>
+
+    {/* Background image only on mobile */}
+    <div
+      className="absolute inset-0 bg-cover bg-no-repeat bg-bottom sm:hidden opacity-30"
+      style={{ backgroundImage: `url(${ManImage})` }}
+    ></div>
+  </div>
 
       {/* QUICK START */}
       <div>
@@ -634,23 +726,28 @@ const CoachDashboard = () => {
             {/* DATE SELECTOR */}
             <div className="flex items-center gap-3 text-xs">
 
-              <button className="flex items-center justify-center bg-[#F5F6FA]">
+              <button 
+                onClick={handlePreviousWeek}
+                className="flex items-center justify-center bg-[#F5F6FA] w-8 h-10 rounded-lg border border-[#D7DCE5] hover:bg-[#E6E7EB] transition cursor-pointer"
+                aria-label="Previous week"
+              >
                 <ArrowLeftIcon />
               </button>
 
               <div className="flex gap-4 overflow-x-auto no-scrollbar px-2">
-                {["Mon 21", "Tue 22", "Wed 23", "Thu 24", "Fri 25", "Sat 26", "Sun 27"].map((day, idx) => {
-                  const [name, date] = day.split(" ");
-
-                  const isSelected = idx === 5; // SAT select
+                {weekDates.map((date) => {
+                  const { dayName, dayNumber } = formatDate(date);
+                  const isSelected = isDateSelected(date);
 
                   return (
                     <button
-                      key={day}
+                      key={date.toISOString()}
+                      onClick={() => handleDateClick(date)}
                       className={`
-            min-w-[60px] rounded-xl border overflow-hidden text-center
-            ${isSelected ? "border-[#3F547D]" : "border-[#D7DCE5]"}
+            min-w-[60px] rounded-xl border overflow-hidden text-center transition cursor-pointer
+            ${isSelected ? "border-[#3F547D]" : "border-[#D7DCE5] hover:border-[#3F547D]/50"}
           `}
+                      aria-label={`Select ${dayName} ${dayNumber}`}
                     >
                       {/* TOP HALF */}
                       <div
@@ -659,13 +756,13 @@ const CoachDashboard = () => {
               ${isSelected ? "bg-[#3F547D] text-white" : "bg-[#E6E7EB] text-[#3F547D]"}
             `}
                       >
-                        <span className="text-sm font-medium">{name}</span>
+                        <span className="text-sm font-medium">{dayName}</span>
                       </div>
 
                       {/* BOTTOM HALF — FIXED WHITE FOR SELECTED */}
                       <div className="bg-white py-2">
                         <span className={`text-sm font-semibold ${isSelected ? "text-black" : "text-black"}`}>
-                          {date}
+                          {dayNumber}
                         </span>
                       </div>
                     </button>
@@ -673,7 +770,11 @@ const CoachDashboard = () => {
                 })}
               </div>
 
-              <button className="flex items-center justify-center bg-[#F5F6FA]">
+              <button 
+                onClick={handleNextWeek}
+                className="flex items-center justify-center bg-[#F5F6FA] w-8 h-10 rounded-lg border border-[#D7DCE5] hover:bg-[#E6E7EB] transition cursor-pointer"
+                aria-label="Next week"
+              >
                 <ArrowRightIcon />
               </button>
 
@@ -686,17 +787,21 @@ const CoachDashboard = () => {
             <div className="space-y-3">
               {sessions.map((session, index) => {
                 const isPending = session.status === "Pending";
+                const isSelectedRow = selectedSessionIndex === index;
 
                 return (
                   <div
                     key={session.name}
+                    onClick={() => setSelectedSessionIndex(index)}
                     className={`
           rounded-xl border px-4 py-4 flex flex-col sm:flex-row 
-          items-start sm:items-center justify-between gap-4
+          items-start sm:items-center justify-between gap-4 cursor-pointer transition
 
-          ${isPending
-                        ? "bg-[#FFF4EC] border-[#F5C6A5]"   // Pending style (orange background + orange border)
-                        : "bg-white border-[#D5DFEE]"}      // Normal style
+          ${
+            isSelectedRow
+              ? "bg-[#FFF4EC] border-[#F5C6A5]"   
+              : "bg-white border-[#D5DFEE] hover:border-[#003F8F66]" 
+          }
         `}
                   >
                     {/* LEFT Section */}
@@ -736,12 +841,32 @@ const CoachDashboard = () => {
 
             <p className="text-xl font-semibold">Client Progress</p>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-3 ">
               <div className="flex !border border-[#4D60804D] rounded-lg p-2 gap-2">
-                <button className="px-4 py-2 rounded-lg bg-[#003F8F] text-white text-sm">
+                <button
+                  onClick={() => setSelectedTarget("weekly")}
+                  className={`
+                    px-4 py-2 rounded-lg text-sm cursor-pointer
+                    ${
+                      selectedTarget === "weekly"
+                        ? "bg-[#003F8F] text-white"
+                        : "bg-transparent text-[#003F8F]"
+                    }
+                  `}
+                >
                   Weekly Target
                 </button>
-                <button className="px-4 py-2 rounded-lg text-[#003F8F] text-sm">
+                <button
+                  onClick={() => setSelectedTarget("monthly")}
+                  className={`
+                    px-4 py-2 rounded-lg text-sm cursor-pointer
+                    ${
+                      selectedTarget === "monthly"
+                        ? "bg-[#003F8F] text-white"
+                        : "bg-transparent text-[#003F8F]"
+                    }
+                  `}
+                >
                   Monthly Target
                 </button>
               </div>

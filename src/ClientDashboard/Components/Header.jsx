@@ -8,7 +8,7 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
   const { user } = useAuth();
 
   return (
-    <div className='flex justify-between bg-[#FFFFFF] shadow-sm h-[70px] min-h-[70px]'>
+    <div className='flex justify-between bg-[#FFFFFF]  h-[70px] min-h-[70px]'>
       {/* Left Section - Logo Area */}
       <div className={`h-full flex items-center justify-center relative transition-all duration-300 ${isSidebarOpen ? 'w-[260px] lg:w-[260px]' : 'w-0 lg:w-[80px]'
         } overflow-hidden`}>
@@ -87,7 +87,7 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
             </div>
             <input
               type="text"
-              placeholder="Q Search here..."
+              placeholder="Search here..."
               className="w-40 sm:w-48 lg:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm mb-[10px] sm:mb-0"
             />
 

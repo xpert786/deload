@@ -178,7 +178,7 @@ const LogWorkout = () => {
   };
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 bg-[#F7F7F7]">
+    <div className="space-y-6 px-4 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6 bg-[#F7F7F7]">
       {/* Header */}
       <div className="flex flex-col lg:items-start gap-4">
         <div>
@@ -207,31 +207,20 @@ const LogWorkout = () => {
         <div className="flex flex-col lg:flex-row lg:justify-between gap-4 lg:gap-8">
           {/* Left: Exercise Info */}
           <div className="flex-1">
-            <h2 className="text-xl sm:text-2xl font-medium text-[#003F8F] font-[Poppins] mb-4">
+            <h2 className="text-xl sm:text-2xl font-medium text-[#003F8F] font-[Poppins] mb-3">
               {displayedExercise?.name}
             </h2>
-            <div className="flex flex-wrap gap-4">
-              <div className="inline-flex items-center gap-2 text-gray-600 text-sm sm:text-base font-[Inter]">
-                <span className="font-medium ">Sets:</span>
-                {displayedExercise?.stats?.sets}
-              </div>
-              <div className="inline-flex items-center gap-2 text-gray-600 text-sm sm:text-base font-[Inter]">
-                <span className="font-medium ">Reps:</span>
-                {displayedExercise?.stats?.reps}
-              </div>
-              <div className="inline-flex items-center gap-2 text-gray-600 text-sm sm:text-base font-[Inter]">
-                <span className="font-medium ">Rest Time:</span>
-                {displayedExercise?.stats?.rest}
-              </div>
-            </div>
+            <p className="text-sm sm:text-base text-gray-500 font-[Inter]">
+              Sets: {displayedExercise?.stats?.sets} • Reps: {displayedExercise?.stats?.reps} • Rest Time: {displayedExercise?.stats?.rest}
+            </p>
           </div>
 
           {/* Right: Instructions */}
           <div className="lg:w-80">
-            <p className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-2 text-right lg:text-left">
+            <h3 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-2">
               Instructions
-            </p>
-            <p className="text-sm sm:text-base text-gray-600 font-[Inter] text-right lg:text-left">
+            </h3>
+            <p className="text-sm sm:text-base text-gray-500 font-[Inter]">
               {displayedExercise?.instructions}
             </p>
           </div>
@@ -286,20 +275,24 @@ const LogWorkout = () => {
                 <div className="col-span-4 flex items-center justify-center gap-2">
                   <button
                     onClick={() => handleSetAction(set?.id, 'done')}
-                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium font-[Inter] transition-colors ${
+                    className={`px-3 sm:px-4 py-1.3 sm:py-1 rounded-lg text-xs sm:text-sm font-medium font-[Inter] transition-colors ${
                       set?.status === 'done'
                         ? 'bg-[#003F8F] text-white'
-                        : 'bg-white text-[#003F8F] border border-transparent hover:bg-[#F3F7FF]'
+                        : set?.status === 'active'
+                        ? 'bg-[#FEECE2] text-gray-800'
+                        : 'bg-white text-[#003F8F] border border-gray-300'
                     }`}
                   >
                     Done
                   </button>
                   <button 
                     onClick={() => handleSetAction(set?.id, 'skip')}
-                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium font-[Inter] transition-colors ${
-                      set?.status === 'skipped'
-                        ? 'bg-[#FB923C] text-white'
-                        : 'bg-white text-[#003F8F] border border-[#003F8F] hover:bg-[#F3F7FF]'
+                    className={`px-3 sm:px-4 py-1.3 sm:py-1 rounded-lg text-xs sm:text-sm font-medium font-[Inter] transition-colors ${
+                      set?.status === 'active'
+                        ? 'bg-[#F57C00] text-white'
+                        : set?.status === 'done'
+                        ? 'bg-white text-[#003F8F] !border border-[#4D60804D]'
+                        : 'bg-white text-[#003F8F] !border border-[#4D60804D]'
                     }`}
                   >
                     Skip

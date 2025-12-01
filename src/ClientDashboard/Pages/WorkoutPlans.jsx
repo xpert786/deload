@@ -112,7 +112,7 @@ const WorkoutPlans = () => {
   const stats = viewMode === 'Monthly' ? monthlyStats : weeklyStats;
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 bg-[#F7F7F7]">
+    <div className="space-y-6 px-4 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6 bg-[#F7F7F7]">
       {/* Header */}
       <div className="flex flex-col lg:items-start lg:justify-between gap-4">
         <div>
@@ -135,7 +135,7 @@ const WorkoutPlans = () => {
       </div>
 
       {/* Main grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
+      <div className="grid lg:grid-cols-3 gap-4 sm:gap-5 lg:gap-6">
         {/* Today's workout */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100">
@@ -237,31 +237,39 @@ const WorkoutPlans = () => {
           </div>
 
           {/* Progress Overview */}
-          <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <p className="text-xl font-medium text-[#003F8F] font-[Poppins]">Progress Overview</p>
-          <div className="flex items-center gap-2 text-sm font-[Inter]">
-            <button
-              onClick={() => setViewMode('Monthly')}
-              className={`px-4 py-1.5 rounded-lg ${viewMode === 'Monthly' ? 'bg-[#003F8F] text-white' : 'border border-gray-200 text-[#003F8F]'}`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setViewMode('Weekly')}
-              className={`px-4 py-1.5 rounded-lg ${viewMode === 'Weekly' ? 'bg-[#003F8F] text-white' : 'border border-gray-200 text-[#003F8F]'}`}
-            >
-              Weekly
-            </button>
-          </div>
+          <div className="bg-white rounded-2xl p-3 sm:p-5 md:p-6 border border-gray-100">
+            <div className="mb-4">
+              <p className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-3">Progress Overview</p>
+              <div className="flex items-center border border-gray-200 rounded-lg p-1 text-sm font-[Inter] bg-white w-fit">
+                <button
+                  onClick={() => setViewMode('Monthly')}
+                  className={`px-4 py-1.5 rounded-lg transition-colors ${
+                    viewMode === 'Monthly' 
+                      ? 'bg-[#003F8F] text-white' 
+                      : 'bg-white text-[#003F8F]'
+                  }`}
+                >
+                  Monthly
+                </button>
+                <button
+                  onClick={() => setViewMode('Weekly')}
+                  className={`px-4 py-1.5 rounded-lg transition-colors ${
+                    viewMode === 'Weekly' 
+                      ? 'bg-[#003F8F] text-white' 
+                      : 'bg-white text-[#003F8F]'
+                  }`}
+                >
+                  Weekly
+                </button>
+              </div>
             </div>
-        <div className="flex items-center justify-between mb-3 text-[#003F8F] font-semibold font-[Inter]">
+        <div className="flex items-center justify-between mb-3 text-[#003F8F] font-semibold font-[Inter] text-sm sm:text-base">
           <button onClick={handlePrev} className="p-1 hover:bg-gray-100 rounded disabled:opacity-40" disabled={(viewMode === 'Monthly' && currentMonthIndex === 0) || (viewMode === 'Weekly' && currentWeekIndex === 0)}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-          <span>{viewMode === 'Monthly' ? activeMonth.month : activeWeek.month}</span>
+          <span className="text-sm sm:text-base">{viewMode === 'Monthly' ? activeMonth.month : activeWeek.month}</span>
           <button onClick={handleNext} className="p-1 hover:bg-gray-100 rounded disabled:opacity-40" disabled={(viewMode === 'Monthly' && currentMonthIndex === monthlyCalendars.length - 1) || (viewMode === 'Weekly' && currentWeekIndex === weeklyCalendars.length - 1)}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -275,13 +283,14 @@ const WorkoutPlans = () => {
                 <span key={day}>{day}</span>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-2 text-sm font-[Inter]">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 text-sm font-[Inter]">
               {activeMonth.days.map((item) => (
                 <div
                   key={`${activeMonth.month}-${item.day}`}
-                  className={`min-h-[56px] flex flex-col items-center justify-center rounded-lg ${getStatusStyle(item.status)}`}
+                  className={`aspect-square flex flex-col items-center justify-center rounded-lg text-xs sm:text-sm ${getStatusStyle(item.status)}`}
+                  style={{ minHeight: '36px' }}
                 >
-                  <span className="text-base font-semibold">{item.day}</span>
+                  <span className="font-semibold">{item.day}</span>
                 </div>
               ))}
             </div>
@@ -293,20 +302,21 @@ const WorkoutPlans = () => {
                 <span key={`${item.dayLabel}-header`}>{item.dayLabel}</span>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-2 text-sm font-[Inter]">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 text-sm font-[Inter]">
               {activeWeek.days.map((item) => (
                 <div
                   key={`${item.dayLabel}-${item.day}`}
-                  className={`min-h-[56px] flex flex-col items-center justify-center rounded-lg ${getStatusStyle(item.status)}`}
+                  className={`aspect-square flex flex-col items-center justify-center rounded-lg ${getStatusStyle(item.status)}`}
+                  style={{ minHeight: '36px' }}
                 >
                   <span className="text-xs font-semibold">{item.dayLabel}</span>
-                  <span className="text-base font-semibold">{item.day}</span>
+                  <span className="text-xs sm:text-sm font-semibold">{item.day}</span>
                 </div>
               ))}
             </div>
           </>
         )}
-            <div className="flex items-center gap-4 mt-4 text-xs text-gray-500 font-[Inter]">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 mt-4 text-xs text-gray-500 font-[Inter]">
               {progressLegend.map((legend) => (
                 <div key={legend.label} className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full" style={{ backgroundColor: legend.color }}></span>

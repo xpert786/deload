@@ -1,8 +1,14 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import DloadLogo from "../assets/DloadLogo.png";
 import ManImage from "../assets/ManImage.png";
+
+// Use API URL from .env file only
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -11,7 +17,6 @@ const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -19,22 +24,184 @@ const Login = () => {
     setError('');
     setLoading(true);
 
-    const result = login(email, password);
+    try {
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      const apiUrl = `${baseUrl}/login/`;
+      
+      console.log('API URL:', apiUrl);
 
-    if (result.success) {
-      // Redirect based on role
-      if (result.user.role === 'client') {
-        navigate('/client/dashboard');
-      } else if (result.user.role === 'coach') {
-        navigate('/coach/dashboard');
-      } else if (result.user.role === 'admin') {
-        navigate('/admin/dashboard');
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies for session-based auth
+        body: JSON.stringify({
+          email: email,
+          password: password
+        }),
+      });
+      
+      // Check response headers for token (some APIs return token in headers)
+      const authHeader = response.headers.get('Authorization') || 
+                        response.headers.get('X-Auth-Token') ||
+                        response.headers.get('X-Token');
+      
+      if (authHeader) {
+        const token = authHeader.replace('Bearer ', '').replace('Token ', '');
+        console.log('Token found in response headers:', token.substring(0, 20) + '...');
+        localStorage.setItem('token', token);
+        localStorage.setItem('access_token', token);
       }
-    } else {
-      setError(result.error);
-    }
 
-    setLoading(false);
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('Response status:', response.status);
+        console.log('Response text:', responseText);
+        
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        if (response.status === 400) {
+          setError('Invalid email or password. Please check your credentials.');
+        } else if (response.status === 401) {
+          setError('Invalid email or password.');
+        } else if (response.status === 0 || response.status >= 500) {
+          setError('Server error. Please try again later.');
+        } else {
+          setError(`Request failed with status ${response.status}. Please try again.`);
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (response.ok) {
+        // Store user data in localStorage
+        console.log('Login response:', result);
+       
+        const responseData = result.data || result.user || result;
+        const userData = {
+          id: responseData?.id,
+          email: responseData?.email || email,
+          fullname: responseData?.fullname || responseData?.name,
+          role: responseData?.role,
+          ...responseData
+        };
+        
+        // Ensure role is present
+        if (!userData.role) {
+          console.error('Role not found in response:', result);
+          setError('Login successful but role information is missing. Please contact support.');
+          setLoading(false);
+          return;
+        }
+        
+        // Store token if present in response - check all possible locations
+        // Priority: tokens.access (JWT format) > token > access_token > etc.
+        const authToken = result.tokens?.access ||  // JWT tokens.access format
+                         result.tokens?.access_token ||
+                         result.token || 
+                         result.access_token || 
+                         result.accessToken ||
+                         result.access ||
+                         result.data?.token || 
+                         result.data?.access_token ||
+                         result.data?.accessToken ||
+                         result.data?.access ||
+                         responseData?.token ||
+                         responseData?.access_token ||
+                         responseData?.accessToken ||
+                         responseData?.access;
+        
+        // Also store refresh token if available
+        const refreshToken = result.tokens?.refresh || 
+                           result.tokens?.refresh_token ||
+                           result.refresh_token ||
+                           result.refresh;
+        
+        if (authToken) {
+          userData.token = authToken;
+          // Also store token separately for easy access
+          localStorage.setItem('token', authToken);
+          localStorage.setItem('access_token', authToken);
+          console.log('✓ Access token stored:', authToken.substring(0, 30) + '...');
+          
+          // Store refresh token if available
+          if (refreshToken) {
+            localStorage.setItem('refresh_token', refreshToken);
+            console.log('✓ Refresh token stored');
+          }
+        } else {
+          console.warn('⚠ No token found in login response. API might use session-based auth.');
+          console.log('Full login response:', JSON.stringify(result, null, 2));
+          // If no token, API uses session-based auth with cookies
+          // This is fine - credentials: 'include' will send cookies
+        }
+        
+        localStorage.setItem('user', JSON.stringify(userData));
+        console.log('User logged in:', { ...userData, token: authToken ? '***' : 'none' });
+
+        // Trigger AuthContext update by dispatching custom event
+        window.dispatchEvent(new Event('userUpdated'));
+
+        // Normalize role to lowercase for comparison
+        const userRole = userData.role?.toLowerCase();
+        
+        // Redirect based on role (client, coach, admin)
+        if (userRole === 'client') {
+          navigate('/client/dashboard', { replace: true });
+        } else if (userRole === 'coach') {
+          navigate('/coach/dashboard', { replace: true });
+        } else if (userRole === 'admin') {
+          navigate('/admin/dashboard', { replace: true });
+        } else {
+          console.error('Unknown role:', userData.role);
+          setError(`Unknown user role: ${userData.role}. Please contact support.`);
+        }
+      } else {
+        // Handle different error formats
+        let errorMessage = 'Login failed. Please try again.';
+        
+        if (result.message) {
+          errorMessage = result.message;
+        } else if (result.error) {
+          errorMessage = result.error;
+        } else if (result.detail) {
+          errorMessage = result.detail;
+        } else if (result.non_field_errors) {
+          errorMessage = Array.isArray(result.non_field_errors) 
+            ? result.non_field_errors[0] 
+            : result.non_field_errors;
+        }
+        
+        setError(errorMessage);
+        console.error('API Error Response:', result);
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      console.error('Error details:', {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+      });
+      
+      // Handle CORS and network errors
+      if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('Failed to fetch'))) {
+        setError('Network/CORS Error: Unable to connect to the server. This could be due to:\n1. CORS issue - Backend needs to allow requests from http://localhost:5173\n2. Server is down or unreachable\n3. Network connectivity issue\n\nPlease check the API URL in .env file and ensure the backend server is running and configured for CORS.');
+      } else if (err.message) {
+        setError(`Error: ${err.message}`);
+      } else {
+        setError('Network error. Please check your connection and try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,7 +226,7 @@ const Login = () => {
 
             {/* Error Message */}
             {error && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm whitespace-pre-line">
                 {error}
               </div>
             )}
@@ -162,43 +329,6 @@ const Login = () => {
                 >
                   {loading ? 'Logging in...' : 'Login'}
                 </button>
-              </div>
-
-              {/* Demo Credentials */}
-              <div className="mt-4 w-full bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-[#003F8F] text-xs font-semibold mb-2 font-[Inter] text-center">Quick Login - Click to Auto-Fill</p>
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('client@example.com');
-                      setPassword('client123');
-                    }}
-                    className="w-full bg-white border border-blue-300 rounded px-3 py-1.5 text-left hover:bg-blue-100 transition-colors"
-                  >
-                    <p className="text-[#003F8F] text-xs font-semibold font-[Inter]">👤 Client: client@example.com / client123</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('coach@example.com');
-                      setPassword('coach123');
-                    }}
-                    className="w-full bg-white border border-blue-300 rounded px-3 py-1.5 text-left hover:bg-blue-100 transition-colors"
-                  >
-                    <p className="text-[#003F8F] text-xs font-semibold font-[Inter]">💪 Coach: coach@example.com / coach123</p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmail('admin@example.com');
-                      setPassword('admin123');
-                    }}
-                    className="w-full bg-white border border-blue-300 rounded px-3 py-1.5 text-left hover:bg-blue-100 transition-colors"
-                  >
-                    <p className="text-[#003F8F] text-xs font-semibold font-[Inter]">⚙️ Admin: admin@example.com / admin123</p>
-                  </button>
-                </div>
               </div>
               
               {/* Sign up Link */}
