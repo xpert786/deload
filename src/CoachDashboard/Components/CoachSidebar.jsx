@@ -11,6 +11,12 @@ export default function CoachSidebar({ isOpen }) {
     if (path === '/coach/dashboard') {
       return location.pathname === path || location.pathname.startsWith('/coach/dashboard/');
     }
+    if (path === '/coach/clients') {
+      return location.pathname === path || location.pathname.startsWith('/coach/clients/');
+    }
+    if (path === '/coach/ai-program') {
+      return location.pathname === path || location.pathname.startsWith('/coach/ai-program/');
+    }
     return location.pathname === path;
   };
 
