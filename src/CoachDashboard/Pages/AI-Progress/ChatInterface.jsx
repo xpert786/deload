@@ -1,17 +1,171 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-const ChatInterface = () => {
+// Use API URL from .env file
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
+const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiCall = false }) => {
   const [message, setMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState([
+    { type: 'ai', text: "Hi there, How can I help you?" }
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
+  const initialMessageSentRef = useRef(false);
 
-  const chatMessages = [
-    { type: 'ai', text: "Hi there, How can I help you?" },
-    { type: 'user', text: "create a calendar", isButton: true },
-    { type: 'ai', text: "I'll create a beautiful, modern calendar application for you!" },
-    { type: 'ai', text: "Design Inspiration: Google Calendar meets modern design - clean interface with vibrant gradients, smooth animations, and an intuitive layout." },
-    { type: 'ai', text: "Features:\n• Month view with current date highlighting\n• Add, view, and manage events\n• Navigate between months\n• Event categories with color coding\n• Responsive design" },
-    { type: 'user', text: "create the full week workout\nof a person:\nName: john,\nHeight: 5.6,\nWeight: 70kg" },
-    { type: 'ai', text: "I'll help you create a comprehensive workout management system integrated with the calendar. This is a multi-system project, so let me first check the available integrations and understand the current structure." }
-  ];
+  // API call function - extracted for reuse
+  const handleSendMessage = useCallback(async (userMessage) => {
+    if (!userMessage || !userMessage.trim()) {
+      return;
+    }
+
+    const messageToSend = userMessage.trim();
+    
+    // Add user message to chat
+    setChatMessages(prev => [...prev, { type: 'user', text: messageToSend }]);
+    setIsLoading(true);
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api') 
+        ? `${baseUrl}/generate-workout-plan/`
+        : `${baseUrl}/api/generate-workout-plan/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log('=== API CALL START ===');
+      console.log('API URL:', apiUrl);
+      console.log('Message:', messageToSend);
+      console.log('Headers:', headers);
+
+      // Call API
+      console.log('Making fetch request...');
+      const requestBody = {
+        question: messageToSend,
+        message: messageToSend,
+        save_to_db: false
+      };
+      console.log('Request body:', requestBody);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('=== API RESPONSE ===');
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('API Response text:', responseText);
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok && result.data) {
+        // Add AI response to chat
+        setChatMessages(prev => [...prev, { 
+          type: 'ai', 
+          text: result.message || "Workout plan generated successfully!" 
+        }]);
+
+        // Pass workout plan data to parent
+        if (onWorkoutPlanGenerated) {
+          onWorkoutPlanGenerated(result.data);
+        }
+      } else {
+        // Handle validation errors
+        const errorMessage = result.message || 'Failed to generate workout plan';
+        const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
+        throw new Error(errorMessage + (errorDetails ? ` - ${errorDetails}` : ''));
+      }
+    } catch (error) {
+      console.error('=== API ERROR ===');
+      console.error('Error generating workout plan:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      setChatMessages(prev => [...prev, { 
+        type: 'ai', 
+        text: `Sorry, I encountered an error: ${error.message}. Please check the console for details.` 
+      }]);
+    } finally {
+      setIsLoading(false);
+      console.log('=== API CALL END ===');
+    }
+  }, [onWorkoutPlanGenerated]);
+
+  // Handle initial message from parent
+  useEffect(() => {
+    if (initialMessage && initialMessage.trim() && !initialMessageSentRef.current && !isLoading) {
+      initialMessageSentRef.current = true;
+      const messageToSend = initialMessage.trim();
+      setMessage(messageToSend);
+      
+      // Add user message to chat
+      setChatMessages(prev => [...prev, { type: 'user', text: messageToSend }]);
+      
+      // Only call API if not skipped (i.e., if API wasn't already called from initial screen)
+      if (!skipInitialApiCall) {
+        // Auto-send after a short delay to ensure state is updated
+        setTimeout(() => {
+          if (!isLoading) {
+            handleSendMessage(messageToSend);
+          }
+        }, 200);
+      }
+    }
+    
+    // Reset ref when initialMessage changes to empty (allows resending)
+    if (!initialMessage || !initialMessage.trim()) {
+      initialMessageSentRef.current = false;
+    }
+  }, [initialMessage, handleSendMessage, isLoading, skipInitialApiCall]);
 
   const allSuggestions = [
     "You can also say 'convert this to a 4-week template'",
@@ -33,14 +187,27 @@ const ChatInterface = () => {
     : [];
 
   const handleSuggestionClick = (suggestion) => {
+    console.log('Suggestion clicked:', suggestion);
     setMessage(suggestion);
+    // Auto-send when suggestion is clicked
+    setTimeout(() => {
+      if (suggestion.trim() && !isLoading) {
+        console.log('Auto-sending suggestion');
+        handleSendMessage(suggestion.trim());
+        setMessage('');
+      }
+    }, 100);
   };
 
   const handleSend = () => {
-    if (message.trim()) {
-      // Handle send logic here
-      console.log('Sending:', message);
+    console.log('handleSend called', { message: message.trim(), isLoading });
+    if (message.trim() && !isLoading) {
+      const userMessage = message.trim();
+      console.log('Sending message:', userMessage);
       setMessage('');
+      handleSendMessage(userMessage);
+    } else {
+      console.log('Cannot send - message empty or loading');
     }
   };
 
@@ -70,6 +237,15 @@ const ChatInterface = () => {
             )}
           </div>
         ))}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%]">
+              <p className="text-sm text-gray-500 font-[Inter] italic">
+                Generating workout plan...
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Suggestions Section */}
@@ -78,20 +254,39 @@ const ChatInterface = () => {
         <div className="relative">
           <textarea
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+            onChange={(e) => {
+              const newValue = e.target.value;
+              console.log('Message changed:', newValue);
+              setMessage(newValue);
+            }}
+            onKeyDown={(e) => {
+              console.log('Key pressed:', e.key, { message, isLoading, messageTrimmed: message.trim() });
+              if (e.key === 'Enter' && !e.shiftKey && !isLoading && message.trim()) {
                 e.preventDefault();
+                console.log('Enter key pressed, sending message');
                 handleSend();
               }
             }}
+            disabled={isLoading}
             placeholder={defaultSuggestion}
             rows={3}
             className="w-full px-4 pt-4 pb-8 pr-12 bg-[#4D60801A] !border border-[#4D60804D]  rounded-[12px] text-sm text-gray-700 font-[Inter] focus:outline-none focus:ring-2 focus:ring-[#003F8F] resize-none align-top"
           />
           <button
-            onClick={handleSend}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2  flex items-center justify-center mt-6 transition"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Button clicked', { message, isLoading, messageTrimmed: message.trim() });
+              if (!isLoading && message.trim()) {
+                handleSend();
+              } else {
+                console.log('Button click ignored - disabled state');
+              }
+            }}
+            disabled={isLoading || !message.trim()}
+            className={`absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center justify-center mt-6 transition z-10 ${isLoading || !message.trim() ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
+            type="button"
+            aria-label="Send message"
           >
             <svg width="23" height="23" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect width="23" height="23" rx="11.5" fill="#003F8F" />
@@ -132,4 +327,5 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
 

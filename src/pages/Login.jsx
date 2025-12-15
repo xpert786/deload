@@ -257,7 +257,7 @@ const Login = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     placeholder="Enter your password"
-                    className="block w-full rounded-md px-3 py-2 pr-10 focus:outline-none inter-placeholder"
+                    className="block w-full rounded-md px-3 py-2 pr-10 focus:outline-none inter-placeholder "
                     style={{ 
                       border: '1px solid #003F8F',
                       fontFamily: 'Inter'
@@ -266,7 +266,7 @@ const Login = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
                   >
                     {showPassword ? (
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="#6B7280">
@@ -290,7 +290,7 @@ const Login = () => {
                     id="rememberMe"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded font-[Inter]"
+                    className="h-4 w-4 rounded font-[Inter] cursor-pointer"
                     style={{ 
                       border: '1px solid #003F8F',
                       accentColor: '#003F8F'
@@ -308,7 +308,7 @@ const Login = () => {
                 </div>
                 <Link 
                   to="#" 
-                  className="text-sm font-normal font-[Inter]"
+                  className="text-sm font-normal font-[Inter] cursor-pointer"
                   style={{ 
                     color: '#333333',
                   }}
@@ -322,7 +322,7 @@ const Login = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 rounded-lg font-[Inter] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-3 rounded-lg font-[Inter] font-medium text-white transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   style={{ 
                     backgroundColor: '#003F8F',
                   }}
@@ -337,7 +337,7 @@ const Login = () => {
                   Don't have an account?{' '}
                   <Link 
                     to="/register" 
-                    className="underline hover:no-underline transition-all font-[Inter]"
+                    className="underline hover:no-underline transition-all font-[Inter] cursor-pointer"
                     style={{ color: '#003F8F' }}
                   >
                     Sign up

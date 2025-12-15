@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DeleteWorkoutModal from './DeleteWorkoutModal';
 import AddEditWorkout from './AddEditWorkout';
 import RestDay from './RestDay';
 
-const WorkoutPlan = ({ onBack }) => {
+const WorkoutPlan = ({ onBack, workoutPlanData }) => {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState('Mon');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -16,49 +16,86 @@ const WorkoutPlan = ({ onBack }) => {
   const [selectedCadence, setSelectedCadence] = useState('For 3 Weeks');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [showCadenceDropdown, setShowCadenceDropdown] = useState(false);
-  const fullBodyWorkout = {
-    workoutName: 'Full Body Workout',
-    exercises: [
-      {
-        id: 1,
-        label: 'A1',
-        name: 'Barbell Squat',
-        sets: 4,
-        reps: 8,
-        notes: 'Keep chest up, go below parallel',
-        videoLinks: ['Seated Cable Row...']
-      },
-      {
-        id: 2,
-        label: 'A2',
-        name: 'Bench Press',
-        sets: 3,
-        reps: 10,
-        notes: 'Shoulders retracted, elbows at 45°',
-        videoLinks: ['Bench Press Form...']
-      },
-      {
-        id: 3,
-        label: 'B',
-        name: 'Romanian Deadlift',
-        sets: 3,
-        reps: 10,
-        notes: 'Slight knee bend, hinge at hips',
-        videoLinks: []
-      }
-    ]
+  const [isRestDay, setIsRestDay] = useState(false);
+
+  // Day name mapping from API format to UI format
+  const dayNameMap = {
+    'monday': 'Mon',
+    'tuesday': 'Tue',
+    'wednesday': 'Wed',
+    'thursday': 'Thu',
+    'friday': 'Fri',
+    'saturday': 'Sat',
+    'sunday': 'Sun'
   };
 
-  const [workouts, setWorkouts] = useState({
-    Mon: fullBodyWorkout,
-    Tue: fullBodyWorkout,
-    Wed: fullBodyWorkout,
-    Thu: fullBodyWorkout,
-    Fri: fullBodyWorkout,
-    Sat: fullBodyWorkout,
-    Sun: { workoutName: 'Rest Day', exercises: [] }
-  });
-  const [isRestDay, setIsRestDay] = useState(false);
+  // Transform API data to UI format
+  const transformWorkoutPlanData = (apiData) => {
+    if (!apiData || !apiData.days) {
+      return null;
+    }
+
+    const transformedWorkouts = {};
+    
+    apiData.days.forEach((day, index) => {
+      const dayKey = dayNameMap[day.day.toLowerCase()] || day.day;
+      
+      if (day.is_rest_day) {
+        transformedWorkouts[dayKey] = {
+          workoutName: day.workout_name || 'Rest Day',
+          exercises: []
+        };
+      } else {
+        transformedWorkouts[dayKey] = {
+          workoutName: day.workout_name || '',
+          exercises: day.exercises.map((exercise, exIndex) => ({
+            id: (index * 100) + exIndex + 1,
+            label: exercise.group_label || '',
+            name: exercise.exercise_name || '',
+            sets: exercise.sets || 0,
+            reps: exercise.reps || 0,
+            notes: exercise.cue || '',
+            videoLinks: []
+          }))
+        };
+      }
+    });
+
+    return transformedWorkouts;
+  };
+
+  // Initialize workouts from API data or use default
+  const getInitialWorkouts = () => {
+    if (workoutPlanData) {
+      const transformed = transformWorkoutPlanData(workoutPlanData);
+      if (transformed) {
+        return transformed;
+      }
+    }
+    
+    // Default empty workouts
+    return {
+      Mon: { workoutName: '', exercises: [] },
+      Tue: { workoutName: '', exercises: [] },
+      Wed: { workoutName: '', exercises: [] },
+      Thu: { workoutName: '', exercises: [] },
+      Fri: { workoutName: '', exercises: [] },
+      Sat: { workoutName: '', exercises: [] },
+      Sun: { workoutName: 'Rest Day', exercises: [] }
+    };
+  };
+
+  const [workouts, setWorkouts] = useState(getInitialWorkouts());
+
+  // Update workouts when workoutPlanData changes
+  useEffect(() => {
+    if (workoutPlanData) {
+      const transformed = transformWorkoutPlanData(workoutPlanData);
+      if (transformed) {
+        setWorkouts(transformed);
+      }
+    }
+  }, [workoutPlanData]);
 
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -142,6 +179,8 @@ const WorkoutPlan = ({ onBack }) => {
   const currentWorkouts = currentDayData.exercises || [];
   const workoutName = currentDayData.workoutName || '';
   const isSunday = selectedDay === 'Sun';
+  // Check if current day is a rest day (either Sunday or has "Rest Day" in workout name and no exercises)
+  const isCurrentDayRestDay = isSunday || (workoutName.toLowerCase().includes('rest') && currentWorkouts.length === 0);
 
   if (showRestDay && isRestDay && !isSunday) {
     return <RestDay day={selectedDay} onBack={() => { setShowRestDay(false); setIsRestDay(false); }} onToggle={() => setIsRestDay(false)} />;
@@ -201,7 +240,9 @@ const WorkoutPlan = ({ onBack }) => {
         <div className="bg-white rounded-lg !border border-[#4D60804D] p-6">
           {/* Title and Actions */}
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">John's Weekly Workout Plan</h3>
+            <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">
+              {workoutPlanData?.title || "Client's Weekly Workout Plan"}
+            </h3>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate('/coach/ai-program/add-workout')}
@@ -240,12 +281,19 @@ const WorkoutPlan = ({ onBack }) => {
             ))}
           </div>
 
+          {/* Description */}
+          {workoutPlanData?.description && (
+            <p className="text-sm text-gray-600 font-[Inter] mb-4">
+              {workoutPlanData.description}
+            </p>
+          )}
+
           {/* Workout Content */}
-          {isSunday ? (
+          {isCurrentDayRestDay ? (
             <>
               {/* Rest Day Title - Outside the Box, Separate Section */}
               <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins] mb-4 mt-4">
-                Rest Day
+                {workoutName || 'Rest Day'}
               </h4>
 
               {/* Rest Day Content Card */}
@@ -331,7 +379,7 @@ const WorkoutPlan = ({ onBack }) => {
               </div>
             </>
           )}
-          {/* End of White Bordered Box */}
+          
         </div>
       </div>
 

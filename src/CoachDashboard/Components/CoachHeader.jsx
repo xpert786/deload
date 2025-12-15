@@ -115,7 +115,7 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
               strokeLinejoin="round"
             />
           </svg>
-          <span className="whitespace-nowrap">Add New Client</span>
+          <span className="whitespace-nowrap cursor-pointer">Add New Client</span>
         </button>
 
         {/* Mobile Add Button - Icon Only */}

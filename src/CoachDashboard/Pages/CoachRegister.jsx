@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import DloadLogo from "../../assets/DloadLogo.png";
 import ClientRegisterImg from "../../assets/ClientRegisterImg.png";
 
-const coachingCategories = ['Fitness', 'Life Coaching', 'Yoga', 'Sports', 'Nutrition'];
+const coachingCategories = ['Fitness',  'Yoga', 'Sports', 'Nutrition'];
 
 // Use API URL from .env file only
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -148,7 +148,7 @@ const CoachRegister = () => {
       // Map category names to API expected format (based on error, API expects lowercase)
       const categoryMapping = {
         'Fitness': 'fitness',
-        'Life Coaching': 'life_coaching',
+        // 'Life Coaching': 'life_coaching',
         'Yoga': 'yoga',
         'Sports': 'sports',  // API expects lowercase 'sports' not 'Sports'
         'Nutrition': 'nutrition'
@@ -452,13 +452,13 @@ const CoachRegister = () => {
                   <button
                     type="button"
                     onClick={() => navigate('/login')}
-                    className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro]"
+                    className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro] cursor-pointer"
                   >
                     Back
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 rounded-md text-white font-[BasisGrotesquePro]"
+                    className="px-6 py-2 rounded-md text-white font-[BasisGrotesquePro] cursor-pointer"
                     style={{ backgroundColor: '#003F8F' }}
                   >
                     Next
@@ -529,13 +529,13 @@ const CoachRegister = () => {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro]"
+                    className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro] cursor-pointer"
                   >
                     Back
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 rounded-md text-white font-[BasisGrotesquePro]"
+                    className="px-6 py-2 rounded-md text-white font-[BasisGrotesquePro] cursor-pointer"
                     style={{ backgroundColor: '#003F8F' }}
                   >
                     Next
@@ -631,7 +631,7 @@ const CoachRegister = () => {
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro]"
+                    className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro] cursor-pointer"
                   >
                     Back
                   </button>
@@ -639,7 +639,7 @@ const CoachRegister = () => {
                     <button
                       type="submit"
                       disabled={loading || success}
-                      className="px-6 py-2 rounded-md text-white font-[BasisGrotesquePro] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-6 py-2 rounded-md text-white font-[BasisGrotesquePro] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       style={{ backgroundColor: '#003F8F' }}
                     >
                       {loading ? 'Creating...' : success ? 'Success!' : 'Create Account'}
@@ -647,13 +647,13 @@ const CoachRegister = () => {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="px-6 py-2 rounded-md border border-[#003F8F] text-[#003F8F] font-[BasisGrotesquePro]"
+                      className="px-6 py-2 rounded-md border border-[#003F8F] text-[#003F8F] font-[BasisGrotesquePro] cursor-pointer"
                     >
                       Reset
                     </button>
                   </div>
                 </div>
-                <p className="text-center text-sm text-gray-500 font-[Inter]">
+                <p className="text-center text-sm text-gray-500 font-[Inter] cursor-pointer">
                   Already have an account?{' '}
                   <a href="/login" className="text-[#003F8F] font-semibold">
                     Login

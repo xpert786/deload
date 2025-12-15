@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import ChatInterface from './ChatInterface';
 import WorkoutPlan from './WorkoutPlan';
 
+// Use API URL from .env file
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
 const PLACEHOLDER_TEXTS = [
   "Ask me to build a 3-day hypertrophy split for beginners.",
   "Say 'add mobility drills to Wednesday's workout'",
@@ -33,6 +40,9 @@ const AIProgram = () => {
   const [currentBottomText, setCurrentBottomText] = useState(0);
   const [inputValue, setInputValue] = useState('');
   const [isHoveringBottomText, setIsHoveringBottomText] = useState(false);
+  const [workoutPlanData, setWorkoutPlanData] = useState(null);
+  const [initialMessage, setInitialMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleCopyText = (text) => {
     // Remove "Try: " prefix if present
@@ -64,10 +74,117 @@ const AIProgram = () => {
     };
   }, [showRotatingText]);
 
-  const handleInputKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && inputValue.trim()) {
-      e.preventDefault();
-      setShowRotatingText(false);
+  const handleWorkoutPlanGenerated = (data) => {
+    setWorkoutPlanData(data);
+    setShowRotatingText(false);
+  };
+
+  // API call function for initial screen
+  const handleInitialSend = async () => {
+    console.log('handleInitialSend called', { inputValue, isLoading });
+    if (inputValue.trim() && !isLoading) {
+      const userMessage = inputValue.trim();
+      console.log('Starting API call with message:', userMessage);
+      setIsLoading(true);
+      setShowRotatingText(false); // Switch to chat view immediately
+      setInitialMessage(userMessage); // Pass message to ChatInterface
+
+      try {
+        // Get authentication token
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+        
+        if (storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+
+        if (!token) {
+          token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+        }
+
+        const isValidToken = token &&
+          typeof token === 'string' &&
+          token.trim().length > 0 &&
+          token.trim() !== 'null' &&
+          token.trim() !== 'undefined' &&
+          token.trim() !== '';
+
+        // Ensure API_BASE_URL doesn't have trailing slash
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        // Check if baseUrl already includes /api, if not add it
+        const apiUrl = baseUrl.includes('/api') 
+          ? `${baseUrl}/generate-workout-plan/`
+          : `${baseUrl}/api/generate-workout-plan/`;
+
+        // Prepare headers
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        if (isValidToken) {
+          headers['Authorization'] = `Bearer ${token.trim()}`;
+        }
+
+        console.log('=== INITIAL SCREEN API CALL START ===');
+        console.log('API URL:', apiUrl);
+        console.log('Message:', userMessage);
+        console.log('Headers:', headers);
+
+        // Call API
+        const requestBody = {
+          question: userMessage,
+          message: userMessage,
+          save_to_db: false
+        };
+        
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: headers,
+          credentials: 'include',
+          body: JSON.stringify(requestBody),
+        });
+
+        console.log('=== INITIAL SCREEN API RESPONSE ===');
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+
+        let result;
+        try {
+          const responseText = await response.text();
+          console.log('API Response text:', responseText);
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse response:', parseError);
+          throw new Error('Failed to parse server response');
+        }
+
+        if (response.ok && result.data) {
+          // Pass workout plan data to WorkoutPlan
+          setWorkoutPlanData(result.data);
+          console.log('Workout plan generated successfully from initial screen');
+        } else {
+          // Handle validation errors
+          const errorMessage = result.message || 'Failed to generate workout plan';
+          const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
+          throw new Error(errorMessage + (errorDetails ? ` - ${errorDetails}` : ''));
+        }
+      } catch (error) {
+        console.error('=== INITIAL SCREEN API ERROR ===');
+        console.error('Error generating workout plan:', error);
+        // Error will be handled by ChatInterface when it receives the initialMessage
+      } finally {
+        setIsLoading(false);
+        console.log('=== INITIAL SCREEN API CALL END ===');
+      }
     }
   };
 
@@ -77,14 +194,27 @@ const AIProgram = () => {
     setInputValue(pastedText);
   };
 
-  const handleSendClick = () => {
-    if (inputValue.trim()) {
-      setShowRotatingText(false);
+  const handleSendClick = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    console.log('Send button clicked', { inputValue, isLoading });
+    if (inputValue.trim() && !isLoading) {
+      handleInitialSend();
+    } else {
+      console.log('Cannot send - input empty or loading');
     }
   };
 
   const handleSuggestionClick = (suggestion) => {
     setInputValue(suggestion);
+    // Auto-send when suggestion is clicked
+    setTimeout(() => {
+      if (suggestion.trim() && !isLoading) {
+        handleInitialSend();
+      }
+    }, 100);
   };
 
   // Filter suggestions based on input
@@ -105,20 +235,54 @@ const AIProgram = () => {
             The AI understands goals, training phases, and exercise intent
           </p>
 
+          {/* Loading Indicator */}
+          {isLoading && (
+            <div className="mb-4 text-center">
+              <p className="text-sm text-gray-600 font-[Inter] italic">
+                Generating workout plan...
+              </p>
+            </div>
+          )}
+
           {/* Main Input Field */}
           <div className="relative mb-6">
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleInputKeyPress}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && inputValue.trim() && !isLoading) {
+                  e.preventDefault();
+                  handleInitialSend();
+                }
+              }}
               onPaste={handlePaste}
+              disabled={isLoading}
               placeholder={PLACEHOLDER_TEXTS[currentPlaceholderText]}
               rows={3}
               className="w-full px-5 pt-4 pb-8 h-[100px] pr-16 !border border-[#4D60804D] rounded-[12px] focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-base text-gray-700 font-[Inter] bg-gray-100 placeholder:text-gray-500 resize-none align-top"
             />
             <button
-              onClick={handleSendClick}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2  flex items-center justify-center cursor-pointer mt-6"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('=== BUTTON CLICKED ===');
+                console.log('Button onClick triggered', { 
+                  inputValue, 
+                  inputValueTrimmed: inputValue.trim(), 
+                  isLoading,
+                  canSend: inputValue.trim() && !isLoading
+                });
+                if (inputValue.trim() && !isLoading) {
+                  console.log('Calling handleSendClick...');
+                  handleSendClick(e);
+                } else {
+                  console.log('Button click ignored - disabled state');
+                }
+              }}
+              disabled={isLoading || !inputValue.trim()}
+              className={`absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center justify-center mt-6 transition z-10 pointer-events-auto ${isLoading || !inputValue.trim() ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
+              type="button"
+              aria-label="Send message"
             >
               <svg width="23" height="23" viewBox="0 0 23 23" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect width="23" height="23" rx="11.5" fill="#003F8F" />
@@ -183,16 +347,26 @@ const AIProgram = () => {
     <div className="h-screen bg-[#F7F7F7] flex gap-4 p-4">
       {/* Chat Interface - Left Side */}
       <div className="w-1/3 bg-gray-100 rounded-xl shadow-sm overflow-hidden flex flex-col">
-        <ChatInterface />
+        <ChatInterface 
+          onWorkoutPlanGenerated={handleWorkoutPlanGenerated}
+          initialMessage={initialMessage}
+          skipInitialApiCall={isLoading || workoutPlanData !== null}
+        />
       </div>
 
       {/* Workout Plan - Right Side */}
       <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
-        <WorkoutPlan onBack={() => setShowRotatingText(true)} />
+        <WorkoutPlan 
+          onBack={() => setShowRotatingText(true)} 
+          workoutPlanData={workoutPlanData}
+        />
       </div>
     </div>
   );
 };
 
 export default AIProgram;
+
+
+
 

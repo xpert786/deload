@@ -356,7 +356,7 @@ const ClientRegister = () => {
                 <div className="flex justify-end font-medium ">
                   <button
                     type="submit"
-                    className="px-6 py-2 rounded-md text-white transition font-[BasisGrotesquePro]"
+                    className="px-6 py-2 rounded-md text-white transition font-[BasisGrotesquePro] cursor-pointer"
                     style={{ backgroundColor: '#003F8F' }}
                   >
                     Next
@@ -466,7 +466,7 @@ const ClientRegister = () => {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50"
+                    className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50 cursor-pointer"
                     style={{ 
                       backgroundColor: 'white',
                       border: '1px solid #003F8F',
@@ -480,7 +480,7 @@ const ClientRegister = () => {
                     <button
                       type="submit"
                       disabled={loading || success}
-                      className="px-6 py-2 rounded-md font-medium font-[Inter] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-6 py-2 rounded-md font-medium font-[Inter] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       style={{ 
                         backgroundColor: '#003F8F',
                         color: 'white',
@@ -492,7 +492,7 @@ const ClientRegister = () => {
                     <button
                       type="button"
                       onClick={handleReset}
-                      className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50"
+                      className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50 cursor-pointer"
                       style={{ 
                         backgroundColor: 'white',
                         border: '1px solid #003F8F',
@@ -511,7 +511,7 @@ const ClientRegister = () => {
                     Already have an account?{' '}
                     <Link 
                       to="/login" 
-                      className="underline hover:no-underline font-[Inter] transition-all"
+                      className="underline hover:no-underline font-[Inter] transition-all cursor-pointer"
                       style={{ color: '#003F8F' }}
                     >
                       Login
