@@ -383,6 +383,11 @@ const CoachSettings = () => {
           
           imageUrl = imageUrl.trim();
           setProfileImage(imageUrl);
+          
+          // Dispatch event to notify header about profile image update
+          window.dispatchEvent(new CustomEvent('profileImageUpdated', {
+            detail: { imageUrl }
+          }));
         }
 
         // Clear selected image file after successful upload

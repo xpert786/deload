@@ -181,6 +181,9 @@ const AddNewClientModal = ({ isOpen, onClose, onClientAdded }) => {
           notes: ''
         });
 
+        // Dispatch event to refresh clients list
+        window.dispatchEvent(new CustomEvent('refreshClients'));
+
         // Call callback to refresh client list if provided
         if (onClientAdded) {
           onClientAdded();

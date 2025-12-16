@@ -4,7 +4,14 @@ import DeleteWorkoutModal from './DeleteWorkoutModal';
 import AddEditWorkout from './AddEditWorkout';
 import RestDay from './RestDay';
 
-const WorkoutPlan = ({ onBack, workoutPlanData }) => {
+// Use API URL from .env file
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
+const WorkoutPlan = ({ onBack, workoutPlanData, onWorkoutPlanUpdated, onWorkoutPlanDeleted }) => {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState('Mon');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -17,6 +24,23 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [showCadenceDropdown, setShowCadenceDropdown] = useState(false);
   const [isRestDay, setIsRestDay] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editableDescription, setEditableDescription] = useState('');
+  const [newVideoLinks, setNewVideoLinks] = useState({});
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessageText, setSuccessMessageText] = useState('Updated successfully');
+  const [showExerciseVideoInputs, setShowExerciseVideoInputs] = useState({});
+  const [hoveredExerciseId, setHoveredExerciseId] = useState(null);
+  const [fullBodyVideoLinks, setFullBodyVideoLinks] = useState([]);
+  const [newFullBodyVideoLink, setNewFullBodyVideoLink] = useState('');
+  const [showFullBodyVideoInput, setShowFullBodyVideoInput] = useState(false);
+  const [clients, setClients] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignError, setAssignError] = useState(null);
 
   // Day name mapping from API format to UI format
   const dayNameMap = {
@@ -27,6 +51,17 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
     'friday': 'Fri',
     'saturday': 'Sat',
     'sunday': 'Sun'
+  };
+
+  // Reverse mapping from UI format to API format
+  const reverseDayMap = {
+    'Mon': 'monday',
+    'Tue': 'tuesday',
+    'Wed': 'wednesday',
+    'Thu': 'thursday',
+    'Fri': 'friday',
+    'Sat': 'saturday',
+    'Sun': 'sunday'
   };
 
   // Transform API data to UI format
@@ -43,19 +78,23 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
       if (day.is_rest_day) {
         transformedWorkouts[dayKey] = {
           workoutName: day.workout_name || 'Rest Day',
+          dayId: day.id, // Store day ID for API update
           exercises: []
         };
       } else {
         transformedWorkouts[dayKey] = {
           workoutName: day.workout_name || '',
+          dayId: day.id, // Store day ID for API update
           exercises: day.exercises.map((exercise, exIndex) => ({
-            id: (index * 100) + exIndex + 1,
+            id: exercise.id || (index * 100) + exIndex + 1, // Preserve original exercise ID
             label: exercise.group_label || '',
             name: exercise.exercise_name || '',
             sets: exercise.sets || 0,
             reps: exercise.reps || 0,
+            weight_kg: exercise.weight_kg || null,
             notes: exercise.cue || '',
-            videoLinks: []
+            videoLinks: [],
+            isSuperset: exercise.group_label && /[A-Z]1$|[A-Z]2$/.test(exercise.group_label) || false
           }))
         };
       }
@@ -94,18 +133,295 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
       if (transformed) {
         setWorkouts(transformed);
       }
+      // Initialize editable fields (title is not editable)
+      setEditableDescription(workoutPlanData.description || '');
     }
   }, [workoutPlanData]);
 
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  // Handle edit mode toggle
+  const handleToggleEditMode = () => {
+    setIsEditMode(!isEditMode);
+  };
 
-  const handleDelete = () => {
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    // Reset to original values (title is not editable)
+    if (workoutPlanData) {
+      setEditableDescription(workoutPlanData.description || '');
+      const transformed = transformWorkoutPlanData(workoutPlanData);
+      if (transformed) {
+        setWorkouts(transformed);
+      }
+    }
+    setIsEditMode(false);
+  };
+
+  // Handle save from edit mode
+  const handleSaveFromEditMode = async () => {
+    await handleUpdateWorkoutPlan();
+    setIsEditMode(false);
+  };
+
+  // Handle adding video link to exercise
+  const handleAddVideoLink = (exerciseId) => {
+    const link = newVideoLinks[exerciseId];
+    if (link && link.trim()) {
+      const updatedExercises = currentWorkouts.map(ex =>
+        ex.id === exerciseId
+          ? { ...ex, videoLinks: [...(ex.videoLinks || []), link] }
+          : ex
+      );
+      setWorkouts(prev => ({
+        ...prev,
+        [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+      }));
+      setNewVideoLinks({ ...newVideoLinks, [exerciseId]: '' });
+      setShowExerciseVideoInputs({ ...showExerciseVideoInputs, [exerciseId]: false });
+    }
+  };
+
+  // Handle showing video link input for exercise
+  const handleShowExerciseVideoInput = (exerciseId) => {
+    setShowExerciseVideoInputs({ ...showExerciseVideoInputs, [exerciseId]: true });
+  };
+
+  // Handle removing video link from exercise
+  const handleRemoveVideoLink = (exerciseId, linkIndex) => {
+    const updatedExercises = currentWorkouts.map(ex =>
+      ex.id === exerciseId
+        ? { ...ex, videoLinks: (ex.videoLinks || []).filter((_, idx) => idx !== linkIndex) }
+        : ex
+    );
     setWorkouts(prev => ({
       ...prev,
-      [selectedDay]: { workoutName: '', exercises: [] }
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
     }));
-    setIsRestDay(false);
-    setShowDeleteModal(false);
+  };
+
+  // Handle adding full body video link
+  const handleAddFullBodyVideoLink = () => {
+    if (newFullBodyVideoLink.trim()) {
+      setFullBodyVideoLinks([...fullBodyVideoLinks, newFullBodyVideoLink]);
+      setNewFullBodyVideoLink('');
+      setShowFullBodyVideoInput(false);
+    }
+  };
+
+  // Handle removing full body video link
+  const handleRemoveFullBodyVideoLink = (linkIndex) => {
+    setFullBodyVideoLinks(fullBodyVideoLinks.filter((_, idx) => idx !== linkIndex));
+  };
+
+  // Toggle superset for exercise
+  const toggleSuperset = (exerciseId) => {
+    const updatedExercises = currentWorkouts.map(ex => {
+      if (ex.id === exerciseId) {
+        const isSuperset = ex.isSuperset || false;
+        return { ...ex, isSuperset: !isSuperset };
+      }
+      return ex;
+    });
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
+  };
+
+  // Handle adding superset
+  const handleAddSuperset = (exerciseId) => {
+    const exerciseIndex = currentWorkouts.findIndex(ex => ex.id === exerciseId);
+    if (exerciseIndex === -1) return;
+
+    const currentExercise = currentWorkouts[exerciseIndex];
+    const baseLetter = currentExercise.label ? currentExercise.label.replace(/[0-9]/g, '') || 'A' : 'A';
+
+    // Convert current exercise to baseLetter1
+    const updatedExercise = {
+      ...currentExercise,
+      label: `${baseLetter}1`,
+      isSuperset: true
+    };
+
+    // Create baseLetter2
+    const maxId = Math.max(...currentWorkouts.map(ex => ex.id || 0), 0);
+    const newExercise2 = {
+      id: maxId + 1,
+      label: `${baseLetter}2`,
+      name: '',
+      sets: 0,
+      reps: 0,
+      weight_kg: null,
+      notes: '',
+      videoLinks: [],
+      isSuperset: true
+    };
+
+    // Replace current exercise and add new one after it
+    const newExercises = [...currentWorkouts];
+    newExercises[exerciseIndex] = updatedExercise;
+    newExercises.splice(exerciseIndex + 1, 0, newExercise2);
+    
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: newExercises }
+    }));
+  };
+
+  // Handle delete exercise
+  const handleDeleteExercise = (exerciseId) => {
+    const updatedExercises = currentWorkouts.filter(ex => ex.id !== exerciseId);
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
+    setHoveredExerciseId(null);
+  };
+
+  // Handle add exercise
+  const handleAddExercise = () => {
+    const nextLabel = String.fromCharCode(65 + currentWorkouts.length);
+    const maxId = Math.max(...currentWorkouts.map(ex => ex.id || 0), 0);
+    const newExercise = {
+      id: maxId + 1,
+      label: nextLabel,
+      name: '',
+      sets: 0,
+      reps: 0,
+      weight_kg: null,
+      notes: '',
+      videoLinks: [],
+      isSuperset: false
+    };
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: [...currentWorkouts, newExercise] }
+    }));
+  };
+
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // Handle delete workout plan via API
+  const handleDelete = async () => {
+    if (!workoutPlanData || !workoutPlanData.id) {
+      console.error('Workout plan ID not found. Cannot delete.');
+      alert('Workout plan ID not found. Cannot delete.');
+      setShowDeleteModal(false);
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api') 
+        ? `${baseUrl}/ai-workout-plans/${workoutPlanData.id}/`
+        : `${baseUrl}/api/ai-workout-plans/${workoutPlanData.id}/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log('=== DELETE WORKOUT PLAN API CALL ===');
+      console.log('API URL:', apiUrl);
+
+      // Call DELETE API
+      const response = await fetch(apiUrl, {
+        method: 'DELETE',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      console.log('=== DELETE WORKOUT PLAN API RESPONSE ===');
+      console.log('Response status:', response.status);
+
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('API Response text:', responseText);
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        // Even if response is empty, treat as success if status is ok
+        if (response.ok) {
+          result = { message: 'Workout plan deleted successfully' };
+        } else {
+          throw new Error('Failed to parse server response');
+        }
+      }
+
+      if (response.ok) {
+        console.log('Workout plan deleted successfully');
+        // Clear workout plan data locally
+        setWorkouts({
+          Mon: { workoutName: '', exercises: [] },
+          Tue: { workoutName: '', exercises: [] },
+          Wed: { workoutName: '', exercises: [] },
+          Thu: { workoutName: '', exercises: [] },
+          Fri: { workoutName: '', exercises: [] },
+          Sat: { workoutName: '', exercises: [] },
+          Sun: { workoutName: 'Rest Day', exercises: [] }
+        });
+        setIsRestDay(false);
+        setIsEditMode(false);
+        setShowDeleteModal(false);
+        setEditableDescription('');
+        
+        // Notify parent component that workout plan was deleted
+        // This will set workoutPlanData to empty structure and keep us on the workout plan view
+        if (onWorkoutPlanDeleted) {
+          onWorkoutPlanDeleted();
+        }
+        
+        // Don't call onBack - we want to stay on the workout plan view with empty state
+      } else {
+        // Handle errors
+        const errorMessage = result.message || 'Failed to delete workout plan';
+        const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
+        throw new Error(errorMessage + (errorDetails ? ` - ${errorDetails}` : ''));
+      }
+    } catch (error) {
+      console.error('=== DELETE WORKOUT PLAN API ERROR ===');
+      console.error('Error deleting workout plan:', error);
+      alert(`Error deleting workout plan: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+      console.log('=== DELETE WORKOUT PLAN API CALL END ===');
+    }
   };
 
   const handleEdit = (exerciseId) => {
@@ -118,10 +434,46 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
     setShowAddWorkout(true);
   };
 
-  const handleSave = () => {
-    // Save logic
-    console.log('Workout saved');
-    setShowAddWorkout(false);
+  const handleSave = async (savedData) => {
+    if (savedData) {
+      // Update the workouts state with the saved data
+      const { workoutName: savedWorkoutName, exercises: savedExercises, day: savedDay } = savedData;
+      
+      setWorkouts(prev => {
+        const currentDayWorkout = prev[savedDay] || { workoutName: '', exercises: [] };
+        
+        // If editing a single exercise, update only that exercise
+        if (editingExerciseId && savedExercises && savedExercises.length === 1) {
+          const updatedExercises = currentDayWorkout.exercises.map(ex => 
+            ex.id === editingExerciseId ? savedExercises[0] : ex
+          );
+          
+          return {
+            ...prev,
+            [savedDay]: {
+              workoutName: savedWorkoutName || currentDayWorkout.workoutName,
+              exercises: updatedExercises
+            }
+          };
+        }
+        
+        // Otherwise, replace all exercises
+        return {
+          ...prev,
+          [savedDay]: {
+            workoutName: savedWorkoutName || currentDayWorkout.workoutName || '',
+            exercises: savedExercises || []
+          }
+        };
+      });
+      
+      console.log('Workout saved for day:', savedDay);
+
+      // If workout plan was deleted (no id), create new one via POST API after saving workout details
+      if (!workoutPlanData?.id) {
+        await handleCreateWorkoutPlan();
+      }
+    }
   };
 
   const handleToggleRestDay = () => {
@@ -134,15 +486,86 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
     }
   };
 
-  // Sample client list
-  const clientList = [
-    'John Doe',
-    'John Miller',
-    'Sarah Johnson',
-    'Mike Wilson',
-    'Emily Davis',
-    'David Brown'
-  ];
+  // Fetch clients list from API
+  const fetchClients = async () => {
+    try {
+      setLoadingClients(true);
+      
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api') 
+        ? `${baseUrl}/clients/list/`
+        : `${baseUrl}/api/clients/list/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log('Fetching clients from:', apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data && Array.isArray(result.data)) {
+          setClients(result.data);
+          console.log('Clients fetched successfully:', result.data);
+        } else {
+          console.error('Invalid response format:', result);
+          setClients([]);
+        }
+      } else {
+        console.error('Failed to fetch clients:', response.status);
+        setClients([]);
+      }
+    } catch (error) {
+      console.error('Error fetching clients:', error);
+      setClients([]);
+    } finally {
+      setLoadingClients(false);
+    }
+  };
+
+  // Fetch clients when modal opens
+  useEffect(() => {
+    if (showAssignModal) {
+      fetchClients();
+    }
+  }, [showAssignModal]);
 
   // Cadence options
   const cadenceOptions = [
@@ -156,23 +579,419 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
 
   // Handle client selection
   const handleSelectClient = (client) => {
-    if (!selectedClients.includes(client)) {
+    // Check if client is already selected by ID
+    if (!selectedClients.some(c => c.id === client.id)) {
       setSelectedClients([...selectedClients, client]);
     }
     setShowClientDropdown(false);
   };
 
   // Handle client removal
-  const handleRemoveClient = (client) => {
-    setSelectedClients(selectedClients.filter(c => c !== client));
+  const handleRemoveClient = (clientId) => {
+    setSelectedClients(selectedClients.filter(c => c.id !== clientId));
   };
 
   // Handle assign plan
-  const handleAssignPlan = () => {
-    console.log('Assigning plan to clients:', selectedClients, 'Cadence:', selectedCadence);
-    setShowAssignModal(false);
-    setSelectedClients([]);
-    setSelectedCadence('For 3 Weeks');
+  const handleAssignPlan = async () => {
+    if (!workoutPlanData?.id) {
+      setAssignError('Workout plan must be saved before assigning to clients');
+      return;
+    }
+
+    if (selectedClients.length === 0) {
+      setAssignError('Please select at least one client');
+      return;
+    }
+
+    setIsAssigning(true);
+    setAssignError(null);
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      // Extract weeks from cadence (e.g., "For 3 Weeks" -> 3)
+      const weeksMatch = selectedCadence.match(/\d+/);
+      const weeks = weeksMatch ? parseInt(weeksMatch[0]) : 3;
+
+      // Assign plan to each selected client
+      const assignPromises = selectedClients.map(async (client) => {
+        // Check if baseUrl already includes /api, if not add it
+        const apiUrl = baseUrl.includes('/api') 
+          ? `${baseUrl}/ai-workout-plans/${workoutPlanData.id}/assign/`
+          : `${baseUrl}/api/ai-workout-plans/${workoutPlanData.id}/assign/`;
+
+        const requestBody = {
+          client_id: client.id,
+          weeks: weeks
+        };
+
+        console.log(`Assigning plan to client ${client.name} (ID: ${client.id}):`, apiUrl, requestBody);
+
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: headers,
+          credentials: 'include',
+          body: JSON.stringify(requestBody),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { message: errorText || 'Failed to assign workout plan' };
+          }
+          throw new Error(errorData.message || `Failed to assign plan to ${client.name}`);
+        }
+
+        const result = await response.json();
+        console.log(`Successfully assigned plan to ${client.name}:`, result);
+        return result;
+      });
+
+      // Wait for all assignments to complete
+      await Promise.all(assignPromises);
+
+      // Show success message
+      setSuccessMessageText('Assigned successfully');
+      setShowSuccessMessage(true);
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+      }, 3000);
+
+      // Close modal and reset
+      setShowAssignModal(false);
+      setSelectedClients([]);
+      setSelectedCadence('For 3 Weeks');
+      setShowClientDropdown(false);
+      setShowCadenceDropdown(false);
+
+    } catch (error) {
+      console.error('Error assigning workout plan:', error);
+      setAssignError(error.message || 'Failed to assign workout plan. Please try again.');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  // Transform local workouts state back to API format
+  const transformWorkoutsToApiFormat = (isCreate = false) => {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    
+    return days.map((day, index) => {
+      const dayData = workouts[day] || { workoutName: '', exercises: [], dayId: null };
+      const apiDay = reverseDayMap[day] || day.toLowerCase();
+      
+      // Check if it's a rest day (Sunday or workout name contains "rest" and no exercises)
+      const isRestDay = day === 'Sun' || 
+        (dayData.workoutName.toLowerCase().includes('rest') && dayData.exercises.length === 0);
+      
+      const dayPayload = {
+        day: apiDay,
+        workout_name: dayData.workoutName || (isRestDay ? 'Rest Day' : ''),
+        is_rest_day: isRestDay,
+        order: index,
+        exercises: isRestDay ? [] : dayData.exercises.map((exercise, exIndex) => {
+          const exercisePayload = {
+            exercise_name: exercise.name || '',
+            sets: exercise.sets || 0,
+            reps: exercise.reps || 0,
+            weight_kg: exercise.weight_kg || null,
+            cue: exercise.notes || '',
+            group_label: exercise.label || '',
+            order: exIndex
+          };
+          
+          // Include exercise ID only for updates, not for create
+          if (!isCreate && exercise.id) {
+            exercisePayload.id = exercise.id;
+          }
+          
+          return exercisePayload;
+        })
+      };
+      
+      // Include day ID only for updates, not for create
+      if (!isCreate && dayData.dayId) {
+        dayPayload.id = dayData.dayId;
+      }
+      
+      return dayPayload;
+    });
+  };
+
+  // Handle create new workout plan via POST API
+  const handleCreateWorkoutPlan = async () => {
+    setIsCreating(true);
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Transform workouts to API format (isCreate = true for POST)
+      const daysPayload = transformWorkoutsToApiFormat(true);
+
+      // Prepare request body
+      const requestBody = {
+        title: workoutPlanData?.title || "Client's Weekly Workout Plan",
+        description: editableDescription || workoutPlanData?.description || '',
+        days: daysPayload
+      };
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api') 
+        ? `${baseUrl}/ai-workout-plans/`
+        : `${baseUrl}/api/ai-workout-plans/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log('=== CREATE WORKOUT PLAN API CALL ===');
+      console.log('API URL:', apiUrl);
+      console.log('Request body:', requestBody);
+
+      // Call POST API
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
+
+      console.log('=== CREATE WORKOUT PLAN API RESPONSE ===');
+      console.log('Response status:', response.status);
+
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('API Response text:', responseText);
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok && result.data) {
+        console.log('Workout plan created successfully');
+        // Update local workouts with the response data
+        const transformed = transformWorkoutPlanData(result.data);
+        if (transformed) {
+          setWorkouts(transformed);
+        }
+        // Update the workout plan data in parent component
+        if (onWorkoutPlanUpdated) {
+          onWorkoutPlanUpdated(result.data);
+        }
+        // Show success message
+        setSuccessMessageText('Created successfully');
+        setShowSuccessMessage(true);
+        setTimeout(() => setShowSuccessMessage(false), 3000);
+      } else {
+        // Handle errors
+        const errorMessage = result.message || 'Failed to create workout plan';
+        const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
+        throw new Error(errorMessage + (errorDetails ? ` - ${errorDetails}` : ''));
+      }
+    } catch (error) {
+      console.error('=== CREATE WORKOUT PLAN API ERROR ===');
+      console.error('Error creating workout plan:', error);
+      alert(`Error creating workout plan: ${error.message}`);
+    } finally {
+      setIsCreating(false);
+      console.log('=== CREATE WORKOUT PLAN API CALL END ===');
+    }
+  };
+
+  // Handle update workout plan
+  const handleUpdateWorkoutPlan = async () => {
+    if (!workoutPlanData || !workoutPlanData.id) {
+      console.error('Workout plan ID not found. Cannot update.');
+      alert('Workout plan ID not found. Please generate a new workout plan first.');
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api') 
+        ? `${baseUrl}/ai-workout-plans/${workoutPlanData.id}/`
+        : `${baseUrl}/api/ai-workout-plans/${workoutPlanData.id}/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      // Prepare request body - use editable fields if in edit mode (title is not editable, keep original)
+      const requestBody = {
+        title: workoutPlanData.title || "Client's Weekly Workout Plan",
+        description: isEditMode ? editableDescription : (workoutPlanData.description || ''),
+        status: workoutPlanData.status || 'draft',
+        days: transformWorkoutsToApiFormat()
+      };
+
+      console.log('=== UPDATE WORKOUT PLAN API CALL ===');
+      console.log('API URL:', apiUrl);
+      console.log('Request body:', requestBody);
+
+      // Call PUT API
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('=== UPDATE WORKOUT PLAN API RESPONSE ===');
+      console.log('Response status:', response.status);
+
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('API Response text:', responseText);
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok && result.data) {
+        console.log('Workout plan updated successfully');
+        // Update local workouts with the response data
+        const transformed = transformWorkoutPlanData(result.data);
+        if (transformed) {
+          setWorkouts(transformed);
+        }
+        // Update local workoutPlanData state if available
+        // The parent will update it via callback, but we also need to update our local editable fields
+        setEditableDescription(result.data.description || editableDescription);
+        // Update the workout plan data in parent component
+        if (onWorkoutPlanUpdated) {
+          onWorkoutPlanUpdated(result.data);
+        }
+        // Show success message
+        setSuccessMessageText('Updated successfully');
+        setShowSuccessMessage(true);
+        setTimeout(() => {
+          setShowSuccessMessage(false);
+        }, 3000);
+      } else {
+        // Handle errors
+        const errorMessage = result.message || 'Failed to update workout plan';
+        const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
+        throw new Error(errorMessage + (errorDetails ? ` - ${errorDetails}` : ''));
+      }
+    } catch (error) {
+      console.error('=== UPDATE WORKOUT PLAN API ERROR ===');
+      console.error('Error updating workout plan:', error);
+      // Error can still use alert or we can add error message state too
+    } finally {
+      setIsUpdating(false);
+      console.log('=== UPDATE WORKOUT PLAN API CALL END ===');
+    }
   };
 
   const currentDayData = workouts[selectedDay] || { workoutName: '', exercises: [] };
@@ -186,29 +1005,11 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
     return <RestDay day={selectedDay} onBack={() => { setShowRestDay(false); setIsRestDay(false); }} onToggle={() => setIsRestDay(false)} />;
   }
 
-  if (showAddWorkout) {
-    return (
-      <AddEditWorkout
-        day={selectedDay}
-        exerciseId={editingExerciseId}
-        onBack={() => {
-          setShowAddWorkout(false);
-          setEditingExerciseId(null);
-        }}
-        onSave={() => {
-          handleSave();
-          setShowAddWorkout(false);
-          setEditingExerciseId(null);
-        }}
-        onToggleRestDay={() => {
-          setShowAddWorkout(false);
-          setIsRestDay(true);
-          setShowRestDay(true);
-        }}
-        isRestDay={isRestDay}
-      />
-    );
-  }
+  // Get current day's workout data for AddEditWorkout (used inline, not as early return)
+  const currentDayDataForAdd = workouts[selectedDay] || { workoutName: '', exercises: [] };
+  const exerciseToEdit = editingExerciseId 
+    ? currentDayDataForAdd.exercises.find(ex => ex.id === editingExerciseId)
+    : null;
 
   if (showDeleteModal) {
     return (
@@ -216,6 +1017,7 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
         day={selectedDay}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDelete}
+        isDeleting={isDeleting}
       />
     );
   }
@@ -236,7 +1038,32 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
 
       {/* Main Content - Gray Background */}
       <div className="flex-1 overflow-y-auto">
-        {/* White Bordered Box - Contains All Content */}
+        {/* Show AddEditWorkout inline if showAddWorkout is true */}
+        {showAddWorkout ? (
+          <AddEditWorkout
+            day={selectedDay}
+            exerciseId={editingExerciseId}
+            initialWorkoutName={currentDayDataForAdd.workoutName}
+            initialExercises={editingExerciseId ? [exerciseToEdit].filter(Boolean) : currentDayDataForAdd.exercises}
+            isEditMode={!!editingExerciseId}
+            onBack={() => {
+              setShowAddWorkout(false);
+              setEditingExerciseId(null);
+            }}
+            onSave={async (savedData) => {
+              await handleSave(savedData);
+              setShowAddWorkout(false);
+              setEditingExerciseId(null);
+            }}
+            onToggleRestDay={() => {
+              setShowAddWorkout(false);
+              setIsRestDay(true);
+              setShowRestDay(true);
+            }}
+            isRestDay={isRestDay}
+          />
+        ) : (
+        /* White Bordered Box - Contains All Content */
         <div className="bg-white rounded-lg !border border-[#4D60804D] p-6">
           {/* Title and Actions */}
           <div className="flex items-center justify-between mb-6">
@@ -245,21 +1072,40 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
             </h3>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate('/coach/ai-program/add-workout')}
-                className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition flex items-center gap-2"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Add Workout button clicked - navigating to add-workout page');
+                  // Always navigate to AddWorkout page
+                  navigate('/coach/ai-program/add-workout');
+                }}
+                disabled={isEditMode || showAddWorkout}
+                className={`px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm transition flex items-center gap-2 ${
+                  isEditMode || showAddWorkout
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-[#002F6F] cursor-pointer'
+                }`}
+                type="button"
               >
                 <span>+</span>
                 Add Workout
               </button>
-              <button
-                onClick={handleAddWorkout}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11.3333 2L14 4.66667M11.3333 2L8.66667 4.66667M11.3333 2V5.33333M14 4.66667H11.3333M14 4.66667V14C14 14.3682 13.7015 14.6667 13.3333 14.6667H2.66667C2.29848 14.6667 2 14.3682 2 14V2.66667C2 2.29848 2.29848 2 2.66667 2H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Edit
-              </button>
+              {!isEditMode && (
+                <button
+                  onClick={handleToggleEditMode}
+                  disabled={!workoutPlanData?.id}
+                  className={`px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm transition flex items-center gap-2 ${
+                    !workoutPlanData?.id 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M11.3333 2L14 4.66667M11.3333 2L8.66667 4.66667M11.3333 2V5.33333M14 4.66667H11.3333M14 4.66667V14C14 14.3682 13.7015 14.6667 13.3333 14.6667H2.66667C2.29848 14.6667 2 14.3682 2 14V2.66667C2 2.29848 2.29848 2 2.66667 2H8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Edit
+                </button>
+              )}
             </div>
           </div>
 
@@ -282,19 +1128,46 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
           </div>
 
           {/* Description */}
-          {workoutPlanData?.description && (
-            <p className="text-sm text-gray-600 font-[Inter] mb-4">
-              {workoutPlanData.description}
-            </p>
+          {(workoutPlanData?.description || isEditMode) && (
+            <div className="mb-4">
+              {isEditMode ? (
+                <textarea
+                  value={editableDescription}
+                  onChange={(e) => setEditableDescription(e.target.value)}
+                  className="text-sm text-gray-600 font-[Inter] bg-transparent border-b-2 border-gray-300 focus:outline-none focus:border-[#003F8F] w-full resize-none"
+                  placeholder="Add description..."
+                  rows={2}
+                />
+              ) : (
+                <p className="text-sm text-gray-600 font-[Inter]">
+                  {workoutPlanData.description}
+                </p>
+              )}
+            </div>
           )}
 
           {/* Workout Content */}
           {isCurrentDayRestDay ? (
             <>
               {/* Rest Day Title - Outside the Box, Separate Section */}
-              <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins] mb-4 mt-4">
-                {workoutName || 'Rest Day'}
-              </h4>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={workoutName || 'Rest Day'}
+                  onChange={(e) => {
+                    setWorkouts(prev => ({
+                      ...prev,
+                      [selectedDay]: { ...prev[selectedDay], workoutName: e.target.value }
+                    }));
+                  }}
+                  className="text-xl font-bold text-[#003F8F] font-[Poppins] mb-4 mt-4 bg-transparent border-b-2 border-[#003F8F] focus:outline-none focus:border-[#002F6F]"
+                  placeholder="Rest Day"
+                />
+              ) : (
+                <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins] mb-4 mt-4">
+                  {workoutName || 'Rest Day'}
+                </h4>
+              )}
 
               {/* Rest Day Content Card */}
               <div className="bg-white rounded-lg p-12 flex flex-col items-center justify-center min-h-[400px] !border border-[#4D60804D]">
@@ -315,8 +1188,15 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
           ) : currentWorkouts.length === 0 && !isRestDay ? (
             <div className="bg-white rounded-b-lg rounded-tl-none rounded-tr-none p-12 flex flex-col items-center justify-center min-h-[400px] border border-gray-200 border-t-0">
               <button
-                onClick={() => navigate('/coach/ai-program/add-workout')}
-                className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('Empty state Add Workout clicked - navigating to add-workout page');
+                  // Navigate to AddWorkout page
+                  navigate('/coach/ai-program/add-workout');
+                }}
+                className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition cursor-pointer"
+                type="button"
               >
                 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M16 8V24M8 16H24" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" />
@@ -327,51 +1207,438 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
           ) : (
             <>
               {/* Workout Name - Outside the Box, Separate Section */}
-              {workoutName && (
-                <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins] mb-4 mt-4">
-                  {workoutName}
-                </h4>
+              {(workoutName || isEditMode) && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    {isEditMode ? (
+                      <input
+                        type="text"
+                        value={workoutName || ''}
+                        onChange={(e) => {
+                          setWorkouts(prev => ({
+                            ...prev,
+                            [selectedDay]: { ...prev[selectedDay], workoutName: e.target.value }
+                          }));
+                        }}
+                        className="text-xl font-bold text-[#003F8F] font-[Poppins] bg-transparent border-b-2 border-[#003F8F] focus:outline-none focus:border-[#002F6F]"
+                        placeholder="Workout Name"
+                      />
+                    ) : (
+                      <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins]">
+                        {workoutName}
+                      </h4>
+                    )}
+                    {!isEditMode && (
+                      <button className="text-[#003F8F] hover:text-[#002F6F] transition">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <circle cx="10" cy="5" r="1.5" fill="currentColor" />
+                          <circle cx="10" cy="10" r="1.5" fill="currentColor" />
+                          <circle cx="10" cy="15" r="1.5" fill="currentColor" />
+                          <circle cx="5" cy="5" r="1.5" fill="currentColor" />
+                          <circle cx="5" cy="10" r="1.5" fill="currentColor" />
+                          <circle cx="5" cy="15" r="1.5" fill="currentColor" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  <div className="border-t border-gray-300"></div>
+                </div>
               )}
 
-              {/* Exercises Box - Single Main White Box with Border */}
-              <div className="bg-white rounded-lg p-6 !border border-[#4D60804D]">
-                {/* Exercises - All in One Main Box, A1 and A2 with Blue Left Border */}
+              {/* Video Links Section for Full Body Workout - Editable in edit mode */}
+              {isEditMode && workoutName && currentWorkouts.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
+                    <h6 className="text-sm font-semibold text-[#9CA3AF]">Video Links</h6>
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12.5 8.33333L16.2942 6.43667C16.4212 6.3732 16.5623 6.34323 16.7042 6.34962C16.846 6.35601 16.9839 6.39854 17.1047 6.47317C17.2255 6.5478 17.3252 6.65206 17.3944 6.77606C17.4636 6.90006 17.4999 7.03967 17.5 7.18167V12.8183C17.4999 12.9603 17.4636 13.0999 17.3944 13.2239C17.3252 13.3479 17.2255 13.4522 17.1047 13.5268C16.9839 13.6015 16.846 13.644 16.7042 13.6504C16.5623 13.6568 16.4212 13.6268 16.2942 13.5633L12.5 11.6667V8.33333ZM2.5 6.66667C2.5 6.22464 2.67559 5.80072 2.98816 5.48816C3.30072 5.17559 3.72464 5 4.16667 5H10.8333C11.2754 5 11.6993 5.17559 12.0118 5.48816C12.3244 5.80072 12.5 6.22464 12.5 6.66667V13.3333C12.5 13.7754 12.3244 14.1993 12.0118 14.5118C11.6993 14.8244 11.2754 15 10.8333 15H4.16667C3.72464 15 3.30072 14.8244 2.98816 14.5118C2.67559 14.1993 2.5 13.7754 2.5 13.3333V6.66667Z" stroke="#4D6080" strokeOpacity="0.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div className="space-y-2">
+                    {fullBodyVideoLinks.map((link, idx) => (
+                      <div key={idx} className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span className="flex-1 text-sm text-[#003F8F]">{link}</span>
+                        <button
+                          onClick={() => handleRemoveFullBodyVideoLink(idx)}
+                          className="w-5 h-5 bg-[#003F8F] rounded-full flex items-center justify-center hover:bg-[#002F6F] transition"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2.5 2.5L7.5 7.5M7.5 2.5L2.5 7.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                    {!showFullBodyVideoInput ? (
+                      <button
+                        onClick={() => setShowFullBodyVideoInput(true)}
+                        className="w-full flex items-center justify-between bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-xs text-[#003F8F] font-semibold hover:bg-gray-200 transition shadow-sm"
+                      >
+                        <div className="flex items-center gap-2">
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 2.5V11.5M2.5 7H11.5" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" />
+                          </svg>
+                          <span>Add Video link</span>
+                        </div>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={newFullBodyVideoLink}
+                          onChange={(e) => setNewFullBodyVideoLink(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddFullBodyVideoLink();
+                            }
+                          }}
+                          placeholder="https://"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] bg-white"
+                          autoFocus
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleAddFullBodyVideoLink}
+                            className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition"
+                          >
+                            Add
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowFullBodyVideoInput(false);
+                              setNewFullBodyVideoLink('');
+                            }}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Exercises Box - White Card Container */}
+              <div className="bg-white rounded-b-lg rounded-tl-none rounded-tr-none border border-gray-200 border-t-0 p-6">
+                {/* Exercises */}
                 <div>
                   {currentWorkouts.map((exercise, index) => {
-                    const isA1OrA2 = exercise.label === 'A1' || exercise.label === 'A2';
                     const prevExercise = index > 0 ? currentWorkouts[index - 1] : null;
-                    const isPrevA1OrA2 = prevExercise && (prevExercise.label === 'A1' || prevExercise.label === 'A2');
-                    const shouldAddSpacing = !isA1OrA2 || !isPrevA1OrA2;
+                    const isSuperset = exercise.isSuperset || false;
+                    const isInSuperset = isSuperset;
+                    const prevIsInSameSuperset = prevExercise && prevExercise.isSuperset &&
+                      prevExercise.label && exercise.label &&
+                      prevExercise.label.replace(/[0-9]/g, '') === exercise.label.replace(/[0-9]/g, '');
+                    const showSupersetDivider = isInSuperset;
+                    const showAddSuperset = !exercise.isSuperset && index > 0 && index < currentWorkouts.length - 1;
+                    const showAddExercise = index === currentWorkouts.length - 1;
+                    const isInSameSupersetGroup = prevExercise &&
+                      exercise.isSuperset &&
+                      prevExercise.isSuperset &&
+                      prevExercise.label && exercise.label &&
+                      prevExercise.label.replace(/[0-9]/g, '') === exercise.label.replace(/[0-9]/g, '');
+                    // Blue border for A1, A2 or any label ending with 1 or 2 (superset exercises)
+                    const hasBlueBorder = exercise.isSuperset || 
+                      (exercise.label && /[A-Z][12]$/.test(exercise.label)) || false;
 
                     return (
-                      <div
-                        key={exercise.id}
-                        className={`bg-white py-4 ${isA1OrA2 ? 'border-l-4 border-l-[#003F8F] pl-4' : 'pl-4'} ${shouldAddSpacing && index > 0 ? 'mt-6' : ''}`}
-                      >
-                        <h5 className="text-lg font-bold text-[#003F8F] font-[Poppins] mb-2">
-                          <span className="text-[#003F8F]">{exercise.label}.</span> <span className="text-[#003F8F]">{exercise.name}</span>
-                        </h5>
-                        <p className="text-sm text-[#003F8F] font-[Inter] mb-2">
-                          {exercise.sets} × {exercise.reps}
-                        </p>
-                        <p className="text-sm text-gray-600 font-[Inter] mb-3">
-                          {exercise.notes}
-                        </p>
-                        {exercise.videoLinks.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {exercise.videoLinks.map((link, idx) => (
-                              <button
-                                key={idx}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#4D60801A] rounded-full hover:bg-[#4D60801A] transition"
-                              >
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                  <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                                <span className="text-xs font-medium text-[#003F8F]">{link}</span>
-                              </button>
-                            ))}
+                      <div key={exercise.id}>
+                        {/* Superset Divider with Centered Button - Above each exercise in superset - Only in edit mode */}
+                        {isEditMode && showSupersetDivider && (
+                          <div
+                            className={`relative flex items-center ${isInSameSupersetGroup ? 'mb-0 mt-0' : 'my-4'}`}
+                            style={isInSameSupersetGroup ? { marginTop: '0', marginBottom: '0' } : {}}
+                          >
+                            <div className="flex-1 border-t border-gray-300"></div>
+                            <button
+                              onClick={() => toggleSuperset(exercise.id)}
+                              className="bg-[#003F8F] text-white text-xs font-semibold transition mx-2 hover:bg-[#002F6F]"
+                              style={{
+                                borderRadius: '9999px',
+                                padding: '0.5rem 1.25rem',
+                                height: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                whiteSpace: 'nowrap',
+                                lineHeight: '1.5',
+                                border: 'none',
+                                outline: 'none'
+                              }}
+                            >
+                              - Superset
+                            </button>
+                            <div className="flex-1 border-t border-gray-300"></div>
                           </div>
                         )}
+
+                        {/* Add Superset Divider - Only in edit mode */}
+                        {isEditMode && showAddSuperset && (
+                          <div className="relative flex items-center my-4">
+                            <div className="flex-1 border-t border-gray-300"></div>
+                            <button
+                              onClick={() => handleAddSuperset(exercise.id)}
+                              className="bg-blue-100 text-[#003F8F] text-xs font-semibold transition mx-2 hover:bg-blue-200"
+                              style={{
+                                borderRadius: '9999px',
+                                padding: '0.5rem 1.25rem',
+                                height: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                whiteSpace: 'nowrap',
+                                lineHeight: '1.5',
+                                border: 'none',
+                                outline: 'none'
+                              }}
+                            >
+                              + Superset
+                            </button>
+                            <div className="flex-1 border-t border-gray-300"></div>
+                          </div>
+                        )}
+
+                        {/* Exercise Card */}
+                        <div
+                          className={`bg-white relative ${isEditMode && isInSameSupersetGroup ? 'pt-0 pb-4 px-4' : 'p-4'} ${index > 0 && !(isEditMode && isInSameSupersetGroup) ? 'mt-6' : ''} ${hasBlueBorder ? 'border-l-4 border-l-[#003F8F]' : ''}`}
+                          style={isEditMode && isInSameSupersetGroup ? {
+                            marginTop: '2px',
+                            paddingTop: '0',
+                            marginBottom: '0',
+                            paddingBottom: '1rem',
+                            zIndex: 1
+                          } : {}}
+                          onMouseEnter={() => isEditMode && setHoveredExerciseId(exercise.id)}
+                          onMouseLeave={() => isEditMode && setHoveredExerciseId(null)}
+                        >
+                          {/* Right Side Dark Blue Pill with Icons - Appears on Hover */}
+                          {hoveredExerciseId === exercise.id && isEditMode && (
+                            <div className="absolute top-4 right-4 bg-[#003F8F] rounded-full px-3 py-2 flex flex-col items-center gap-3 z-10">
+                              {/* Delete Icon */}
+                              <button
+                                onClick={() => handleDeleteExercise(exercise.id)}
+                                className="text-white hover:text-gray-200 transition"
+                                title="Delete Exercise"
+                              >
+                                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M3 4.5H15M14.25 4.5V15C14.25 15.3978 14.092 15.7794 13.8107 16.0607C13.5294 16.342 13.1478 16.5 12.75 16.5H5.25C4.85218 16.5 4.47064 16.342 4.18934 16.0607C3.90804 15.7794 3.75 15.3978 3.75 15V4.5M6 4.5V3C6 2.60218 6.15804 2.22064 6.43934 1.93934C6.72064 1.65804 7.10218 1.5 7.5 1.5H10.5C10.8978 1.5 11.2794 1.65804 11.5607 1.93934C11.842 2.22064 12 2.60218 12 3V4.5M7.5 8.25V12.75M10.5 8.25V12.75" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+
+                          {isEditMode ? (
+                            <div className="space-y-3">
+                              {/* Exercise Name - Editable */}
+                              <div className="mb-3">
+                                <input
+                                  type="text"
+                                  value={`${exercise.label || ''}. ${exercise.name || ''}`}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    const match = value.match(/^([A-Z]?\d*)\s*\.\s*(.*)$/);
+                                    const updatedExercises = [...currentWorkouts];
+                                    if (match) {
+                                      updatedExercises[index].label = match[1] || '';
+                                      updatedExercises[index].name = match[2] || '';
+                                    } else {
+                                      updatedExercises[index].name = value;
+                                    }
+                                    setWorkouts(prev => ({
+                                      ...prev,
+                                      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+                                    }));
+                                  }}
+                                  className="text-lg font-bold text-[#003F8F] font-[Poppins] bg-transparent border-none focus:outline-none focus:ring-0 flex-1 w-full"
+                                  placeholder="A1. Exercise Name"
+                                />
+                              </div>
+
+                              {/* Sets x Reps - Editable */}
+                              <div className="mb-3 flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={exercise.sets || ''}
+                                  onChange={(e) => {
+                                    const updatedExercises = [...currentWorkouts];
+                                    updatedExercises[index].sets = parseInt(e.target.value) || 0;
+                                    setWorkouts(prev => ({
+                                      ...prev,
+                                      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+                                    }));
+                                  }}
+                                  placeholder="Sets"
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                />
+                                <span className="text-gray-700">x</span>
+                                <input
+                                  type="number"
+                                  value={exercise.reps || ''}
+                                  onChange={(e) => {
+                                    const updatedExercises = [...currentWorkouts];
+                                    updatedExercises[index].reps = parseInt(e.target.value) || 0;
+                                    setWorkouts(prev => ({
+                                      ...prev,
+                                      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+                                    }));
+                                  }}
+                                  placeholder="Reps"
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                />
+                                {exercise.weight_kg !== null && exercise.weight_kg !== undefined && (
+                                  <>
+                                    <span className="text-gray-400 mx-1">|</span>
+                                    <input
+                                      type="number"
+                                      step="0.5"
+                                      value={exercise.weight_kg || ''}
+                                      onChange={(e) => {
+                                        const updatedExercises = [...currentWorkouts];
+                                        updatedExercises[index].weight_kg = parseFloat(e.target.value) || null;
+                                        setWorkouts(prev => ({
+                                          ...prev,
+                                          [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+                                        }));
+                                      }}
+                                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                      placeholder="Weight"
+                                    />
+                                    <span className="text-gray-400 text-xs">kg</span>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Notes/Cues - Editable */}
+                              <input
+                                type="text"
+                                value={exercise.notes || ''}
+                                onChange={(e) => {
+                                  const updatedExercises = [...currentWorkouts];
+                                  updatedExercises[index].notes = e.target.value;
+                                  setWorkouts(prev => ({
+                                    ...prev,
+                                    [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+                                  }));
+                                }}
+                                placeholder="Sets, Reps, Rest, Notes"
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F] mb-3"
+                              />
+
+                              {/* Video Links - Editable */}
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h6 className="text-sm font-semibold text-[#4D6080CC]">Video Links</h6>
+                                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12.5 8.33333L16.2942 6.43667C16.4212 6.3732 16.5623 6.34323 16.7042 6.34962C16.846 6.35601 16.9839 6.39854 17.1047 6.47317C17.2255 6.5478 17.3252 6.65206 17.3944 6.77606C17.4636 6.90006 17.4999 7.03967 17.5 7.18167V12.8183C17.4999 12.9603 17.4636 13.0999 17.3944 13.2239C17.3252 13.3479 17.2255 13.4522 17.1047 13.5268C16.9839 13.6015 16.846 13.644 16.7042 13.6504C16.5623 13.6568 16.4212 13.6268 16.2942 13.5633L12.5 11.6667V8.33333ZM2.5 6.66667C2.5 6.22464 2.67559 5.80072 2.98816 5.48816C3.30072 5.17559 3.72464 5 4.16667 5H10.8333C11.2754 5 11.6993 5.17559 12.0118 5.48816C12.3244 5.80072 12.5 6.22464 12.5 6.66667V13.3333C12.5 13.7754 12.3244 14.1993 12.0118 14.5118C11.6993 14.8244 11.2754 15 10.8333 15H4.16667C3.72464 15 3.30072 14.8244 2.98816 14.5118C2.67559 14.1993 2.5 13.7754 2.5 13.3333V6.66667Z" stroke="#4D6080" strokeOpacity="0.8" strokeLinecap="round" strokeLinejoin="round" />
+                                  </svg>
+                                </div>
+                                <div className="space-y-2">
+                                  {(exercise.videoLinks || []).map((link, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                      <span className="flex-1 text-sm text-[#003F8F]">{link}</span>
+                                      <button
+                                        onClick={() => handleRemoveVideoLink(exercise.id, idx)}
+                                        className="w-5 h-5 bg-[#003F8F] rounded-full flex items-center justify-center hover:bg-[#002F6F] transition"
+                                      >
+                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                          <path d="M2.5 2.5L7.5 7.5M7.5 2.5L2.5 7.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ))}
+                                  {!showExerciseVideoInputs[exercise.id] ? (
+                                    <button
+                                      onClick={() => handleShowExerciseVideoInput(exercise.id)}
+                                      className="w-full flex items-center justify-between bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-xs text-[#003F8F] font-semibold hover:bg-gray-200 transition shadow-sm"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                          <path d="M7 2.5V11.5M2.5 7H11.5" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" />
+                                        </svg>
+                                        <span>Add Video link</span>
+                                      </div>
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    </button>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <input
+                                        type="text"
+                                        value={newVideoLinks[exercise.id] || ''}
+                                        onChange={(e) => setNewVideoLinks({ ...newVideoLinks, [exercise.id]: e.target.value })}
+                                        onKeyPress={(e) => {
+                                          if (e.key === 'Enter') {
+                                            handleAddVideoLink(exercise.id);
+                                          }
+                                        }}
+                                        placeholder="https://"
+                                        className="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] bg-white"
+                                        autoFocus
+                                      />
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => handleAddVideoLink(exercise.id)}
+                                          className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition"
+                                        >
+                                          Add
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setShowExerciseVideoInputs({ ...showExerciseVideoInputs, [exercise.id]: false });
+                                            setNewVideoLinks({ ...newVideoLinks, [exercise.id]: '' });
+                                          }}
+                                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <h5 className="text-lg font-bold text-[#003F8F] font-[Poppins] mb-2">
+                                <span className="text-[#003F8F]">{exercise.label}.</span> <span className="text-[#003F8F]">{exercise.name}</span>
+                              </h5>
+                              <p className="text-sm text-[#003F8F] font-[Inter] mb-2">
+                                {exercise.sets} × {exercise.reps}
+                                {exercise.weight_kg && ` | ${exercise.weight_kg} kg`}
+                              </p>
+                              <p className="text-sm text-gray-600 font-[Inter] mb-3">
+                                {exercise.notes}
+                              </p>
+                              {exercise.videoLinks && exercise.videoLinks.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {exercise.videoLinks.map((link, idx) => (
+                                    <button
+                                      key={idx}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#4D60801A] rounded-full hover:bg-[#4D60801A] transition"
+                                    >
+                                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                      <span className="text-xs font-medium text-[#003F8F]">{link}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        {/* Add Exercise Divider - Removed from edit mode */}
                       </div>
                     );
                   })}
@@ -381,7 +1648,44 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
           )}
           
         </div>
-      </div>
+        )}
+        </div>
+
+      {/* Save and Cancel Buttons - Bottom (shown only in edit mode) */}
+      {isEditMode && !isCurrentDayRestDay && currentWorkouts.length > 0 && (
+        <div className="mt-6 flex items-center justify-between pb-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleCancelEdit}
+              disabled={isUpdating}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveFromEditMode}
+              disabled={isUpdating || !workoutPlanData?.id}
+              className={`px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm transition ${
+                isUpdating || !workoutPlanData?.id 
+                  ? 'opacity-50 cursor-not-allowed' 
+                  : 'hover:bg-[#002F6F]'
+              }`}
+            >
+              {isUpdating ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+          {/* Delete/Trash Icon */}
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            className="text-gray-600 hover:text-red-600 transition"
+            title="Delete Workout"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M13 3.66671L12.5867 10.35C12.4813 12.0574 12.4287 12.9114 12 13.5254C11.7884 13.8288 11.5159 14.0849 11.2 14.2774C10.562 14.6667 9.70667 14.6667 7.996 14.6667C6.28267 14.6667 5.426 14.6667 4.78667 14.2767C4.47059 14.0839 4.19814 13.8273 3.98667 13.5234C3.55867 12.9087 3.50667 12.0534 3.404 10.3434L3 3.66671M2 3.66671H14M10.704 3.66671L10.2487 2.72804C9.94667 2.10404 9.79533 1.79271 9.53467 1.59804C9.47676 1.55492 9.41545 1.51657 9.35133 1.48337C9.06267 1.33337 8.716 1.33337 8.02333 1.33337C7.31267 1.33337 6.95733 1.33337 6.66333 1.48937C6.59834 1.52418 6.53635 1.56432 6.478 1.60937C6.21467 1.81137 6.06733 2.13471 5.77267 2.78071L5.36867 3.66671M6.33333 11V7.00004M9.66667 11V7.00004" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Assign To Client Modal */}
       {showAssignModal && (
@@ -417,7 +1721,9 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
                   >
                     {/* Top Row - Placeholder and Dropdown */}
                     <div className="px-3 py-2 flex items-center justify-between relative">
-                      <span className="text-gray-400 text-sm">Select client</span>
+                      <span className={`text-sm ${selectedClients.length > 0 ? 'text-[#003F8F] font-medium' : 'text-gray-400'}`}>
+                        {selectedClients.length > 0 ? `${selectedClients.length} client${selectedClients.length > 1 ? 's' : ''} selected` : 'Select client'}
+                      </span>
                       <svg
                         className="w-5 h-5 text-[#003F8F]"
                         fill="none"
@@ -431,16 +1737,16 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
                     {/* Chips Row - Below placeholder */}
                     {selectedClients.length > 0 && (
                       <div className="px-3 pb-2 flex flex-wrap gap-2">
-                        {selectedClients.map((client, index) => (
+                        {selectedClients.map((client) => (
                           <div
-                            key={index}
+                            key={client.id}
                             className="bg-[#4D60801A] px-3 py-1 rounded-full text-sm flex items-center gap-2"
                           >
-                            <span className="text-[#003F8F] font-medium">{client}</span>
+                            <span className="text-[#003F8F] font-medium">{client.name}</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleRemoveClient(client);
+                                handleRemoveClient(client.id);
                               }}
                               className="text-[#003F8F] hover:text-[#002F6F] transition flex items-center justify-center cursor-pointer"
                             >
@@ -456,17 +1762,23 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
                   </div>
                   {showClientDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                      {clientList
-                        .filter(client => !selectedClients.includes(client))
-                        .map((client, index) => (
-                          <button
-                            key={index}
-                            onClick={() => handleSelectClient(client)}
-                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition"
-                          >
-                            {client}
-                          </button>
-                        ))}
+                      {loadingClients ? (
+                        <div className="px-4 py-2 text-sm text-gray-500 text-center">Loading clients...</div>
+                      ) : clients.length === 0 ? (
+                        <div className="px-4 py-2 text-sm text-gray-500 text-center">No clients available</div>
+                      ) : (
+                        clients
+                          .filter(client => !selectedClients.some(c => c.id === client.id))
+                          .map((client) => (
+                            <button
+                              key={client.id}
+                              onClick={() => handleSelectClient(client)}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 transition"
+                            >
+                              {client.name}
+                            </button>
+                          ))
+                      )}
                     </div>
                   )}
                 </div>
@@ -509,6 +1821,13 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
                   )}
                 </div>
               </div>
+
+              {/* Error Message */}
+              {assignError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-sm text-red-600 font-[Inter]">{assignError}</p>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -518,19 +1837,58 @@ const WorkoutPlan = ({ onBack, workoutPlanData }) => {
                   setShowAssignModal(false);
                   setShowClientDropdown(false);
                   setShowCadenceDropdown(false);
+                  setAssignError(null);
+                  setSelectedClients([]);
+                  setSelectedCadence('For 3 Weeks');
                 }}
-                className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition"
+                disabled={isAssigning}
+                className={`px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm transition ${
+                  isAssigning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'
+                }`}
               >
                 Cancel
               </button>
               <button
                 onClick={handleAssignPlan}
-                className="px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition"
+                disabled={isAssigning || selectedClients.length === 0 || !workoutPlanData?.id}
+                className={`px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm transition ${
+                  isAssigning || selectedClients.length === 0 || !workoutPlanData?.id
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-[#002F6F]'
+                }`}
               >
-                Assign Plan
+                {isAssigning ? 'Assigning...' : 'Assign Plan'}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Success Message Popup */}
+      {showSuccessMessage && (
+        <div 
+          className="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3 transition-all duration-300"
+          style={{
+            animation: 'slideInRight 0.3s ease-out'
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 18.3333C14.6024 18.3333 18.3333 14.6024 18.3333 10C18.3333 5.39763 14.6024 1.66667 10 1.66667C5.39763 1.66667 1.66667 5.39763 1.66667 10C1.66667 14.6024 5.39763 18.3333 10 18.3333Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M6.66667 10L9.16667 12.5L13.3333 8.33333" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span className="font-semibold">{successMessageText}</span>
+          <style>{`
+            @keyframes slideInRight {
+              from {
+                transform: translateX(100%);
+                opacity: 0;
+              }
+              to {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+          `}</style>
         </div>
       )}
     </div>

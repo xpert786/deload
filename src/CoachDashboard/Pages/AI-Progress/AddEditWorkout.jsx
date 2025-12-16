@@ -1,57 +1,75 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDay, isRestDay = false }) => {
+const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDay, isRestDay = false, initialWorkoutName = '', initialExercises = [], isEditMode = false }) => {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState(day);
-  const [workoutName, setWorkoutName] = useState('Full Body');
+  const [workoutName, setWorkoutName] = useState(initialWorkoutName || 'Full Body');
   const [fullBodyVideoLinks, setFullBodyVideoLinks] = useState([
     'Seated Cable Row...',
     'Bench Press Form...',
     'How to Barbell...'
   ]);
-  const [exercises, setExercises] = useState([
-    {
-      id: 1,
-      label: 'A1',
-      name: 'Barbell Squat',
-      sets: 4,
-      reps: 8,
-      notes: 'Keep chest up, go below parallel',
-      videoLinks: ['Seated Cable Row...'],
-      isSuperset: true
-    },
-    {
-      id: 2,
-      label: 'A2',
-      name: 'Bench Press',
-      sets: 3,
-      reps: 10,
-      notes: 'Shoulders retracted, elbows at 45°',
-      videoLinks: ['Bench Press Form...'],
-      isSuperset: true
-    },
-    {
-      id: 3,
-      label: 'B',
-      name: 'Romanian Deadlift',
-      sets: 3,
-      reps: 10,
-      notes: 'Slight knee bend, hinge at hips',
-      videoLinks: [],
-      isSuperset: false
-    },
-    {
-      id: 4,
-      label: 'C',
-      name: 'Exercise Title',
-      sets: 0,
-      reps: 0,
-      notes: 'Sets, Reps, Rest, Notes',
-      videoLinks: [],
-      isSuperset: false
+  
+  // Initialize exercises from props if provided (for editing), otherwise use default
+  const getInitialExercises = () => {
+    if (initialExercises && initialExercises.length > 0) {
+      // If editing a single exercise, return just that exercise
+      if (isEditMode && exerciseId) {
+        return initialExercises;
+      }
+      // Otherwise return all exercises
+      return initialExercises.map(ex => ({
+        ...ex,
+        videoLinks: ex.videoLinks || []
+      }));
     }
-  ]);
+    // Default exercises for new workout
+    return [
+      {
+        id: 1,
+        label: 'A1',
+        name: 'Barbell Squat',
+        sets: 4,
+        reps: 8,
+        notes: 'Keep chest up, go below parallel',
+        videoLinks: ['Seated Cable Row...'],
+        isSuperset: true
+      },
+      {
+        id: 2,
+        label: 'A2',
+        name: 'Bench Press',
+        sets: 3,
+        reps: 10,
+        notes: 'Shoulders retracted, elbows at 45°',
+        videoLinks: ['Bench Press Form...'],
+        isSuperset: true
+      },
+      {
+        id: 3,
+        label: 'B',
+        name: 'Romanian Deadlift',
+        sets: 3,
+        reps: 10,
+        notes: 'Slight knee bend, hinge at hips',
+        videoLinks: [],
+        isSuperset: false
+      },
+      {
+        id: 4,
+        label: 'C',
+        name: 'Exercise Title',
+        sets: 0,
+        reps: 0,
+        notes: 'Sets, Reps, Rest, Notes',
+        videoLinks: [],
+        isSuperset: false
+      }
+    ];
+  };
+  
+  const [exercises, setExercises] = useState(getInitialExercises());
   const [newVideoLinks, setNewVideoLinks] = useState({});
   const [newFullBodyVideoLink, setNewFullBodyVideoLink] = useState('');
   const [showFullBodyVideoInput, setShowFullBodyVideoInput] = useState(false);
@@ -62,8 +80,11 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
   const [isWorkoutDeleted, setIsWorkoutDeleted] = useState(false);
   const [showSuggestionsFor, setShowSuggestionsFor] = useState(null);
   const [suggestionInputValue, setSuggestionInputValue] = useState({});
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [localEditMode, setLocalEditMode] = useState(isEditMode || false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  
+  // Use prop isEditMode if provided, otherwise use local state
+  const currentEditMode = isEditMode !== undefined ? isEditMode : localEditMode;
   const [selectedClients, setSelectedClients] = useState([]);
   const [selectedCadence, setSelectedCadence] = useState('For 3 Weeks');
   const [showClientDropdown, setShowClientDropdown] = useState(false);
@@ -97,6 +118,22 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
     'Wall Sits', 'Wide Grip Pull-ups',
     'Zercher Squats'
   ];
+
+  // Update state when initial props change (for editing)
+  useEffect(() => {
+    if (initialWorkoutName && initialWorkoutName !== workoutName) {
+      setWorkoutName(initialWorkoutName);
+    }
+    if (initialExercises && initialExercises.length > 0) {
+      const exercisesToUse = isEditMode && exerciseId 
+        ? initialExercises 
+        : initialExercises.map(ex => ({
+            ...ex,
+            videoLinks: ex.videoLinks || []
+          }));
+      setExercises(exercisesToUse);
+    }
+  }, [initialWorkoutName, initialExercises, isEditMode, exerciseId]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -367,7 +404,11 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
                 Add Workout
               </button>
               <button 
-                onClick={() => setIsEditMode(!isEditMode)}
+                onClick={() => {
+                  if (isEditMode === undefined) {
+                    setLocalEditMode(!localEditMode);
+                  }
+                }}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -393,7 +434,7 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
                 {d}
               </button>
             ))}
-            {false && onToggleRestDay && !exerciseId && !isEditMode && (
+            {false && onToggleRestDay && !exerciseId && !currentEditMode && (
               <div className="flex items-center gap-2 ml-2">
                 <span className="text-sm text-gray-600 font-[Inter] whitespace-nowrap">Toggle Rest Day</span>
                 <button
@@ -954,8 +995,16 @@ const AddEditWorkout = ({ day, onBack, onSave, exerciseId = null, onToggleRestDa
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => {
-                          if (onSave) onSave();
-                          else onBack();
+                          if (onSave) {
+                            // Pass the updated workout data back to parent
+                            onSave({
+                              day: selectedDay,
+                              workoutName: workoutName,
+                              exercises: exercises.filter(ex => ex.name.trim() !== '' || ex.sets > 0 || ex.reps > 0)
+                            });
+                          } else {
+                            onBack();
+                          }
                         }}
                         className="px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition"
                       >

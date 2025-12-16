@@ -35,14 +35,64 @@ const SUGGESTIONS = [
 
 const AIProgram = () => {
   const navigate = useNavigate();
-  const [showRotatingText, setShowRotatingText] = useState(true);
+  
+  // Load workout plan data from localStorage on mount
+  const loadWorkoutPlanFromStorage = () => {
+    try {
+      const stored = localStorage.getItem('aiWorkoutPlanData');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      console.error('Error loading workout plan from localStorage:', error);
+    }
+    return null;
+  };
+
+  // Check if there are existing chat messages
+  const hasExistingChatMessages = () => {
+    try {
+      const stored = localStorage.getItem('aiChatMessages');
+      if (stored) {
+        const messages = JSON.parse(stored);
+        // Check if there are any user messages (not just the default AI message)
+        const userMessages = messages.filter(msg => msg.type === 'user');
+        return userMessages.length > 0;
+      }
+    } catch (error) {
+      console.error('Error loading chat messages from localStorage:', error);
+    }
+    return false;
+  };
+
+  // Initialize state - check if we have stored workout plan data or chat messages
+  // For new coach's first chat, show the initial interface page
+  const storedWorkoutPlan = loadWorkoutPlanFromStorage();
+  const hasChatHistory = hasExistingChatMessages();
+  // Show initial screen if no workout plan AND no chat history (new coach's first visit)
+  const [showRotatingText, setShowRotatingText] = useState(!storedWorkoutPlan && !hasChatHistory);
   const [currentPlaceholderText, setCurrentPlaceholderText] = useState(0);
   const [currentBottomText, setCurrentBottomText] = useState(0);
   const [inputValue, setInputValue] = useState('');
   const [isHoveringBottomText, setIsHoveringBottomText] = useState(false);
-  const [workoutPlanData, setWorkoutPlanData] = useState(null);
+  const [workoutPlanData, setWorkoutPlanData] = useState(storedWorkoutPlan);
   const [initialMessage, setInitialMessage] = useState('');
+  const [initialAiResponse, setInitialAiResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Save workout plan data to localStorage whenever it changes
+  useEffect(() => {
+    if (workoutPlanData) {
+      try {
+        localStorage.setItem('aiWorkoutPlanData', JSON.stringify(workoutPlanData));
+      } catch (error) {
+        console.error('Error saving workout plan to localStorage:', error);
+      }
+    } else {
+      // Remove from localStorage if workout plan is cleared
+      localStorage.removeItem('aiWorkoutPlanData');
+    }
+  }, [workoutPlanData]);
 
   const handleCopyText = (text) => {
     // Remove "Try: " prefix if present
@@ -77,6 +127,49 @@ const AIProgram = () => {
   const handleWorkoutPlanGenerated = (data) => {
     setWorkoutPlanData(data);
     setShowRotatingText(false);
+    // Save to localStorage
+    try {
+      localStorage.setItem('aiWorkoutPlanData', JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving workout plan to localStorage:', error);
+    }
+  };
+
+  const handleWorkoutPlanUpdated = (data) => {
+    // Update workout plan data when it's updated via PUT API
+    setWorkoutPlanData(data);
+    // Save updated data to localStorage
+    try {
+      localStorage.setItem('aiWorkoutPlanData', JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving updated workout plan to localStorage:', error);
+    }
+    console.log('Workout plan updated in parent component');
+  };
+
+  const handleWorkoutPlanDeleted = () => {
+    // Set workout plan data to empty structure to keep the view visible
+    // This allows the user to stay on the workout plan page with empty state
+    const emptyWorkoutPlan = {
+      id: null,
+      title: "Client's Weekly Workout Plan",
+      description: '',
+      days: [
+        { day: 'monday', workout_name: '', exercises: [], is_rest_day: false },
+        { day: 'tuesday', workout_name: '', exercises: [], is_rest_day: false },
+        { day: 'wednesday', workout_name: '', exercises: [], is_rest_day: false },
+        { day: 'thursday', workout_name: '', exercises: [], is_rest_day: false },
+        { day: 'friday', workout_name: '', exercises: [], is_rest_day: false },
+        { day: 'saturday', workout_name: '', exercises: [], is_rest_day: false },
+        { day: 'sunday', workout_name: 'Rest Day', exercises: [], is_rest_day: true }
+      ]
+    };
+    setWorkoutPlanData(emptyWorkoutPlan);
+    // Clear from localStorage since plan is deleted
+    localStorage.removeItem('aiWorkoutPlanData');
+    // Keep showRotatingText false so we stay on the workout plan view
+    setShowRotatingText(false);
+    console.log('Workout plan deleted in parent component, showing empty state');
   };
 
   // API call function for initial screen
@@ -170,6 +263,15 @@ const AIProgram = () => {
         if (response.ok && result.data) {
           // Pass workout plan data to WorkoutPlan
           setWorkoutPlanData(result.data);
+          // Store the AI response message
+          const aiResponseMessage = result.message || "Your personalized workout plan has been generated and saved successfully! The plan is ready for review and can be edited before assigning to a client.";
+          setInitialAiResponse(aiResponseMessage);
+          // Save to localStorage
+          try {
+            localStorage.setItem('aiWorkoutPlanData', JSON.stringify(result.data));
+          } catch (error) {
+            console.error('Error saving workout plan to localStorage:', error);
+          }
           console.log('Workout plan generated successfully from initial screen');
         } else {
           // Handle validation errors
@@ -180,7 +282,8 @@ const AIProgram = () => {
       } catch (error) {
         console.error('=== INITIAL SCREEN API ERROR ===');
         console.error('Error generating workout plan:', error);
-        // Error will be handled by ChatInterface when it receives the initialMessage
+        // Store error message as AI response
+        setInitialAiResponse(`Sorry, I encountered an error: ${error.message}. Please try again.`);
       } finally {
         setIsLoading(false);
         console.log('=== INITIAL SCREEN API CALL END ===');
@@ -350,15 +453,24 @@ const AIProgram = () => {
         <ChatInterface 
           onWorkoutPlanGenerated={handleWorkoutPlanGenerated}
           initialMessage={initialMessage}
+          initialAiResponse={initialAiResponse}
           skipInitialApiCall={isLoading || workoutPlanData !== null}
+          externalIsLoading={isLoading}
         />
       </div>
 
       {/* Workout Plan - Right Side */}
       <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col">
         <WorkoutPlan 
-          onBack={() => setShowRotatingText(true)} 
+          onBack={() => {
+            setShowRotatingText(true);
+            // Clear workout plan data when going back
+            setWorkoutPlanData(null);
+            localStorage.removeItem('aiWorkoutPlanData');
+          }} 
           workoutPlanData={workoutPlanData}
+          onWorkoutPlanUpdated={handleWorkoutPlanUpdated}
+          onWorkoutPlanDeleted={handleWorkoutPlanDeleted}
         />
       </div>
     </div>

@@ -7,13 +7,44 @@ if (!API_BASE_URL) {
   console.error('VITE_API_BASE_URL is not defined in .env file');
 }
 
-const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiCall = false }) => {
+const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, initialAiResponse, skipInitialApiCall = false, externalIsLoading = false }) => {
   const [message, setMessage] = useState('');
-  const [chatMessages, setChatMessages] = useState([
-    { type: 'ai', text: "Hi there, How can I help you?" }
-  ]);
+  
+  // Load messages from localStorage or initialize with default
+  const loadMessagesFromStorage = () => {
+    try {
+      const stored = localStorage.getItem('aiChatMessages');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      console.error('Error loading messages from localStorage:', error);
+    }
+    return [{ type: 'ai', text: "Hi there, How can I help you?" }];
+  };
+
+  const [chatMessages, setChatMessages] = useState(loadMessagesFromStorage);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Combine external loading state (from initial screen) with internal loading state
+  const isCurrentlyLoading = isLoading || externalIsLoading;
   const initialMessageSentRef = useRef(false);
+  const processedInitialMessageRef = useRef('');
+  const messagesEndRef = useRef(null);
+  
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('aiChatMessages', JSON.stringify(chatMessages));
+    } catch (error) {
+      console.error('Error saving messages to localStorage:', error);
+    }
+    
+    // Auto-scroll to bottom when new messages are added
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
 
   // API call function - extracted for reuse
   const handleSendMessage = useCallback(async (userMessage) => {
@@ -140,32 +171,64 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiC
     }
   }, [onWorkoutPlanGenerated]);
 
-  // Handle initial message from parent
+  // Handle initial message and AI response from parent
   useEffect(() => {
-    if (initialMessage && initialMessage.trim() && !initialMessageSentRef.current && !isLoading) {
-      initialMessageSentRef.current = true;
-      const messageToSend = initialMessage.trim();
-      setMessage(messageToSend);
-      
-      // Add user message to chat
-      setChatMessages(prev => [...prev, { type: 'user', text: messageToSend }]);
-      
-      // Only call API if not skipped (i.e., if API wasn't already called from initial screen)
-      if (!skipInitialApiCall) {
-        // Auto-send after a short delay to ensure state is updated
-        setTimeout(() => {
-          if (!isLoading) {
-            handleSendMessage(messageToSend);
-          }
-        }, 200);
-      }
-    }
+    const messageToSend = initialMessage && initialMessage.trim() ? initialMessage.trim() : '';
+    const aiResponseToAdd = initialAiResponse && initialAiResponse.trim() ? initialAiResponse.trim() : '';
     
-    // Reset ref when initialMessage changes to empty (allows resending)
-    if (!initialMessage || !initialMessage.trim()) {
+    // Create a unique key for this message/response combo
+    const messageKey = `${messageToSend}|${aiResponseToAdd}`;
+    
+    // Process if we have a message to send
+    if (messageToSend) {
+      // Only process if this is a new combo (different from what we've already processed)
+      const needsUpdate = processedInitialMessageRef.current !== messageKey;
+      
+      if (needsUpdate) {
+        processedInitialMessageRef.current = messageKey;
+        setMessage(messageToSend);
+        
+        // Add messages to chat immediately
+        setChatMessages(prev => {
+          // Check if user message already exists
+          const userMessageExists = prev.some(msg => msg.type === 'user' && msg.text === messageToSend);
+          
+          // Start with existing messages
+          let updated = [...prev];
+          
+          // Add user message if it doesn't exist
+          if (!userMessageExists) {
+            updated = [...updated, { type: 'user', text: messageToSend }];
+          }
+          
+          // If we have an AI response, add it (even if user message existed)
+          if (aiResponseToAdd) {
+            const aiResponseExists = updated.some(msg => msg.type === 'ai' && msg.text === aiResponseToAdd);
+            if (!aiResponseExists) {
+              updated = [...updated, { type: 'ai', text: aiResponseToAdd }];
+            }
+          } else if (!skipInitialApiCall && !userMessageExists) {
+            // Only call API if not skipped, no AI response provided, and user message was just added
+            // Auto-send after a short delay to ensure state is updated
+            setTimeout(() => {
+              handleSendMessage(messageToSend);
+            }, 100);
+          }
+          
+          return updated;
+        });
+        
+        // Mark as sent to prevent duplicate API calls
+        if (aiResponseToAdd || skipInitialApiCall) {
+          initialMessageSentRef.current = true;
+        }
+      }
+    } else {
+      // Reset ref when initialMessage changes to empty (allows resending)
       initialMessageSentRef.current = false;
+      processedInitialMessageRef.current = '';
     }
-  }, [initialMessage, handleSendMessage, isLoading, skipInitialApiCall]);
+  }, [initialMessage, initialAiResponse, handleSendMessage, skipInitialApiCall]);
 
   const allSuggestions = [
     "You can also say 'convert this to a 4-week template'",
@@ -191,7 +254,7 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiC
     setMessage(suggestion);
     // Auto-send when suggestion is clicked
     setTimeout(() => {
-      if (suggestion.trim() && !isLoading) {
+      if (suggestion.trim() && !isCurrentlyLoading) {
         console.log('Auto-sending suggestion');
         handleSendMessage(suggestion.trim());
         setMessage('');
@@ -200,8 +263,8 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiC
   };
 
   const handleSend = () => {
-    console.log('handleSend called', { message: message.trim(), isLoading });
-    if (message.trim() && !isLoading) {
+    console.log('handleSend called', { message: message.trim(), isCurrentlyLoading });
+    if (message.trim() && !isCurrentlyLoading) {
       const userMessage = message.trim();
       console.log('Sending message:', userMessage);
       setMessage('');
@@ -237,7 +300,7 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiC
             )}
           </div>
         ))}
-        {isLoading && (
+        {isCurrentlyLoading && (
           <div className="flex justify-start">
             <div className="max-w-[80%]">
               <p className="text-sm text-gray-500 font-[Inter] italic">
@@ -246,6 +309,7 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiC
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Suggestions Section */}
@@ -260,14 +324,14 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiC
               setMessage(newValue);
             }}
             onKeyDown={(e) => {
-              console.log('Key pressed:', e.key, { message, isLoading, messageTrimmed: message.trim() });
-              if (e.key === 'Enter' && !e.shiftKey && !isLoading && message.trim()) {
+              console.log('Key pressed:', e.key, { message, isCurrentlyLoading, messageTrimmed: message.trim() });
+              if (e.key === 'Enter' && !e.shiftKey && !isCurrentlyLoading && message.trim()) {
                 e.preventDefault();
                 console.log('Enter key pressed, sending message');
                 handleSend();
               }
             }}
-            disabled={isLoading}
+            disabled={isCurrentlyLoading}
             placeholder={defaultSuggestion}
             rows={3}
             className="w-full px-4 pt-4 pb-8 pr-12 bg-[#4D60801A] !border border-[#4D60804D]  rounded-[12px] text-sm text-gray-700 font-[Inter] focus:outline-none focus:ring-2 focus:ring-[#003F8F] resize-none align-top"
@@ -276,15 +340,15 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, skipInitialApiC
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              console.log('Button clicked', { message, isLoading, messageTrimmed: message.trim() });
-              if (!isLoading && message.trim()) {
+              console.log('Button clicked', { message, isCurrentlyLoading, messageTrimmed: message.trim() });
+              if (!isCurrentlyLoading && message.trim()) {
                 handleSend();
               } else {
                 console.log('Button click ignored - disabled state');
               }
             }}
-            disabled={isLoading || !message.trim()}
-            className={`absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center justify-center mt-6 transition z-10 ${isLoading || !message.trim() ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
+            disabled={isCurrentlyLoading || !message.trim()}
+            className={`absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center justify-center mt-6 transition z-10 ${isCurrentlyLoading || !message.trim() ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-80'}`}
             type="button"
             aria-label="Send message"
           >

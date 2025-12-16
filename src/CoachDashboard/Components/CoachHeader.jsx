@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DloadLogo from "../../assets/DloadLogo.png";
 import { BellIcon, SearchIcon } from '../../ClientDashboard/Components/icons';
@@ -6,10 +6,126 @@ import ProfileLogo from "../../assets/ProfileLogo.png";
 import AddNewClientModal from './AddNewClientModal';
 import NotificationsModal from './NotificationsModal';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
   const { user } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
+  const [profileImage, setProfileImage] = useState(null);
+
+  // Fetch coach profile image
+  useEffect(() => {
+    const fetchProfileImage = async () => {
+      if (!user) return;
+
+      try {
+        // Get authentication token
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+        
+        if (user) {
+          token = user.token || user.access_token || user.authToken || user.accessToken;
+        }
+
+        if (!token && storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+
+        if (!token) {
+          token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+        }
+
+        const isValidToken = token &&
+          typeof token === 'string' &&
+          token.trim().length > 0 &&
+          token.trim() !== 'null' &&
+          token.trim() !== 'undefined' &&
+          token.trim() !== '';
+
+        // Ensure API_BASE_URL doesn't have trailing slash
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        // Check if baseUrl already includes /api, if not add it
+        const apiUrl = baseUrl.includes('/api') 
+          ? `${baseUrl}/coach/profile/`
+          : `${baseUrl}/api/coach/profile/`;
+
+        // Prepare headers
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        if (isValidToken) {
+          headers['Authorization'] = `Bearer ${token.trim()}`;
+        }
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: headers,
+          credentials: 'include',
+        });
+
+        let result;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse response:', parseError);
+          return;
+        }
+
+        if (response.ok && result.data && result.data.profile_photo_url) {
+          let imageUrl = result.data.profile_photo_url;
+          
+          // If URL is relative, construct full URL
+          if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+            // Remove leading slash if present
+            const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+            // Construct full URL using API base URL
+            const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+            // Remove /api or /deload/api if present to get base domain
+            const domainUrl = baseUrl.replace(/\/api$/, '').replace(/\/deload\/api$/, '').replace(/\/deload$/, '');
+            imageUrl = `${domainUrl}/${cleanUrl}`;
+          }
+          
+          // Ensure URL is properly formatted
+          imageUrl = imageUrl.trim();
+          setProfileImage(imageUrl);
+        }
+      } catch (err) {
+        console.error('Error fetching coach profile image:', err);
+        // Don't set error state, just use default image
+      }
+    };
+
+    fetchProfileImage();
+  }, [user]);
+
+  // Listen for profile image updates from settings page
+  useEffect(() => {
+    const handleProfileImageUpdate = (event) => {
+      if (event.detail && event.detail.imageUrl) {
+        // Update profile image with the new URL from settings
+        setProfileImage(event.detail.imageUrl);
+      }
+    };
+
+    window.addEventListener('profileImageUpdated', handleProfileImageUpdate);
+
+    // Cleanup event listener on unmount
+    return () => {
+      window.removeEventListener('profileImageUpdated', handleProfileImageUpdate);
+    };
+  }, []);
 
   return (
     <>
@@ -160,9 +276,16 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
 
         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden">
           <img
-            src={ProfileLogo}
-            alt={user?.name || "Profile"}
+            src={profileImage || ProfileLogo}
+            alt={user?.name || user?.fullname || "Profile"}
             className="w-full h-full object-cover"
+            key={profileImage || 'default'} // Force re-render when image changes
+            onError={(e) => {
+              // Fallback to default image if profile image fails to load
+              if (e.target.src !== ProfileLogo && !e.target.src.includes(ProfileLogo)) {
+                e.target.src = ProfileLogo;
+              }
+            }}
           />
         </div>
       </div>

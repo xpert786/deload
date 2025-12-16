@@ -2,23 +2,50 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ChatInterface from './ChatInterface';
 
+// Use API URL from .env file
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
 const AddWorkout = () => {
   const navigate = useNavigate();
   const [selectedDay, setSelectedDay] = useState('Mon');
-  const [workoutName, setWorkoutName] = useState('');
-  const [isRestDay, setIsRestDay] = useState(false);
-  const [exercises, setExercises] = useState([
-    {
-      id: 1,
-      label: 'A',
-      name: 'Exercise Title',
-      sets: 0,
-      reps: 0,
-      notes: 'Sets, Reps, Rest, Notes',
-      videoLinks: [],
-      isSuperset: false
-    }
-  ]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  
+  // Day name mapping from UI format to API format
+  const reverseDayMap = {
+    'Mon': 'monday',
+    'Tue': 'tuesday',
+    'Wed': 'wednesday',
+    'Thu': 'thursday',
+    'Fri': 'friday',
+    'Sat': 'saturday',
+    'Sun': 'sunday'
+  };
+
+  // Initialize workouts for all 7 days
+  const getInitialWorkouts = () => {
+    return {
+      Mon: { workoutName: '', exercises: [] },
+      Tue: { workoutName: '', exercises: [] },
+      Wed: { workoutName: '', exercises: [] },
+      Thu: { workoutName: '', exercises: [] },
+      Fri: { workoutName: '', exercises: [] },
+      Sat: { workoutName: '', exercises: [] },
+      Sun: { workoutName: 'Rest Day', exercises: [] }
+    };
+  };
+
+  const [workouts, setWorkouts] = useState(getInitialWorkouts());
+  
+  // Get current day's workout data
+  const currentDayData = workouts[selectedDay] || { workoutName: '', exercises: [] };
+  const workoutName = currentDayData.workoutName;
+  const exercises = currentDayData.exercises;
+  const isRestDay = selectedDay === 'Sun' || (workoutName.toLowerCase().includes('rest') && exercises.length === 0);
   const [showExerciseVideoInputs, setShowExerciseVideoInputs] = useState({});
   const [newVideoLinks, setNewVideoLinks] = useState({});
   const [workoutVideoLinks, setWorkoutVideoLinks] = useState([]);
@@ -122,18 +149,12 @@ const AddWorkout = () => {
     '4 sets, 10 reps, 60s rest'
   ];
 
-  // Automatically show rest day page when Sunday is selected
-  useEffect(() => {
-    if (selectedDay === 'Sun') {
-      setIsRestDay(true);
-    } else {
-      setIsRestDay(false);
-    }
-  }, [selectedDay]);
-
   // Handle workout name change and show suggestions
   const handleWorkoutNameChange = (value) => {
-    setWorkoutName(value);
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], workoutName: value }
+    }));
     if (value.trim().length > 0) {
       const filtered = workoutNameSuggestions.filter(suggestion =>
         suggestion.toLowerCase().includes(value.toLowerCase())
@@ -148,50 +169,71 @@ const AddWorkout = () => {
 
   // Handle suggestion selection
   const handleSelectSuggestion = (suggestion) => {
-    setWorkoutName(suggestion);
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], workoutName: suggestion }
+    }));
     setShowNameSuggestions(false);
     setNameSuggestions([]);
   };
 
   const handleAddExercise = () => {
     const nextLabel = String.fromCharCode(65 + exercises.length);
+    const maxId = Math.max(...exercises.map(ex => ex.id || 0), 0);
     const newExercise = {
-      id: exercises.length + 1,
+      id: maxId + 1,
       label: nextLabel,
-      name: 'Exercise Title',
+      name: '',
       sets: 0,
       reps: 0,
-      notes: 'Sets, Reps, Rest, Notes',
+      weight_kg: null,
+      notes: '',
       videoLinks: [],
       isSuperset: false
     };
-    setExercises([...exercises, newExercise]);
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: [...exercises, newExercise] }
+    }));
   };
 
   const handleUpdateExercise = (id, field, value) => {
-    setExercises(exercises.map(ex =>
+    const updatedExercises = exercises.map(ex =>
       ex.id === id ? { ...ex, [field]: value } : ex
-    ));
+    );
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
   };
 
   const handleExerciseNameChange = (id, value) => {
     const match = value.match(/^([A-Z]1?[0-9]?)\.\s*(.*)$/);
     let exerciseName = '';
+    let updatedExercises;
+    
     if (match) {
       const label = match[1];
       exerciseName = match[2];
-      setExercises(exercises.map(ex =>
+      updatedExercises = exercises.map(ex =>
         ex.id === id ? { ...ex, label, name: exerciseName } : ex
-      ));
+      );
     } else {
       const currentExercise = exercises.find(ex => ex.id === id);
       if (currentExercise) {
         exerciseName = value.replace(/^[A-Z]1?[0-9]?\.\s*/, '');
-        setExercises(exercises.map(ex =>
+        updatedExercises = exercises.map(ex =>
           ex.id === id ? { ...ex, name: exerciseName } : ex
-        ));
+        );
+      } else {
+        updatedExercises = exercises;
       }
     }
+
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
 
     // Show suggestions for exercise name
     if (exerciseName.trim().length > 0) {
@@ -210,10 +252,13 @@ const AddWorkout = () => {
   const handleSelectExerciseSuggestion = (id, suggestion) => {
     const currentExercise = exercises.find(ex => ex.id === id);
     if (currentExercise) {
-      const newValue = `${currentExercise.label}. ${suggestion}`;
-      setExercises(exercises.map(ex =>
+      const updatedExercises = exercises.map(ex =>
         ex.id === id ? { ...ex, name: suggestion } : ex
-      ));
+      );
+      setWorkouts(prev => ({
+        ...prev,
+        [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+      }));
       setShowExerciseSuggestions({ ...showExerciseSuggestions, [id]: false });
       setExerciseSuggestions({ ...exerciseSuggestions, [id]: [] });
     }
@@ -221,9 +266,13 @@ const AddWorkout = () => {
 
   // Handle notes change and show suggestions
   const handleNotesChange = (id, value) => {
-    setExercises(exercises.map(ex =>
+    const updatedExercises = exercises.map(ex =>
       ex.id === id ? { ...ex, notes: value } : ex
-    ));
+    );
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
 
     if (value.trim().length > 0) {
       const filtered = notesSuggestionsList.filter(suggestion =>
@@ -239,9 +288,13 @@ const AddWorkout = () => {
 
   // Handle notes suggestion selection
   const handleSelectNotesSuggestion = (id, suggestion) => {
-    setExercises(exercises.map(ex =>
+    const updatedExercises = exercises.map(ex =>
       ex.id === id ? { ...ex, notes: suggestion } : ex
-    ));
+    );
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
     setShowNotesSuggestions({ ...showNotesSuggestions, [id]: false });
     setNotesSuggestions({ ...notesSuggestions, [id]: [] });
   };
@@ -253,32 +306,163 @@ const AddWorkout = () => {
   const handleAddVideoLink = (exerciseId) => {
     const link = newVideoLinks[exerciseId]?.trim();
     if (link) {
-      setExercises(exercises.map(ex =>
+      const updatedExercises = exercises.map(ex =>
         ex.id === exerciseId
-          ? { ...ex, videoLinks: [...ex.videoLinks, link] }
+          ? { ...ex, videoLinks: [...(ex.videoLinks || []), link] }
           : ex
-      ));
+      );
+      setWorkouts(prev => ({
+        ...prev,
+        [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+      }));
       setNewVideoLinks({ ...newVideoLinks, [exerciseId]: '' });
       setShowExerciseVideoInputs({ ...showExerciseVideoInputs, [exerciseId]: false });
     }
   };
 
   const handleRemoveVideoLink = (exerciseId, linkIndex) => {
-    setExercises(exercises.map(ex =>
+    const updatedExercises = exercises.map(ex =>
       ex.id === exerciseId
-        ? { ...ex, videoLinks: ex.videoLinks.filter((_, idx) => idx !== linkIndex) }
+        ? { ...ex, videoLinks: (ex.videoLinks || []).filter((_, idx) => idx !== linkIndex) }
         : ex
-    ));
+    );
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
   };
 
   const handleDeleteExercise = (id) => {
-    setExercises(exercises.filter(ex => ex.id !== id));
+    const updatedExercises = exercises.filter(ex => ex.id !== id);
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { ...prev[selectedDay], exercises: updatedExercises }
+    }));
   };
 
-  const handleSave = () => {
-    // Save logic here
-    console.log('Workout saved:', { workoutName, exercises, selectedDay });
-    navigate('/coach/ai-program');
+  const handleSave = async () => {
+    // Prevent multiple saves
+    if (isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+      
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api') 
+        ? `${baseUrl}/ai-workout-plans/`
+        : `${baseUrl}/api/ai-workout-plans/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      // Prepare request body
+      const requestBody = {
+        title: "John's Weekly Workout Plan",
+        description: '',
+        status: 'draft',
+        days: transformWorkoutsToApiFormat()
+      };
+
+      console.log('=== CREATE WORKOUT PLAN API CALL ===');
+      console.log('API URL:', apiUrl);
+      console.log('Request body:', requestBody);
+
+      // Call POST API
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('=== CREATE WORKOUT PLAN API RESPONSE ===');
+      console.log('Response status:', response.status);
+
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('API Response text:', responseText);
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok && result.data) {
+        console.log('Workout plan created successfully');
+        console.log('Created workout plan data:', result.data);
+        
+        // Save to localStorage
+        try {
+          localStorage.setItem('aiWorkoutPlanData', JSON.stringify(result.data));
+        } catch (error) {
+          console.error('Error saving workout plan to localStorage:', error);
+        }
+        
+        // Show success message
+        setShowSuccessMessage(true);
+        setTimeout(() => {
+          setShowSuccessMessage(false);
+          // Navigate back to AI program page
+          navigate('/coach/ai-program');
+        }, 1500);
+      } else {
+        // Handle errors
+        const errorMessage = result.message || 'Failed to create workout plan';
+        const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
+        const fullError = errorMessage + (errorDetails ? ` - ${errorDetails}` : '');
+        console.error('API Error Response:', result);
+        throw new Error(fullError);
+      }
+    } catch (error) {
+      console.error('=== CREATE WORKOUT PLAN API ERROR ===');
+      console.error('Error creating workout plan:', error);
+      console.error('Error details:', error.message);
+      
+      // Show user-friendly error message
+      alert(`Error creating workout plan: ${error.message}\n\nPlease check:\n1. All required fields are filled\n2. Your internet connection\n3. Try again`);
+    } finally {
+      setIsSaving(false);
+      console.log('=== CREATE WORKOUT PLAN API CALL END ===');
+    }
   };
 
   const handleCancel = () => {
@@ -286,25 +470,43 @@ const AddWorkout = () => {
   };
 
   const handleDeleteWorkout = () => {
-    // Clear all data but stay on the page
-    setWorkoutName('');
-    setExercises([
-      {
-        id: 1,
-        label: 'A',
-        name: 'Exercise Title',
-        sets: 0,
-        reps: 0,
-        notes: 'Sets, Reps, Rest, Notes',
-        videoLinks: [],
-        isSuperset: false
-      }
-    ]);
+    // Clear current day's workout data
+    setWorkouts(prev => ({
+      ...prev,
+      [selectedDay]: { workoutName: '', exercises: [] }
+    }));
     setShowExerciseVideoInputs({});
     setNewVideoLinks({});
-    setWorkoutVideoLinks([]);
-    setShowWorkoutVideoInput(false);
-    setNewWorkoutVideoLink('');
+  };
+
+  // Transform workouts to API format
+  const transformWorkoutsToApiFormat = () => {
+    return days.map((day, index) => {
+      const dayData = workouts[day] || { workoutName: '', exercises: [] };
+      const apiDay = reverseDayMap[day] || day.toLowerCase();
+      
+      // Check if it's a rest day (Sunday or workout name contains "rest" and no exercises)
+      const isRestDayForDay = day === 'Sun' || 
+        (dayData.workoutName.toLowerCase().includes('rest') && dayData.exercises.length === 0);
+      
+      const dayPayload = {
+        day: apiDay,
+        workout_name: dayData.workoutName || (isRestDayForDay ? 'Rest Day' : ''),
+        is_rest_day: isRestDayForDay,
+        order: index,
+        exercises: isRestDayForDay ? [] : dayData.exercises.map((exercise, exIndex) => ({
+          exercise_name: exercise.name || '',
+          sets: exercise.sets || 0,
+          reps: exercise.reps || 0,
+          weight_kg: exercise.weight_kg || null,
+          cue: exercise.notes || '',
+          group_label: exercise.label || '',
+          order: exIndex
+        }))
+      };
+      
+      return dayPayload;
+    });
   };
 
   // Handle client selection
@@ -421,7 +623,19 @@ const AddWorkout = () => {
                       </div>
                       {/* Toggle Rest Day Button - Top Right */}
                       <button
-                        onClick={() => setIsRestDay(!isRestDay)}
+                        onClick={() => {
+                          if (isRestDay) {
+                            setWorkouts(prev => ({
+                              ...prev,
+                              [selectedDay]: { workoutName: '', exercises: [] }
+                            }));
+                          } else {
+                            setWorkouts(prev => ({
+                              ...prev,
+                              [selectedDay]: { workoutName: 'Rest Day', exercises: [] }
+                            }));
+                          }
+                        }}
                         className={`w-12 h-6 rounded-full transition relative flex-shrink-0 ${isRestDay ? 'bg-[#003F8F]' : 'bg-gray-300'}`}
                       >
                         <div className={`w-5 h-5 bg-white rounded-full transition-transform absolute top-0.5 shadow-sm ${isRestDay ? 'transform translate-x-6' : 'transform translate-x-1'}`}></div>
@@ -449,13 +663,29 @@ const AddWorkout = () => {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={handleSave}
-                          className="px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition"
+                          disabled={isSaving}
+                          className={`px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm transition flex items-center gap-2 ${
+                            isSaving 
+                              ? 'opacity-50 cursor-not-allowed' 
+                              : 'hover:bg-[#002F6F] cursor-pointer'
+                          }`}
                         >
-                          Save
+                          {isSaving ? (
+                            <>
+                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Saving...
+                            </>
+                          ) : (
+                            'Save'
+                          )}
                         </button>
                         <button
                           onClick={handleCancel}
-                          className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-200 transition"
+                          disabled={isSaving}
+                          className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Cancel
                         </button>
@@ -517,7 +747,19 @@ const AddWorkout = () => {
                         </div>
                         {/* Toggle Rest Day Button - Just toggle switch, no text */}
                         <button
-                          onClick={() => setIsRestDay(!isRestDay)}
+                          onClick={() => {
+                            if (isRestDay) {
+                              setWorkouts(prev => ({
+                                ...prev,
+                                [selectedDay]: { workoutName: '', exercises: [] }
+                              }));
+                            } else {
+                              setWorkouts(prev => ({
+                                ...prev,
+                                [selectedDay]: { workoutName: 'Rest Day', exercises: [] }
+                              }));
+                            }
+                          }}
                           className={`w-12 h-6 rounded-full transition relative flex-shrink-0 ${isRestDay ? 'bg-[#003F8F]' : 'bg-gray-300'}`}
                         >
                           <div className={`w-5 h-5 bg-white rounded-full transition-transform absolute top-0.5 shadow-sm ${isRestDay ? 'transform translate-x-6' : 'transform translate-x-1'}`}></div>
@@ -581,18 +823,32 @@ const AddWorkout = () => {
                                 </button>
                               </div>
 
-                              {/* Sets, Reps, Rest, Notes - Editable with suggestions */}
+                              {/* Sets x Reps - Editable */}
+                              <div className="mb-3 flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  value={exercise.sets || ''}
+                                  onChange={(e) => handleUpdateExercise(exercise.id, 'sets', parseInt(e.target.value) || 0)}
+                                  placeholder="Sets"
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                />
+                                <span className="text-gray-700">x</span>
+                                <input
+                                  type="number"
+                                  value={exercise.reps || ''}
+                                  onChange={(e) => handleUpdateExercise(exercise.id, 'reps', parseInt(e.target.value) || 0)}
+                                  placeholder="Reps"
+                                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                />
+                              </div>
+
+                              {/* Notes/Cues - Editable with suggestions */}
                               <div className="mb-3 relative">
                                 <input
                                   type="text"
-                                  value={exercise.notes || 'Sets, Reps, Rest, Notes'}
+                                  value={exercise.notes || ''}
                                   onChange={(e) => handleNotesChange(exercise.id, e.target.value)}
-                                  onFocus={(e) => {
-                                    if (e.target.value === 'Sets, Reps, Rest, Notes') {
-                                      setExercises(exercises.map(ex =>
-                                        ex.id === exercise.id ? { ...ex, notes: '' } : ex
-                                      ));
-                                    }
+                                  onFocus={() => {
                                     if (exercise.notes && exercise.notes.trim().length > 0) {
                                       const filtered = notesSuggestionsList.filter(suggestion =>
                                         suggestion.toLowerCase().includes(exercise.notes.toLowerCase())
@@ -604,8 +860,8 @@ const AddWorkout = () => {
                                   onBlur={() => {
                                     setTimeout(() => setShowNotesSuggestions({ ...showNotesSuggestions, [exercise.id]: false }), 200);
                                   }}
-                                  className="w-full text-sm text-gray-600 font-[Inter] bg-transparent border-none focus:outline-none focus:ring-0 px-0 py-0 placeholder:text-gray-600"
-                                  placeholder="Sets, Reps, Rest, Notes"
+                                  className="w-full text-sm text-gray-600 font-[Inter] bg-transparent border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#003F8F]"
+                                  placeholder="Notes/Cues"
                                 />
                                 {/* Notes Suggestions Dropdown */}
                                 {showNotesSuggestions[exercise.id] && notesSuggestions[exercise.id]?.length > 0 && (
@@ -757,13 +1013,29 @@ const AddWorkout = () => {
                       <div className="flex items-center gap-3">
                         <button
                           onClick={handleSave}
-                          className="px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition"
+                          disabled={isSaving}
+                          className={`px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm transition flex items-center gap-2 ${
+                            isSaving 
+                              ? 'opacity-50 cursor-not-allowed' 
+                              : 'hover:bg-[#002F6F] cursor-pointer'
+                          }`}
                         >
-                          Save
+                          {isSaving ? (
+                            <>
+                              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Saving...
+                            </>
+                          ) : (
+                            'Save'
+                          )}
                         </button>
                         <button
                           onClick={handleCancel}
-                          className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-200 transition"
+                          disabled={isSaving}
+                          className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Cancel
                         </button>
@@ -940,6 +1212,34 @@ const AddWorkout = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Success Message Popup */}
+      {showSuccessMessage && (
+        <div 
+          className="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3 transition-all duration-300"
+          style={{
+            animation: 'slideInRight 0.3s ease-out'
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 18.3333C14.6024 18.3333 18.3333 14.6024 18.3333 10C18.3333 5.39763 14.6024 1.66667 10 1.66667C5.39763 1.66667 1.66667 5.39763 1.66667 10C1.66667 14.6024 5.39763 18.3333 10 18.3333Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M6.66667 10L9.16667 12.5L13.3333 8.33333" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span className="font-semibold">Workout plan created successfully</span>
+          <style>{`
+            @keyframes slideInRight {
+              from {
+                transform: translateX(100%);
+                opacity: 0;
+              }
+              to {
+                transform: translateX(0);
+                opacity: 1;
+              }
+            }
+          `}</style>
         </div>
       )}
     </div>

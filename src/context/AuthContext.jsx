@@ -72,6 +72,11 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    
+    // Clear AI chat messages and workout plan data on logout
+    localStorage.removeItem('aiChatMessages');
+    localStorage.removeItem('aiWorkoutPlanData');
+    
     // Trigger event to sync across components
     window.dispatchEvent(new Event('userUpdated'));
   };

@@ -59,7 +59,7 @@ const MyClients = () => {
 
       // Ensure API_BASE_URL doesn't have trailing slash
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-      const apiUrl = `${baseUrl}/clients/`;
+      const apiUrl = `${baseUrl}/clients/list/`;
 
       // Prepare headers
       const headers = {
