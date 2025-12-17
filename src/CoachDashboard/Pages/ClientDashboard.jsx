@@ -6,6 +6,12 @@ import { MessageIconForCoach } from '../Components/Icons';
 import WorkOut from './ClientDashboard/WorkOut';
 import CustomWorkouts from './ClientDashboard/CustomWorkouts';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
 // Sample data
 const progressData = {
   cardio: 30,
@@ -44,6 +50,7 @@ const ClientDashboard = () => {
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
   const tabs = ['Overview', 'Workout Calendar', 'Custom Workouts'];
 
@@ -454,20 +461,131 @@ const ClientDashboard = () => {
                 if (!noteText.trim()) return;
 
                 setSavingNote(true);
-                // TODO: Add API call to save note
-                // For now, just close the modal
-                setTimeout(() => {
+                try {
+                  // Get authentication token
+                  let token = null;
+                  const storedUser = localStorage.getItem('user');
+                  
+                  if (storedUser) {
+                    try {
+                      const userData = JSON.parse(storedUser);
+                      token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+                    } catch (error) {
+                      console.error('Error parsing user data:', error);
+                    }
+                  }
+
+                  if (!token) {
+                    token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+                  }
+
+                  const isValidToken = token &&
+                    typeof token === 'string' &&
+                    token.trim().length > 0 &&
+                    token.trim() !== 'null' &&
+                    token.trim() !== 'undefined' &&
+                    token.trim() !== '';
+
+                  // Build API URL
+                  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+                  const apiUrl = baseUrl.includes('/api') 
+                    ? `${baseUrl}/clients/notes/`
+                    : `${baseUrl}/api/clients/notes/`;
+
+                  // Prepare headers
+                  const headers = {
+                    'Content-Type': 'application/json',
+                  };
+
+                  if (isValidToken) {
+                    headers['Authorization'] = `Bearer ${token.trim()}`;
+                  }
+
+                  // Prepare request body
+                  const requestBody = {
+                    client_id: parseInt(id),
+                    note: noteText.trim()
+                  };
+
+                  console.log('Saving note to:', apiUrl);
+                  console.log('Request body:', requestBody);
+
+                  // Call API
+                  const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: headers,
+                    credentials: 'include',
+                    body: JSON.stringify(requestBody),
+                  });
+
+                  let result;
+                  try {
+                    const responseText = await response.text();
+                    if (responseText) {
+                      result = JSON.parse(responseText);
+                    } else {
+                      result = {};
+                    }
+                  } catch (parseError) {
+                    console.error('Failed to parse response:', parseError);
+                    throw new Error('Failed to parse server response');
+                  }
+
+                  if (response.ok) {
+                    // Success - close modal and reset
+                    setNoteText('');
+                    setShowNotesModal(false);
+                    // Show success popup
+                    setShowSuccessPopup(true);
+                    // Auto hide after 3 seconds
+                    setTimeout(() => {
+                      setShowSuccessPopup(false);
+                    }, 3000);
+                  } else {
+                    // Handle error silently - just log it
+                    const errorMessage = result.message || result.detail || 'Failed to save note';
+                    console.error('Error saving note:', errorMessage);
+                    setSavingNote(false);
+                  }
+                } catch (error) {
+                  // Handle error silently - just log it
+                  console.error('Error saving note:', error);
                   setSavingNote(false);
-                  setNoteText('');
-                  setShowNotesModal(false);
-                  // You can add the note to the notes array here or make an API call
-                }, 500);
+                }
               }}
               disabled={!noteText.trim() || savingNote}
               className="mt-4 px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingNote ? 'Saving...' : 'Save Note'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 transition-opacity duration-300">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
+            <div className="flex flex-col items-center text-center space-y-4">
+              {/* Success Icon */}
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              {/* Success Message */}
+              <div>
+                <h3 className="text-xl font-bold text-[#003F8F] font-[Poppins] mb-2">Success!</h3>
+                <p className="text-gray-600 font-[Inter]">Note saved successfully!</p>
+              </div>
+              {/* Close Button */}
+              <button
+                onClick={() => setShowSuccessPopup(false)}
+                className="px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition"
+              >
+                OK
+              </button>
+            </div>
           </div>
         </div>
       )}
