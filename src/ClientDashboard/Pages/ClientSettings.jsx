@@ -345,6 +345,14 @@ const ClientSettings = () => {
           
           imageUrl = imageUrl.trim();
           setProfileImage(imageUrl);
+          
+          // Dispatch custom event to notify Header component about profile update
+          window.dispatchEvent(new CustomEvent('profilePictureUpdated', {
+            detail: { profilePhotoUrl: imageUrl }
+          }));
+          
+          // Also store in localStorage for persistence
+          localStorage.setItem('clientProfilePhoto', imageUrl);
         }
 
         // Clear selected image file after successful upload

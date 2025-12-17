@@ -56,7 +56,13 @@ const buildWebSocketUrl = () => {
   wsUrl = wsUrl.replace(/\/api\/?$/, '');
   
   const token = getAuthToken();
-  const wsPath = '/ws/chat/';
+  
+  // Check if /deload is already in the base URL
+  // If baseUrl already contains /deload, we don't need to add it again
+  const hasDeload = wsUrl.includes('/deload');
+  
+  // Updated WebSocket path: only add /deload if it's not already in the URL
+  const wsPath = hasDeload ? '/ws/chat/' : '/deload/ws/chat/';
   
   // Ensure wsUrl doesn't end with / before adding wsPath
   if (wsUrl.endsWith('/')) {

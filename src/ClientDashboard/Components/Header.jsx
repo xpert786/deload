@@ -1,11 +1,148 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DloadLogo from "../../assets/DloadLogo.png";
 import { BellIcon, SearchIcon } from './icons';
 import ProfileLogo from "../../assets/ProfileLogo.png";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
 const Header = ({ isSidebarOpen, toggleSidebar }) => {
   const { user } = useAuth();
+  const [profileImage, setProfileImage] = useState(null);
+
+  // Fetch client profile picture
+  useEffect(() => {
+    const fetchProfilePicture = async () => {
+      if (!user?.id) return;
+
+      try {
+        // Get authentication token
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+        
+        if (user) {
+          token = user.token || user.access_token || user.authToken || user.accessToken || user.access;
+        }
+
+        if (!token && storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken || userData.access;
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+
+        if (!token) {
+          token = localStorage.getItem('token') || 
+                  localStorage.getItem('access_token') || 
+                  localStorage.getItem('authToken') || 
+                  localStorage.getItem('accessToken') ||
+                  localStorage.getItem('access');
+        }
+
+        const isValidToken = token &&
+          typeof token === 'string' &&
+          token.trim().length > 0 &&
+          token.trim() !== 'null' &&
+          token.trim() !== 'undefined' &&
+          token.trim() !== '' &&
+          !token.startsWith('{') &&
+          !token.startsWith('[');
+
+        if (!isValidToken) {
+          return;
+        }
+
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        const apiUrl = baseUrl.includes('/api')
+          ? `${baseUrl}/client/profile/`
+          : `${baseUrl}/api/client/profile/`;
+
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        const cleanToken = token.trim().replace(/^["']|["']$/g, '');
+        headers['Authorization'] = `Bearer ${cleanToken}`;
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: headers,
+          credentials: 'include',
+        });
+
+        let result;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse response:', parseError);
+          return;
+        }
+
+        if (response.ok && result.data) {
+          if (result.data.profile_photo_url) {
+            let imageUrl = result.data.profile_photo_url;
+            
+            // If URL is relative, construct full URL
+            if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+              const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+              const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+              const domainUrl = baseUrl.replace(/\/api$/, '').replace(/\/deload\/api$/, '').replace(/\/deload$/, '');
+              imageUrl = `${domainUrl}/${cleanUrl}`;
+            }
+            
+            imageUrl = imageUrl.trim();
+            setProfileImage(imageUrl);
+            // Store in localStorage for persistence
+            localStorage.setItem('clientProfilePhoto', imageUrl);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching profile picture:', err);
+      }
+    };
+
+    fetchProfilePicture();
+    
+    // Listen for profile picture updates from Settings page
+    const handleProfileUpdate = (event) => {
+      if (event.detail && event.detail.profilePhotoUrl) {
+        setProfileImage(event.detail.profilePhotoUrl);
+      }
+    };
+    
+    window.addEventListener('profilePictureUpdated', handleProfileUpdate);
+    
+    // Also check localStorage on mount and when it changes
+    const storedPhoto = localStorage.getItem('clientProfilePhoto');
+    if (storedPhoto) {
+      setProfileImage(storedPhoto);
+    }
+    
+    // Listen for storage changes (when profile is updated in another tab/window)
+    const handleStorageChange = (e) => {
+      if (e.key === 'clientProfilePhoto' && e.newValue) {
+        setProfileImage(e.newValue);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('profilePictureUpdated', handleProfileUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [user]);
 
   return (
     <div className='flex justify-between bg-[#FFFFFF]  h-[70px] min-h-[70px]'>
@@ -99,11 +236,16 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
           </div>
 
           {/* Profile Image */}
-          <div className="w-10 h-10 rounded-full overflow-hidden mb-[10px] sm:mb-0">
+          <div className="w-10 h-10 rounded-full overflow-hidden mb-[10px] sm:mb-0 border border-gray-200">
             <img
-              src={ProfileLogo}
-              alt={user?.name || "Profile"}
+              src={profileImage || user?.photo || user?.profile_photo || user?.profile_photo_url || ProfileLogo}
+              alt={user?.name || user?.fullname || "Profile"}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                // Fallback to default logo if image fails to load
+                e.target.onerror = null;
+                e.target.src = ProfileLogo;
+              }}
             />
           </div>
         </div>

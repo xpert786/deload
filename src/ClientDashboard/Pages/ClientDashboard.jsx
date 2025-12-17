@@ -1,83 +1,274 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { Chat, DashboardMessageCoach, DashboardStartWorkout, DashboardViewProgress, DashboardWorkoutHistory } from '../Components/icons';
 import ManImage from '../../assets/dashboard.png';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
 const ClientDashboard = () => {
   const { user } = useAuth();
   const [selectedTab, setSelectedTab] = useState('Monthly');
-  const [currentMonth, setCurrentMonth] = useState(new Date(2024, 6, 1)); // July 2024
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  
+  // State for calendar days
+  const [calendarDaysState, setCalendarDaysState] = useState([]);
+  const [weeklyDaysState, setWeeklyDaysState] = useState([]);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // Initialize calendar days with state
-  const [calendarDaysState, setCalendarDaysState] = useState(() => {
-    const days = [];
-    // July 2024 starts on Monday (day 1)
-    // Previous month dates (June 29, 30)
-    days.push({ date: 29, status: null, isPrevMonth: true });
-    days.push({ date: 30, status: null, isPrevMonth: true });
+  // Process calendar days from API response
+  const processCalendarDays = (calendarDays, period) => {
+    if (!calendarDays || calendarDays.length === 0) {
+      setCalendarDaysState([]);
+      setWeeklyDaysState([]);
+      return;
+    }
 
-    // July dates
-    const julyDates = [
-      { date: 1, status: 'complete' }, { date: 2, status: 'complete' }, { date: 3, status: 'complete' },
-      { date: 4, status: 'complete' }, { date: 5, status: 'complete' }, { date: 6, status: 'incomplete' },
-      { date: 7, status: 'complete' }, { date: 8, status: 'complete' }, { date: 9, status: 'complete' },
-      { date: 10, status: 'complete' }, { date: 11, status: 'incomplete' }, { date: 12, status: 'complete' },
-      { date: 13, status: 'complete' }, { date: 14, status: 'complete' }, { date: 15, status: 'complete' },
-      { date: 16, status: 'complete' }, { date: 17, status: 'incomplete' }, { date: 18, status: 'complete' },
-      { date: 19, status: 'complete' }, { date: 20, status: 'complete' }, { date: 21, status: 'complete' },
-      { date: 22, status: 'complete' }, { date: 23, status: 'complete' }, { date: 24, status: 'complete' },
-      { date: 25, status: null }, { date: 26, status: null }, { date: 27, status: 'pending' },
-      { date: 28, status: 'pending' }, { date: 29, status: 'pending' }, { date: 30, status: 'pending' },
-      { date: 31, status: 'pending' }
-    ];
-    days.push(...julyDates.map(d => ({ ...d, isPrevMonth: false, isNextMonth: false })));
-
-    // Next month dates (August 1, 2)
-    days.push({ date: 1, status: null, isNextMonth: true });
-    days.push({ date: 2, status: null, isNextMonth: true });
-
-    return days;
-  });
-
-  const [weeklyDaysState, setWeeklyDaysState] = useState([
-    { dayLabel: 'Su', date: 20, status: 'complete' },
-    { dayLabel: 'Mo', date: 21, status: 'complete' },
-    { dayLabel: 'Tu', date: 22, status: 'complete' },
-    { dayLabel: 'We', date: 23, status: 'complete' },
-    { dayLabel: 'Th', date: 24, status: 'pending' },
-    { dayLabel: 'Fr', date: 25, status: 'complete' },
-    { dayLabel: 'Sa', date: 26, status: 'pending' }
-  ]);
-
-  // Handle weekly date click
-  const handleWeeklyDateClick = (index) => {
-    setWeeklyDaysState(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], status: 'complete' };
-      return updated;
-    });
+    if (period === 'Weekly') {
+      // Process weekly view - get last 7 days
+      const weeklyDays = calendarDays.slice(-7).map(day => ({
+        dayLabel: day.day_name || (day.date_display ? day.date_display.substring(0, 2) : '') || '',
+        date: day.day_number || (day.date_display ? parseInt(day.date_display) : 0) || 0,
+        status: day.status === 'complete' ? 'complete' : 
+                day.status === 'incomplete' ? 'incomplete' : 
+                day.status === 'pending' ? 'pending' : null
+      }));
+      setWeeklyDaysState(weeklyDays);
+    } else {
+      // Process monthly view
+      const processedDays = calendarDays.map(day => {
+        const dateObj = new Date(day.date);
+        const today = new Date();
+        const isToday = day.is_today || 
+          (dateObj.getDate() === today.getDate() && 
+           dateObj.getMonth() === today.getMonth() && 
+           dateObj.getFullYear() === today.getFullYear());
+        
+        return {
+          date: day.day_number || (day.date_display ? parseInt(day.date_display) : 0) || 0,
+          status: day.status === 'complete' ? 'complete' : 
+                  day.status === 'incomplete' ? 'incomplete' : 
+                  day.status === 'pending' ? 'pending' : null,
+          isPrevMonth: false,
+          isNextMonth: false,
+          isToday: isToday,
+          fullDate: day.date
+        };
+      });
+      
+      setCalendarDaysState(processedDays);
+      
+      // Set current month from API data
+      if (calendarDays.length > 0) {
+        const firstDay = new Date(calendarDays[0].date);
+        if (!isNaN(firstDay.getTime())) {
+          setCurrentMonth(new Date(firstDay.getFullYear(), firstDay.getMonth(), 1));
+        }
+      }
+    }
   };
+
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Get authentication token - match login.jsx logic
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+        
+        // Priority 1: Check user object from context
+        if (user) {
+          token = user.token || user.access_token || user.authToken || user.accessToken || user.access;
+        }
+
+        // Priority 2: Check stored user in localStorage
+        if (!token && storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken || userData.access;
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+
+        // Priority 3: Check direct localStorage tokens (as stored by login.jsx)
+        if (!token) {
+          token = localStorage.getItem('token') || 
+                  localStorage.getItem('access_token') || 
+                  localStorage.getItem('authToken') || 
+                  localStorage.getItem('accessToken') ||
+                  localStorage.getItem('access');
+        }
+
+        // Validate token format
+        const isValidToken = token &&
+          typeof token === 'string' &&
+          token.trim().length > 0 &&
+          token.trim() !== 'null' &&
+          token.trim() !== 'undefined' &&
+          token.trim() !== '' &&
+          !token.startsWith('{') &&
+          !token.startsWith('[');
+
+        // Debug logging
+        if (!isValidToken) {
+          console.warn('No valid token found:', {
+            user: user ? 'exists' : 'null',
+            storedUser: storedUser ? 'exists' : 'null',
+            directToken: localStorage.getItem('token') ? 'exists' : 'null',
+            allTokens: {
+              token: localStorage.getItem('token'),
+              access_token: localStorage.getItem('access_token'),
+              authToken: localStorage.getItem('authToken')
+            }
+          });
+          setError('No authentication token found. Please log in again.');
+          setLoading(false);
+          return;
+        }
+
+        console.log('Token found, length:', token.length, 'First 20 chars:', token.substring(0, 20) + '...');
+
+        // Determine period based on selected tab
+        const period = selectedTab === 'Weekly' ? 'weekly' : 'monthly';
+        
+        // Ensure API_BASE_URL doesn't have trailing slash
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        // Check if baseUrl already includes /api, if not add it
+        const apiUrl = baseUrl.includes('/api') 
+          ? `${baseUrl}/client-workplan/?period=${period}`
+          : `${baseUrl}/api/client-workplan/?period=${period}`;
+
+        // Prepare headers
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        // Clean token - remove any extra whitespace or quotes
+        const cleanToken = token.trim().replace(/^["']|["']$/g, '');
+        headers['Authorization'] = `Bearer ${cleanToken}`;
+        console.log('Sending request to:', apiUrl);
+        console.log('With Authorization header (first 30 chars):', cleanToken.substring(0, 30) + '...');
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: headers,
+          credentials: 'include',
+        });
+
+        let result;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse response:', parseError);
+          throw new Error('Failed to parse server response');
+        }
+
+        if (response.ok && result.data) {
+          setDashboardData(result.data);
+          
+          // Process calendar days from API
+          if (result.data.progress_overview?.calendar_days) {
+            processCalendarDays(result.data.progress_overview.calendar_days, selectedTab);
+          }
+        } else {
+          // Handle token errors specifically
+          if (response.status === 401 || response.status === 403) {
+            console.error('Authentication error:', {
+              status: response.status,
+              result: result,
+              tokenSent: !!headers['Authorization']
+            });
+            
+            if (result.detail && (result.detail.includes('token') || result.code === 'token_not_valid')) {
+              console.error('Token validation error:', result);
+              // Clear invalid tokens
+              localStorage.removeItem('token');
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('authToken');
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('access');
+              // Clear user but keep it for now to show error
+              // localStorage.removeItem('user');
+              setError('Your session has expired. Please log in again.');
+            } else if (result.detail && result.detail.includes('credentials')) {
+              setError('Authentication failed. Please log in again.');
+            } else {
+              setError(result.message || result.detail || 'Authentication failed. Please log in again.');
+            }
+          } else {
+            const errorMessage = result.message || result.detail || result.errors?.detail || 'Failed to fetch dashboard data';
+            setError(errorMessage);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching dashboard:', err);
+        setError(err.message || 'Failed to load dashboard. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user, selectedTab]);
 
   const getStatusColor = (status, isPrevMonth, isNextMonth) => {
     if (isPrevMonth || isNextMonth) return 'text-gray-400 bg-transparent';
     if (status === 'complete') return 'bg-[#003F8F] text-white';
     if (status === 'incomplete') return 'bg-orange-500 text-white';
     if (status === 'pending') return 'bg-gray-200 text-gray-600';
-    return 'bg-transparent text-gray-800'; // No status (plain)
+    return 'bg-transparent text-gray-800';
   };
 
-  // Handle date click - make it complete (blue)
-  const handleDateClick = (index) => {
-    setCalendarDaysState(prev => {
-      const updated = [...prev];
-      // Only allow clicking on current month dates (not prev/next month)
-      if (!updated[index].isPrevMonth && !updated[index].isNextMonth) {
-        updated[index] = { ...updated[index], status: 'complete' };
-      }
-      return updated;
-    });
+  // Get month name from current month
+  const getMonthName = () => {
+    if (dashboardData?.progress_overview?.current_month) {
+      return dashboardData.progress_overview.current_month;
+    }
+    return currentMonth.toLocaleString('default', { month: 'long' });
   };
+
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="space-y-6 px-4 sm:px-5 lg:px-6 xl:px-8 py-3 sm:py-5 md:py-6 bg-[#F7F7F7]">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <p className="font-semibold">Error</p>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Get data from API or use defaults
+  const todayWorkout = dashboardData?.today_workout || {};
+  const userProfile = dashboardData?.user_profile || {};
+  const progressOverview = dashboardData?.progress_overview || {};
+  const thisMonthSummary = dashboardData?.this_month_summary || {};
+  const workoutsHistory = dashboardData?.workouts_history || {};
+  
+  // Get streak from this_month_summary or default
+  const streak = thisMonthSummary.streak_days || thisMonthSummary.streak || 0;
 
   return (
     <div className="space-y-6 px-4 sm:px-5 lg:px-6 xl:px-8 py-3 sm:py-5 md:py-6 bg-[#F7F7F7]">
@@ -86,10 +277,13 @@ const ClientDashboard = () => {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-2xl font-medium font-[Poppins] mb-2">
-              Welcome back, {user?.name?.split(' ')[0] || 'John'}!
+              Welcome back, {user?.name?.split(' ')[0] || user?.fullname?.split(' ')[0] || 'John'}!
             </h1>
             <p className="text-sm font-[Inter] mb-4">
-              You're on a 7-day streak! Ready to crush today's workout?
+              {streak > 0 
+                ? `You're on a ${streak}-day streak! Ready to crush today's workout?`
+                : "Ready to crush today's workout?"
+              }
             </p>
             <Link
               to="/client/chat"
@@ -104,12 +298,9 @@ const ClientDashboard = () => {
               Message Coach
             </Link>
           </div>
-
-
         </div>
 
         {/* Background image only on mobile */}
-
         <div className="hidden sm:flex sm:absolute sm:right-0 sm:-top-15 sm:items-end mt-6 mb-6">
           <img
             src={ManImage}
@@ -120,7 +311,6 @@ const ClientDashboard = () => {
         </div>
       </div>
 
-
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Today's Workout */}
@@ -130,92 +320,130 @@ const ClientDashboard = () => {
             <div className="mb-4 flex items-start justify-between">
               {/* Left side */}
               <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins]">
-                Today's Workout
+                {todayWorkout.title || "Today's Workout"}
               </h2>
 
               {/* Right side */}
               <div className="flex flex-col items-end">
                 <p className="text-lg font-semibold text-gray-700 px-4 py-2" style={{ color: '#003F8F' }}>
-                  Upper Body Power
+                  {todayWorkout.workout_name || 'No Workout'}
                 </p>
                 <p className="text-sm text-gray-600 font-[Inter]">
-                  You have 5 exercises today • 45 minutes
+                  {todayWorkout.summary || 'No workout scheduled'}
                 </p>
               </div>
             </div>
 
+            {todayWorkout.is_rest_day ? (
+              <div className="text-center py-8">
+                <p className="text-lg font-medium text-[#003F8F] font-[Inter] mb-2">Rest Day</p>
+                <p className="text-sm text-gray-600 font-[Inter]">Take time to recover and come back stronger tomorrow!</p>
+              </div>
+            ) : todayWorkout.exercises && todayWorkout.exercises.length > 0 ? (
+              <>
             <div className="space-y-3 mb-4">
-              {[
-                { name: 'Bench Press', sets: '4 sets x 8-10 reps' },
-                { name: 'Overhead Press', sets: '3 sets x 10-12 reps' },
-                { name: 'Incline Dumbbell Press', sets: '3 sets x 12-15 reps' }
-              ].map((exercise, idx) => (
+                  {todayWorkout.exercises.slice(0, 3).map((exercise, idx) => (
                 <div
-                  key={idx}
+                      key={exercise.id || idx}
                   className="border border-gray-200 rounded-lg p-4 bg-gray-50"
                 >
                   <div className="flex items-center gap-3">
                     <span className="w-10 h-10 flex items-center justify-center rounded-full border border-[#003F8F] text-[#003F8F] font-semibold">{idx + 1}.</span>
                     <div>
-                      <p className="font-semibold text-gray-800 font-[Inter]" style={{ color: '#003F8F' }}>{exercise.name}</p>
-                      <p className="text-sm text-gray-600 font-[Inter]" >{exercise.sets}</p>
+                          <p className="font-semibold text-gray-800 font-[Inter]" style={{ color: '#003F8F' }}>{exercise.exercise_name}</p>
+                          <p className="text-sm text-gray-600 font-[Inter]">
+                            {exercise.sets} sets x {exercise.reps_display || exercise.reps} reps
+                            {exercise.rest_time_display && ` • Rest: ${exercise.rest_time_display}`}
+                          </p>
                     </div>
                   </div>
                 </div>
               ))}
+                  {todayWorkout.exercises.length > 3 && (
+                    <p className="text-sm text-gray-600 font-[Inter] text-center">
+                      +{todayWorkout.exercises.length - 3} more exercises
+                    </p>
+                  )}
             </div>
-            <button className="w-full text-gray-600 border border-gray-300 py-3 rounded-lg font-medium font-[Inter] transition-colors flex items-center justify-center gap-2" style={{ color: '#003F8F' }}>
+                <Link
+                  to="/client/log-workout"
+                  className="w-full text-gray-600 border border-gray-300 py-3 rounded-lg font-medium font-[Inter] transition-colors flex items-center justify-center gap-2 hover:bg-gray-50"
+                  style={{ color: '#003F8F' }}
+                >
               <DashboardStartWorkout />
-
               Start Workout
-            </button>
+                </Link>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-gray-600 font-[Inter]">No workout scheduled for today</p>
+              </div>
+            )}
           </div>
 
           {/* Recent Workouts */}
           <div className="bg-white rounded-lg p-3 sm:p-5 md:p-6">
-            <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-1">Recent Workouts</h2>
-            <p className="text-sm text-gray-600 font-[Inter] mb-4">Your workout history and performance</p>
+            <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-1">
+              Recent Workouts
+            </h2>
+            <p className="text-sm text-gray-600 font-[Inter] mb-4">
+              Your workout history and performance
+            </p>
+            {workoutsHistory.workouts && workoutsHistory.workouts.length > 0 ? (
             <div className="space-y-3">
-              {[
-                { name: 'Lower Body Strength', date: '2024-01-15', duration: '52 min', status: 'Completed' },
-                { name: 'Upper Body Hypertrophy', date: '2024-01-13', duration: null, status: 'Incomplete' },
-                { name: 'Full Body Circuit', date: '2024-01-11', duration: '52 min', status: 'Completed' }
-              ].map((workout, idx) => (
-                <div key={idx} className="border-b border-gray-200 pb-3 last:border-0">
-                  <div className="flex justify-between items-center gap-3">
-                    {/* Left: name + date */}
-                    <span className="w-10 h-10 flex items-center justify-center rounded-full border border-[#003F8F] text-[#003F8F] font-semibold">{idx + 1}.</span>
-                    <div className="flex flex-col">
-                      <p className="font-semibold text-gray-800 font-[Inter]" style={{ color: '#003F8F' }}>{workout.name}</p>
-                      <p className="text-sm text-gray-600 font-[Inter]">{workout.date}</p>
+                {workoutsHistory.workouts.map((workout, idx) => {
+                  const isCompleted = workout.status === 'completed' || workout.status_display === 'Completed';
+                  const isIncomplete = workout.status === 'incomplete' || workout.status_display === 'Incomplete';
+                  
+                  return (
+                  <div key={workout.id || idx} className="bg-white rounded-lg p-4  !border border-[#4D60804D]">
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Left: Numbered icon + Workout name + Date */}
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-10 h-10 flex items-center justify-center rounded-full bg-white border-2 border-[#003F8F] text-[#003F8F] font-semibold text-sm flex-shrink-0">
+                        {idx + 1}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <p className="font-semibold text-[#003F8F] font-[Inter] text-base mb-1">{workout.workout_name}</p>
+                        <p className="text-sm text-gray-600 font-[Inter]">{workout.date_display || workout.date}</p>
+                      </div>
                     </div>
 
-                    {/* Center: duration */}
-                    <div className="text-center flex-1">
-                      {workout.duration ? (
-                        <p className="text-sm text-gray-700 font-[Inter]" style={{ color: '#003F8F' }}>{workout.duration}</p>
-                      ) : (
-                        <p className="text-sm text-gray-400 font-[Inter]">—</p>
+                    {/* Right: Duration + Status */}
+                    <div className="flex items-center gap-4 flex-shrink-0">
+                      {/* Duration - only show if completed */}
+                      {isCompleted && workout.duration_display && (
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-[#003F8F] font-[Inter]">{workout.duration_display}</p>
+                          <p className="text-xs text-gray-500 font-[Inter]">Duration</p>
+                        </div>
                       )}
-                    </div>
-
-                    {/* Right: status */}
-                    <span
-                      className={`text-sm font-medium font-[Inter] ${workout.status === 'Completed'
-                        ? 'text-[#003F8F]'
-                        : workout.status === 'Incomplete'
-                          ? 'text-orange-500'
-                          : 'text-gray-500'
+                      
+                      {/* Status */}
+                      <span
+                        className={`text-sm font-medium font-[Inter] ${
+                          isCompleted
+                            ? 'text-[#003F8F]'
+                            : isIncomplete
+                            ? 'text-orange-500'
+                            : 'text-gray-500'
                         }`}
-                    >
-                      {workout.status}
-                    </span>
+                      >
+                        {workout.status_display || workout.status}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ))}
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-sm text-gray-600 font-[Inter]">No workout history available</p>
+              </div>
+            )}
             </div>
 
-          </div>
           {/* Notifications */}
           <div className="bg-white rounded-lg p-3 sm:p-5 md:p-6">
             <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-4">Notifications</h2>
@@ -254,7 +482,6 @@ const ClientDashboard = () => {
             </div>
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-
                 <div className="flex items-center justify-between w-full">
                   {/* Left button */}
                   <button className="p-1 hover:bg-gray-100 rounded">
@@ -264,7 +491,10 @@ const ClientDashboard = () => {
                   </button>
 
                   {/* Center month */}
-                  <h3 className="font-semibold text-[#003F8F] font-[Inter] text-center text-sm sm:text-base">July</h3>
+                  <h3 className="font-semibold text-[#003F8F] font-[Inter] text-center text-sm sm:text-base">
+                    {getMonthName()}
+                    {progressOverview.current_year && ` ${progressOverview.current_year}`}
+                  </h3>
 
                   {/* Right button */}
                   <button className="p-1 hover:bg-gray-100 rounded">
@@ -273,7 +503,6 @@ const ClientDashboard = () => {
                     </svg>
                   </button>
                 </div>
-
               </div>
               {selectedTab === 'Monthly' ? (
                 <>
@@ -285,38 +514,53 @@ const ClientDashboard = () => {
                     ))}
                   </div>
                   <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 text-xs font-[Inter]">
-                    {calendarDaysState.map((day, idx) => (
+                    {calendarDaysState.length > 0 ? (
+                      calendarDaysState.map((day, idx) => (
                       <button
                         key={idx}
-                        onClick={() => handleDateClick(idx)}
                         disabled={day.isPrevMonth || day.isNextMonth}
                         className={`
                           aspect-square flex items-center justify-center rounded cursor-pointer
                           transition-colors hover:opacity-80 text-xs sm:text-sm
                           ${getStatusColor(day.status, day.isPrevMonth, day.isNextMonth)}
                           ${day.isPrevMonth || day.isNextMonth ? 'cursor-default' : ''}
+                            ${day.isToday ? 'ring-2 ring-[#003F8F] ring-offset-1' : ''}
                         `}
                         style={{ minHeight: '36px' }}
+                          title={day.fullDate || day.date}
                       >
                         <span className="font-semibold">{day.date}</span>
                       </button>
-                    ))}
+                      ))
+                    ) : (
+                      <div className="col-span-7 text-center py-4 text-gray-500 text-sm">
+                        No calendar data available
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
                 <>
                   <div className="grid grid-cols-7 gap-1 mb-2">
-                    {weeklyDaysState.map((day) => (
+                    {weeklyDaysState.length > 0 ? (
+                      weeklyDaysState.map((day) => (
                       <div key={`${day.dayLabel}-header`} className="text-center text-xs font-medium text-gray-600 font-[Inter] py-1">
                         {day.dayLabel}
                       </div>
-                    ))}
+                      ))
+                    ) : (
+                      ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+                        <div key={day} className="text-center text-xs font-medium text-gray-600 font-[Inter] py-1">
+                          {day}
+                        </div>
+                      ))
+                    )}
                   </div>
                   <div className="grid grid-cols-7 gap-1 sm:gap-1.5 md:gap-2 text-xs font-[Inter]">
-                    {weeklyDaysState.map((day, idx) => (
+                    {weeklyDaysState.length > 0 ? (
+                      weeklyDaysState.map((day, idx) => (
                       <button
-                        key={day.date}
-                        onClick={() => handleWeeklyDateClick(idx)}
+                          key={`${day.dayLabel}-${day.date}-${idx}`}
                         className={`
                           aspect-square flex flex-col items-center justify-center rounded cursor-pointer
                           transition-colors hover:opacity-80
@@ -326,12 +570,33 @@ const ClientDashboard = () => {
                       >
                         <span className="text-xs font-semibold">{day.date}</span>
                       </button>
-                    ))}
+                      ))
+                    ) : (
+                      <div className="col-span-7 text-center py-4 text-gray-500 text-sm">
+                        No weekly data available
+                      </div>
+                    )}
                   </div>
                 </>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs font-[Inter]">
+              {progressOverview.legend && progressOverview.legend.length > 0 ? (
+                progressOverview.legend.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <div 
+                      className={`w-3 h-3 rounded ${
+                        item.color === 'blue' ? 'bg-[#003F8F]' :
+                        item.color === 'orange' ? 'bg-orange-500' :
+                        item.color === 'grey' || item.color === 'gray' ? 'bg-gray-200' :
+                        'bg-gray-200'
+                      }`}
+                    ></div>
+                    <span className="text-[#003F8F]">{item.label}</span>
+                  </div>
+                ))
+              ) : (
+                <>
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 bg-[#003F8F] rounded"></div>
                 <span className="text-[#003F8F]">Complete</span>
@@ -344,48 +609,69 @@ const ClientDashboard = () => {
                 <div className="w-3 h-3 bg-gray-200 rounded"></div>
                 <span className="text-[#003F8F]">Pending</span>
               </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* This Month & Quick Actions */}
+          {/* This Month */}
           <div className="bg-white rounded-lg p-3 sm:p-5 md:p-6">
-            <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-4">{selectedTab === 'Weekly' ? 'This Week' : 'This Month'}</h2>
-            <div className="space-y-3 mb-6">
+            <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-4">
+              {thisMonthSummary.title || (selectedTab === 'Weekly' ? 'This Week' : 'This Month')}
+            </h2>
+            <div className="space-y-3">
               <div className='flex items-center justify-between'>
                 <p className="text-sm text-gray-600 font-[Inter]">Workouts Completed</p>
-                <p className="text-xl font-medium text-[#003F8F] font-[Inter]">17/19</p>
+                <p className="text-xl font-medium text-[#003F8F] font-[Inter]">
+                  {thisMonthSummary.workouts_completed || 
+                   (thisMonthSummary.workouts_completed_count !== undefined && thisMonthSummary.workouts_total_count !== undefined
+                     ? `${thisMonthSummary.workouts_completed_count}/${thisMonthSummary.workouts_total_count}`
+                     : '0/0')}
+                </p>
               </div>
               <div className='flex items-center justify-between'>
                 <p className="text-sm text-gray-600 font-[Inter]">Total time</p>
-                <p className="text-xl font-medium text-[#003F8F] font-[Inter]">14.5 hrs</p>
+                <p className="text-xl font-medium text-[#003F8F] font-[Inter]">
+                  {thisMonthSummary.total_time || 
+                   (thisMonthSummary.total_time_hours !== undefined 
+                     ? `${thisMonthSummary.total_time_hours} hrs`
+                     : '0 hrs')}
+                </p>
               </div>
               <div className='flex items-center justify-between'>
                 <p className="text-sm text-gray-600 font-[Inter]">Streak</p>
-                <p className="text-xl font-medium text-[#003F8F] font-[Inter]">7 days</p>
+                <p className="text-xl font-medium text-[#003F8F] font-[Inter]">
+                  {thisMonthSummary.streak || 
+                   (thisMonthSummary.streak_days !== undefined 
+                     ? `${thisMonthSummary.streak_days} days`
+                     : '0 days')}
+                </p>
               </div>
             </div>
-            <div>
-              <h3 className="text-lg font-medium text-[#003F8F] font-[Poppins] mb-3">Quick Actions</h3>
-              <div className="space-y-2">
-                <Link
-                  to="/client/dashboard/strength"
-                  className="w-full flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                >
-                  <DashboardViewProgress />
-                  <span className="font-medium text-[#003F8F] font-[Inter]">View Progress</span>
-                </Link>
-                <button className="w-full flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left">
-                  <DashboardWorkoutHistory />
-                  <span className="font-medium text-[#003F8F] font-[Inter]">Workout History</span>
-                </button>
-                <Link
-                  to="/client/chat"
-                  className="w-full flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left"
-                >
-                  <DashboardMessageCoach />
-                  <span className="font-medium text-[#003F8F] font-[Inter]">Message Coach</span>
-                </Link>
-              </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="bg-white rounded-lg p-3 sm:p-5 md:p-6">
+            <h2 className="text-xl font-medium text-[#003F8F] font-[Poppins] mb-4">Quick Actions</h2>
+            <div className="space-y-2">
+              <Link
+                to="/client/dashboard/strength"
+                className="w-full flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
+                <DashboardViewProgress />
+                <span className="font-medium text-[#003F8F] font-[Inter]">View Progress</span>
+              </Link>
+              <button className="w-full flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left">
+                <DashboardWorkoutHistory />
+                <span className="font-medium text-[#003F8F] font-[Inter]">Recent Workouts</span>
+              </button>
+              <Link
+                to="/client/chat"
+                className="w-full flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
+                <DashboardMessageCoach />
+                <span className="font-medium text-[#003F8F] font-[Inter]">Message Coach</span>
+              </Link>
             </div>
           </div>
         </div>

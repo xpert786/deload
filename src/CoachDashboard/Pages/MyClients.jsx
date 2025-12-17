@@ -20,6 +20,9 @@ const MyClients = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [hoveredRow, setHoveredRow] = useState(null);
+  const [deletingClientId, setDeletingClientId] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState(null);
   const clientsPerPage = 7;
 
   const filters = ['All', 'Beginner', 'Intermediate', 'Advanced'];
@@ -167,9 +170,115 @@ const MyClients = () => {
     navigate(`/coach/clients/${clientId}/dashboard`);
   };
 
-  const handleDelete = (clientId) => {
-    console.log('Delete client:', clientId);
-    // Add delete functionality here
+  const handleDeleteClick = (clientId) => {
+    const client = clientsData.find(c => c.id === clientId);
+    setClientToDelete(client);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!clientToDelete) return;
+
+    const clientId = clientToDelete.id;
+    setShowDeleteModal(false);
+    setDeletingClientId(clientId);
+    setError('');
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      if (!isValidToken) {
+        setError('Authentication token not found. Please login again.');
+        setDeletingClientId(null);
+        return;
+      }
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      const apiUrl = `${baseUrl}/coach/clients/${clientId}/delete/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'DELETE',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse delete response:', parseError);
+        // Some APIs return empty response on success
+        if (response.ok) {
+          result = { success: true };
+        } else {
+          setError('Failed to parse server response. Please try again.');
+          setDeletingClientId(null);
+          return;
+        }
+      }
+
+      if (response.ok) {
+        // Success - refresh clients list
+        await fetchClients();
+        // Reset to first page if current page becomes empty
+        setCurrentPage(1);
+      } else {
+        console.error('Failed to delete client:', result);
+        setError(result.message || result.detail || 'Failed to delete client. Please try again.');
+      }
+    } catch (err) {
+      console.error('Delete client error:', err);
+      setError('Network error: Unable to delete client. Please check your connection.');
+    } finally {
+      setDeletingClientId(null);
+      setClientToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setShowDeleteModal(false);
+    setClientToDelete(null);
   };
 
   return (
@@ -288,14 +397,25 @@ const MyClients = () => {
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleDelete(client.id)}
-                            className={` border flex items-center justify-center transition ${
-                              isHovered
+                            onClick={() => handleDeleteClick(client.id)}
+                            disabled={deletingClientId === client.id}
+                            className={`border flex items-center justify-center transition cursor-pointer ${
+                              deletingClientId === client.id
+                                ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : isHovered
                                 ? 'border-gray-300 bg-white text-gray-600 hover:bg-red-50 hover:text-red-600'
                                 : 'border-gray-300 bg-white text-gray-400'
                             }`}
+                            title="Delete client"
                           >
-                           <DeleteIcon />
+                           {deletingClientId === client.id ? (
+                             <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                             </svg>
+                           ) : (
+                             <DeleteIcon />
+                           )}
                           </button>
                           <button
                             onClick={() => handleView(client.id)}
@@ -397,6 +517,47 @@ const MyClients = () => {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && clientToDelete && (
+        <div className="fixed inset-0 bg-black/40 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-[#003F8F] font-[Poppins]">Delete Client</h3>
+              <button
+                onClick={handleDeleteCancel}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-2">
+                Are you sure you want to delete successfully
+              </p>
+              
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={handleDeleteCancel}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition font-medium"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -21,9 +21,71 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
   const typingDebounceRef = useRef(null);
 
   // Determine the other user (receiver)
-  const otherUser = thread.coach === currentUserId 
-    ? { id: thread.client, name: thread.client_name, photo: thread.client_photo }
-    : { id: thread.coach, name: thread.coach_name, photo: thread.coach_photo };
+  // Check multiple ways to determine if current user is coach
+  const threadCoachId = thread.coach || thread.coach_id;
+  const threadClientId = thread.client || thread.client_id;
+  
+  // Convert to numbers/strings for comparison - handle both string and number IDs
+  const normalizeId = (id) => {
+    if (id == null) return null;
+    return typeof id === 'string' ? parseInt(id) : id;
+  };
+  
+  const coachIdNormalized = normalizeId(threadCoachId);
+  const currentUserIdNormalized = normalizeId(currentUserId);
+  const isCoach = coachIdNormalized === currentUserIdNormalized || 
+                  String(threadCoachId) === String(currentUserId) ||
+                  threadCoachId == currentUserId; // Loose equality for type coercion
+  
+  // Debug logging
+  console.log('ThreadDetail - Determining otherUser:', {
+    threadId: thread.id,
+    threadCoach: thread.coach,
+    threadCoachId: thread.coach_id,
+    coachIdNormalized: coachIdNormalized,
+    currentUserId: currentUserId,
+    currentUserIdNormalized: currentUserIdNormalized,
+    isCoach: isCoach,
+    client: thread.client,
+    client_id: thread.client_id,
+    client_name: thread.client_name,
+    client_email: thread.client_email,
+    coach_name: thread.coach_name,
+    stringComparison: String(threadCoachId) === String(currentUserId),
+    fullThread: thread
+  });
+  
+  // Determine other user - if current user is coach, show client; otherwise show coach
+  let otherUser;
+  
+  if (isCoach) {
+    // Current user is coach - ALWAYS show client name from thread
+    // Use thread.client_name directly as it comes from API
+    otherUser = { 
+      id: threadClientId, 
+      name: thread.client_name || 'Client', // Use client_name directly from thread
+      photo: thread.client_photo || null
+    };
+    
+    console.log('ThreadDetail - Coach view, showing client:', {
+      client_name: thread.client_name,
+      otherUser: otherUser
+    });
+    
+    if (!thread.client_name) {
+      console.error('ThreadDetail: Missing client_name in thread data!', {
+        thread: thread,
+        otherUser: otherUser
+      });
+    }
+  } else {
+    // Current user is client - show coach
+    otherUser = { 
+      id: threadCoachId, 
+      name: thread.coach_name || 'Coach', 
+      photo: thread.coach_photo || null
+    };
+  }
 
   // Load messages
   const loadMessages = useCallback(async (offset = 0, append = false) => {
@@ -253,10 +315,10 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     // Send via WebSocket
     try {
       // Try to send via WebSocket (even if not connected, it might reconnect)
+      // Updated message format: { thread_id, content }
       const success = sendMessage({
-        type: 'message',
+        thread_id: thread.id,
         content: messageToSend,
-        receiver_id: otherUser.id,
       });
 
       if (!success) {

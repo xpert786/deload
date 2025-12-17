@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { listThreads, createThread } from '../../services/threadsApi';
@@ -21,6 +21,14 @@ const Messages = () => {
   const [clients, setClients] = useState([]);
   const [loadingClients, setLoadingClients] = useState(false);
   const [clientSearchQuery, setClientSearchQuery] = useState('');
+  
+  // Use ref to track selectedThread without causing re-renders
+  const selectedThreadRef = useRef(null);
+  
+  // Update ref whenever selectedThread changes
+  useEffect(() => {
+    selectedThreadRef.current = selectedThread;
+  }, [selectedThread]);
 
   const currentUserId = user?.id;
 
@@ -38,27 +46,37 @@ const Messages = () => {
           const dateB = new Date(b.updated_at || b.created_at);
           return dateB - dateA;
         });
+        
+        // Debug: Log threads to check client_name and full structure
+        console.log('Loaded threads from API:', sortedThreads.map(t => ({
+          id: t.id,
+          client: t.client,
+          client_id: t.client_id,
+          client_name: t.client_name,
+          client_photo: t.client_photo,
+          coach: t.coach,
+          coach_id: t.coach_id,
+          coach_name: t.coach_name,
+          coach_photo: t.coach_photo,
+          fullThread: t // Log full thread to see structure
+        })));
+        
         setThreads(sortedThreads);
 
-        // If clientId is provided, find or create thread for that client
-        if (clientId && !selectedThread) {
-          const existingThread = sortedThreads.find(t => t.client === parseInt(clientId));
-          if (existingThread) {
-            setSelectedThread(existingThread);
-          } else {
-            // Create thread for this client
-            try {
-              const createResult = await createThread(parseInt(clientId));
-              if (createResult.data) {
-                setSelectedThread(createResult.data);
-                // Reload threads to include the new one
-                loadThreads();
+        // If clientId is provided, find thread for that client (only on initial load)
+        // Use functional update to check selectedThread without dependency
+        if (clientId) {
+          setSelectedThread(prevSelected => {
+            // Only set if not already selected
+            if (!prevSelected) {
+              const existingThread = sortedThreads.find(t => t.client === parseInt(clientId));
+              if (existingThread) {
+                return existingThread;
               }
-            } catch (createError) {
-              console.error('Error creating thread:', createError);
-              setError(createError.userMessage || createError.message || 'Failed to create thread');
+              // Don't create thread here - let the URL param handler do it to avoid infinite loop
             }
-          }
+            return prevSelected;
+          });
         }
       }
     } catch (err) {
@@ -67,14 +85,15 @@ const Messages = () => {
     } finally {
       setLoading(false);
     }
-  }, [clientId, selectedThread]);
+  }, [clientId]); // Removed selectedThread from dependencies to prevent infinite loop
 
-  // Initial load
+  // Initial load - only run once when component mounts or currentUserId changes
   useEffect(() => {
     if (currentUserId) {
       loadThreads();
     }
-  }, [currentUserId, loadThreads]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]); // Only depend on currentUserId, not loadThreads
 
   // WebSocket handler for real-time updates
   const handleWebSocketMessage = useCallback((data) => {
@@ -84,12 +103,12 @@ const Messages = () => {
       // Only update if message is not from current user (i.e., it's a message received)
       const isMessageForCurrentUser = message.receiver_id === currentUserId || message.receiver === currentUserId;
       
-      // Update threads list
+      // Update threads list - use ref to check selectedThread without dependency
       setThreads(prev => prev.map(thread => {
         if (thread.id === message.thread_id) {
           // Increment unread count only if message is for current user and thread is not currently selected
           const shouldIncrementUnread = isMessageForCurrentUser && 
-            (!selectedThread || selectedThread.id !== thread.id);
+            (!selectedThreadRef.current || selectedThreadRef.current.id !== thread.id);
           
           return {
             ...thread,
@@ -107,11 +126,6 @@ const Messages = () => {
         }
         return thread;
       }));
-
-      // Update selected thread if it's the current one
-      if (selectedThread && selectedThread.id === message.thread_id) {
-        // ThreadDetail will handle adding the message via its own WebSocket connection
-      }
     } else if (data.type === 'messages_read' && data.message_ids) {
       // Update unread count when messages are read
       // Decrement unread count for the thread that contains these messages
@@ -139,7 +153,7 @@ const Messages = () => {
         return thread;
       }));
     }
-  }, [currentUserId, selectedThread]);
+  }, [currentUserId]); // Removed selectedThread dependency
 
   const handleWebSocketError = useCallback((error) => {
     console.error('WebSocket error in Messages:', error);
@@ -176,10 +190,14 @@ const Messages = () => {
       thread.id === threadId ? { ...thread, ...updates } : thread
     ));
     
-    if (selectedThread && selectedThread.id === threadId) {
-      setSelectedThread(prev => ({ ...prev, ...updates }));
-    }
-  }, [selectedThread]);
+    // Update selected thread using functional update to avoid dependency
+    setSelectedThread(prev => {
+      if (prev && prev.id === threadId) {
+        return { ...prev, ...updates };
+      }
+      return prev;
+    });
+  }, []);
 
   // Filter threads by search query
   const filteredThreads = threads.filter(thread => {
@@ -303,15 +321,27 @@ const Messages = () => {
       setLoading(true);
       const createResult = await createThread(client.id);
       if (createResult.data) {
-        setSelectedThread(createResult.data);
+        // Ensure client_name is set from the selected client object
+        const threadData = {
+          ...createResult.data,
+          client: client.id, // Ensure client ID is set
+          client_name: client.name || client.fullname || createResult.data.client_name,
+          client_photo: client.photo || client.profile_picture || createResult.data.client_photo,
+          coach: currentUserId, // Ensure coach ID is set to current user
+        };
+        
+        setSelectedThread(threadData);
         setThreads(prev => {
-          const exists = prev.some(t => t.id === createResult.data.id);
+          const exists = prev.some(t => t.id === threadData.id);
           if (exists) {
-            return prev.map(t => t.id === createResult.data.id ? createResult.data : t);
+            return prev.map(t => t.id === threadData.id ? threadData : t);
           }
-          return [createResult.data, ...prev];
+          return [threadData, ...prev];
         });
         handleCloseComposeModal();
+        
+        // No need to reload - we already have the thread data with correct client_name
+        // The threadData already includes client_name from the selected client object
       }
     } catch (err) {
       console.error('Error creating thread:', err);
@@ -331,10 +361,45 @@ const Messages = () => {
     return name.includes(query) || email.includes(query);
   });
 
-  // Filter out clients that already have threads
-  const availableClients = filteredClients.filter(client => {
-    return !threads.some(thread => thread.client === client.id);
-  });
+
+  // If a thread is selected, create a client object from thread data and show only that client
+  let availableClients;
+  
+  if (selectedThread && (selectedThread.client || selectedThread.client_id)) {
+    const selectedClientId = selectedThread.client || selectedThread.client_id;
+    console.log('Thread selected, showing client from thread:', {
+      selectedClientId: selectedClientId,
+      client_name: selectedThread.client_name,
+      client_email: selectedThread.client_email
+    });
+    
+    // Create client object from thread data
+    const clientFromThread = {
+      id: selectedClientId,
+      name: selectedThread.client_name,
+      fullname: selectedThread.client_name,
+      email: selectedThread.client_email,
+      photo: selectedThread.client_photo,
+      profile_picture: selectedThread.client_photo
+    };
+    
+    // Show only this client in the compose modal
+    availableClients = [clientFromThread];
+    
+    console.log('Available clients from selected thread:', availableClients);
+  } else {
+    // Filter out clients that already have threads (normal compose behavior)
+    availableClients = filteredClients.filter(client => {
+      return !threads.some(thread => {
+        const threadClientId = thread.client || thread.client_id;
+        return String(threadClientId) === String(client.id) || 
+               Number(threadClientId) === Number(client.id) ||
+               threadClientId == client.id;
+      });
+    });
+
+    console.log('Available clients from selected thread:elseeee', availableClients);
+  }
 
   return (
     <>
@@ -393,9 +458,50 @@ const Messages = () => {
               <div className="p-4 text-center text-gray-500">No messages found</div>
             ) : (
               filteredThreads.map((thread) => {
-                const otherUser = thread.coach === currentUserId 
-                  ? { name: thread.client_name, photo: thread.client_photo }
-                  : { name: thread.coach_name, photo: thread.coach_photo };
+                // For coach view: ALWAYS show client's name and photo
+                // Since this is the coach dashboard, we should always display the client
+                // Don't check if current user is coach - just always show client
+                
+                // Debug logging to see what data we have
+                if (!thread.client_name) {
+                  console.warn('Thread missing client_name:', {
+                    threadId: thread.id,
+                    client: thread.client,
+                    client_id: thread.client_id,
+                    client_name: thread.client_name,
+                    coach: thread.coach,
+                    coach_id: thread.coach_id,
+                    coach_name: thread.coach_name,
+                    currentUserId: currentUserId,
+                    fullThread: thread
+                  });
+                }
+                
+                // Always show client name - this is coach dashboard
+                // Use thread.client_name directly from API (it's always present in thread data)
+                // DO NOT fallback to coach_name - this is coach dashboard, always show client
+                const clientName = thread.client_name || 'Client';
+                const clientPhoto = thread.client_photo || null;
+                
+                // Debug: Log to verify we're using client_name
+                if (thread.client_name) {
+                  console.log('Messages.jsx - Using client_name from thread:', {
+                    threadId: thread.id,
+                    client_name: thread.client_name,
+                    client: thread.client,
+                    coach_name: thread.coach_name // Should NOT be used
+                  });
+                } else {
+                  console.error('Messages.jsx - Missing client_name in thread!', {
+                    threadId: thread.id,
+                    thread: thread
+                  });
+                }
+                
+                const otherUser = { 
+                  name: clientName, 
+                  photo: clientPhoto
+                };
                 
                 const isSelected = selectedThread?.id === thread.id;
                 
