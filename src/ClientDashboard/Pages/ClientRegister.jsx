@@ -465,7 +465,12 @@ const ClientRegister = () => {
                 <div className="flex justify-between gap-3 font-medium ">
                   <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setStep(1);
+                      setError('');
+                    }}
                     className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50 cursor-pointer"
                     style={{ 
                       backgroundColor: 'white',
