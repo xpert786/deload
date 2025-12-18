@@ -332,14 +332,14 @@ const AdminDashboard = () => {
          <div className="bg-white rounded-lg shadow-sm p-6">
            <div className="flex items-center justify-between mb-4">
              <h3 className="text-lg font-semibold text-[#003F8F] font-[BasisGrotesquePro]">Recent Coach Registrations</h3>
-             {recentCoaches.length > 0 && (
+             {/* {recentCoaches.length > 0 && (
                <button 
                  onClick={() => setShowAllCoaches(!showAllCoaches)}
                  className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer"
                >
                  View All
                </button>
-             )}
+             )} */}
            </div>
           <div className="space-y-3">
             {/* Table Header */}
@@ -378,14 +378,14 @@ const AdminDashboard = () => {
          <div className="bg-white rounded-lg p-6">
            <div className="flex items-center justify-between mb-4">
              <h3 className="text-lg font-semibold text-[#003F8F] font-[BasisGrotesquePro]">Recent Activity</h3>
-             {recentActivity.length > 0 && (
+             {/* {recentActivity.length > 0 && (
                <button 
                  onClick={() => setShowAllActivity(!showAllActivity)}
                  className="px-4 py-2 bg-[#003F8F] text-white rounded-lg text-sm font-semibold hover:bg-[#002F6F] transition cursor-pointer"
                >
                  View All
                </button>
-             )}
+             )} */}
            </div>
            <div className="space-y-3">
              {recentActivity.length === 0 ? (
