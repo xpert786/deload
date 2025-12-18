@@ -179,6 +179,7 @@ const LogWorkout = () => {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadFiles, setUploadFiles] = useState([]); // Store actual File objects
   const [completingWorkout, setCompletingWorkout] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
 
   // Fetch today's workout from API
   useEffect(() => {
@@ -578,7 +579,7 @@ const LogWorkout = () => {
 
       // Ensure API_BASE_URL doesn't have trailing slash
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-      // Check if baseUrl already includes /api, if not add it
+      // Use the bulk-status API endpoint: /api/log-workout/exercises/bulk-status/
       const apiUrl = baseUrl.includes('/api')
         ? `${baseUrl}/log-workout/exercises/bulk-status/`
         : `${baseUrl}/api/log-workout/exercises/bulk-status/`;
@@ -616,8 +617,12 @@ const LogWorkout = () => {
 
       if (response.ok) {
         console.log('Bulk exercise status updated successfully:', result);
-        // Optionally show success message or navigate
-        // You can add navigation or success toast here
+        // Show success popup
+        setShowSuccessPopup(true);
+        // Auto-hide popup after 3 seconds
+        setTimeout(() => {
+          setShowSuccessPopup(false);
+        }, 3000);
       } else {
         const errorMessage = result.message || result.detail || 'Failed to update exercise status';
         setError(errorMessage);
@@ -1205,6 +1210,39 @@ const LogWorkout = () => {
                 }`}
               >
                 {uploadLoading ? 'Uploading...' : 'Upload'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Popup */}
+      {showSuccessPopup && (
+        <div className="fixed inset-0 bg-black/60 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 sm:p-8">
+            <div className="flex flex-col items-center space-y-4">
+              {/* Success Icon */}
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M20 0C8.954 0 0 8.954 0 20C0 31.046 8.954 40 20 40C31.046 40 40 31.046 40 20C40 8.954 31.046 0 20 0ZM20 37.5C10.335 37.5 2.5 29.665 2.5 20C2.5 10.335 10.335 2.5 20 2.5C29.665 2.5 37.5 10.335 37.5 20C37.5 29.665 29.665 37.5 20 37.5Z" fill="#25CD25"/>
+                  <path d="M27.982 13.017L16.982 24.017L12.018 19.053C11.586 18.621 10.914 18.621 10.482 19.053C10.05 19.485 10.05 20.157 10.482 20.589L16.232 26.339C16.664 26.771 17.336 26.771 17.768 26.339L29.768 14.339C30.2 13.907 30.2 13.235 29.768 12.803C29.336 12.371 28.664 12.371 28.232 12.803L27.982 13.017Z" fill="#25CD25"/>
+                </svg>
+              </div>
+              
+              {/* Success Message */}
+              <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins] text-center">
+                Complete Successfully!
+              </h3>
+              <p className="text-gray-600 text-center font-[Inter]">
+                Your workout has been completed and saved successfully.
+              </p>
+              
+              {/* Close Button */}
+              <button
+                onClick={() => setShowSuccessPopup(false)}
+                className="mt-4 px-6 py-2.5 bg-[#003F8F] text-white rounded-lg font-semibold font-[Inter] hover:bg-[#002A5F] transition-colors"
+              >
+                OK
               </button>
             </div>
           </div>
