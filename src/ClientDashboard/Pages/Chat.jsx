@@ -29,6 +29,7 @@ const Chat = () => {
           const dateB = new Date(b.updated_at || b.created_at);
           return dateB - dateA;
         });
+        console.log('Loaded threads from API:', sortedThreads);
         setThreads(sortedThreads);
 
         // Auto-select first thread if available
@@ -53,6 +54,8 @@ const Chat = () => {
 
   // WebSocket handler for real-time updates
   const handleWebSocketMessage = useCallback((data) => {
+
+    console.log('WebSocket message received:', data);
     if (data.type === 'new_message' && data.message) {
       const message = data.message;
       
@@ -138,6 +141,7 @@ const Chat = () => {
 
   // Handle thread selection
   const handleThreadSelect = (thread) => {
+    console.log('Thread selected:', thread);
     setSelectedThread(thread);
     // Reset unread count for this thread (optimistic update)
     setThreads(prev => prev.map(t => 
@@ -147,17 +151,20 @@ const Chat = () => {
 
   // Handle thread update from ThreadDetail
   const handleThreadUpdate = useCallback((threadId, updates) => {
+    console.log('Thread updated:', threadId, updates);
     setThreads(prev => prev.map(thread => 
       thread.id === threadId ? { ...thread, ...updates } : thread
     ));
     
     if (selectedThread && selectedThread.id === threadId) {
+      console.log('Selected thread updated:', { ...selectedThread, ...updates });
       setSelectedThread(prev => ({ ...prev, ...updates }));
     }
   }, [selectedThread]);
 
   // Filter threads by search query
   const filteredThreads = threads.filter(thread => {
+    console.log('Filtering thread:', thread);
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     const clientName = (thread.client_name || '').toLowerCase();
@@ -184,6 +191,8 @@ const Chat = () => {
     
     return date.toLocaleDateString();
   };
+
+  console.log('Threads:', threads);
 
   return (
     <>
@@ -263,7 +272,7 @@ const Chat = () => {
                     const otherUser = thread.coach === currentUserId 
                       ? { name: thread.client_name, photo: thread.client_photo }
                       : { name: thread.coach_name, photo: thread.coach_photo };
-                    
+                    console.log('Other user:', otherUser);
                     const isSelected = selectedThread?.id === thread.id;
                     
                     return (

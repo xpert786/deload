@@ -55,37 +55,32 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     fullThread: thread
   });
   
-  // Determine other user - if current user is coach, show client; otherwise show coach
+  // Determine conversation counterpart:
+  // - Coach view  : other user = client
+  // - Client view : other user = coach
   let otherUser;
-  
   if (isCoach) {
-    // Current user is coach - ALWAYS show client name from thread
-    // Use thread.client_name directly as it comes from API
-    otherUser = { 
-      id: threadClientId, 
-      name: thread.client_name || 'Client', // Use client_name directly from thread
-      photo: thread.client_photo || null
+    otherUser = {
+      id: threadClientId,
+      name: thread.client_name || 'Client',
+      photo: thread.client_photo || null,
     };
-    
-    console.log('ThreadDetail - Coach view, showing client:', {
-      client_name: thread.client_name,
-      otherUser: otherUser
-    });
-    
-    if (!thread.client_name) {
-      console.error('ThreadDetail: Missing client_name in thread data!', {
-        thread: thread,
-        otherUser: otherUser
-      });
-    }
   } else {
-    // Current user is client - show coach
-    otherUser = { 
-      id: threadCoachId, 
-      name: thread.coach_name || 'Coach', 
-      photo: thread.coach_photo || null
+    otherUser = {
+      id: threadCoachId,
+      name: thread.coach_name || 'Coach',
+      photo: thread.coach_photo || null,
     };
   }
+
+  // Avatar logic:
+  // - Coach view  : left (received) shows client, right (sent) shows coach
+  // - Client view : left (received) shows coach, right (sent) shows client
+  const clientAvatar = thread.client_photo || ProfileLogo;
+  const coachAvatar = thread.coach_photo || ProfileLogo;
+  
+  const otherAvatar = isCoach ? clientAvatar : coachAvatar;
+  const selfAvatar = isCoach ? coachAvatar : clientAvatar;
 
   // Load messages
   const loadMessages = useCallback(async (offset = 0, append = false) => {
@@ -290,29 +285,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     setError(null);
     sendTypingIndicator(false);
 
-    // Optimistic update
-    const tempMessage = {
-      id: Date.now(), // Temporary ID
-      thread_id: thread.id,
-      sender_id: currentUserId,
-      sender: currentUserId,
-      receiver_id: otherUser.id,
-      receiver: otherUser.id,
-      content: messageToSend,
-      is_read: false,
-      created_at: new Date().toISOString(),
-      sender_name: thread.coach === currentUserId ? thread.coach_name : thread.client_name,
-      receiver_name: otherUser.name,
-    };
-
-    setMessages(prev => [...prev, tempMessage]);
-
-    // Scroll to bottom immediately
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 50);
-
-    // Send via WebSocket
+    // Send via WebSocket (no optimistic duplicate; rely on server echo)
     try {
       // Try to send via WebSocket (even if not connected, it might reconnect)
       // Updated message format: { thread_id, content }
@@ -321,31 +294,20 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
         content: messageToSend,
       });
 
-      if (!success) {
-        if (!isConnected) {
-          // If not connected, keep the message visible but show a subtle warning
-          // The message will be sent when WebSocket reconnects
-          console.log('WebSocket not connected. Message will be sent when connection is restored.');
-          // Don't show error - just keep the message in the list
-          // It will be sent automatically when connection is restored
-        } else {
-          // Connected but send failed - show error
-          setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
-          setError('Failed to send message. Please check your connection and try again.');
-          
-          // Clear error after 5 seconds
-          if (errorTimeoutRef.current) {
-            clearTimeout(errorTimeoutRef.current);
-          }
-          errorTimeoutRef.current = setTimeout(() => {
-            setError(null);
-          }, 5000);
+      if (!success && isConnected) {
+        // Connected but send failed - show error
+        setError('Failed to send message. Please check your connection and try again.');
+        
+        // Clear error after 5 seconds
+        if (errorTimeoutRef.current) {
+          clearTimeout(errorTimeoutRef.current);
         }
+        errorTimeoutRef.current = setTimeout(() => {
+          setError(null);
+        }, 5000);
       }
     } catch (err) {
       console.error('Error sending message:', err);
-      // Remove optimistic message and show error
-      setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
       setError('Failed to send message. Please try again.');
       
       // Clear error after 5 seconds
@@ -518,7 +480,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                   <div className="flex items-start gap-2 max-w-[70%]">
                     <div className="flex-shrink-0">
                       <img
-                        src={otherUser.photo || ProfileLogo}
+                        src={otherAvatar}
                         alt={otherUser.name}
                         className="w-8 h-8 rounded-full object-cover"
                       />
@@ -554,8 +516,8 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                     </div>
                     <div className="flex-shrink-0">
                       <img
-                        src={ProfileLogo}
-                        alt="You"
+                        src={selfAvatar}
+                        alt={isCoach ? 'You' : 'Client'}
                         className="w-8 h-8 rounded-full object-cover"
                       />
                     </div>

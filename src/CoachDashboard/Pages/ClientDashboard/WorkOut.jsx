@@ -1,15 +1,110 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useAuth } from '../../../context/AuthContext';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector } from 'recharts';
 
-const WorkOut = () => {
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+    console.error('VITE_API_BASE_URL is not defined in .env file');
+}
+
+const WorkOut = ({ clientId }) => {
+    const { user } = useAuth();
     const [viewMode, setViewMode] = useState('Week');
-    // Initialize with September 1, 2025 to match the sample data
-    const [currentDate, setCurrentDate] = useState(new Date(2025, 8, 1)); // Month is 0-indexed, so 8 = September
-    const [note, setNote] = useState('');
+    // Initialize with current date; API will return the correct week range
+    const [currentDate, setCurrentDate] = useState(new Date());
     const [isPopupOpen, setIsPopupOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedExercise, setSelectedExercise] = useState(null);
     const [openExerciseIndex, setOpenExerciseIndex] = useState(0); // Track which exercise dropdown is open
     const [selectedDay, setSelectedDay] = useState('Mon'); // Day selector for workout view
+    const [activeIndex, setActiveIndex] = useState(null); // For pie chart hover effect
+
+    // API-driven workout calendar state
+    const [calendarData, setCalendarData] = useState(null);
+    const [calendarError, setCalendarError] = useState('');
+    const [calendarLoading, setCalendarLoading] = useState(true);
+
+    // Get auth token (same pattern as other pages)
+    const getAuthToken = useCallback(() => {
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+
+        if (user) {
+            token = user.token || user.access_token || user.authToken || user.accessToken;
+        }
+        if (!token && storedUser) {
+            try {
+                const userData = JSON.parse(storedUser);
+                token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+            } catch (e) {
+                console.error('Error parsing user data:', e);
+            }
+        }
+        if (!token) {
+            token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+        }
+        const isValidToken = token && typeof token === 'string' && token.trim() && token !== 'null' && token !== 'undefined';
+        return isValidToken ? token.trim() : null;
+    }, [user]);
+
+    const fetchCalendar = useCallback(async () => {
+        if (!clientId) return;
+        setCalendarLoading(true);
+        setCalendarError('');
+        try {
+            const token = getAuthToken();
+            if (!token) {
+                setCalendarError('Authentication token not found. Please login again.');
+                setCalendarLoading(false);
+                return;
+            }
+
+            const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+            const url = baseUrl.includes('/api')
+                ? `${baseUrl}/clients/${clientId}/workout-calendar/?period=weekly`
+                : `${baseUrl}/api/clients/${clientId}/workout-calendar/?period=weekly`;
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            };
+
+            const res = await fetch(url, { method: 'GET', headers, credentials: 'include' });
+            let result;
+            try {
+                const text = await res.read ? await res.text() : await res.text();
+                result = text ? JSON.parse(text) : {};
+            } catch (err) {
+                console.error('Failed to parse workout calendar response:', err);
+                throw new Error('Failed to parse server response');
+            }
+
+            if (!res.ok) {
+                throw new Error(result.message || 'Failed to fetch workout calendar');
+            }
+
+            if (result && result.data) {
+                setCalendarData(result.data);
+                const week = result.data.weekly_schedule || [];
+                const today = week.find(d => d.is_today) || week[0];
+                if (today) {
+                    setSelectedDay(today.day_abbrev);
+                }
+            } else {
+                setCalendarData(null);
+            }
+        } catch (err) {
+            console.error('Error fetching workout calendar:', err);
+            setCalendarError(err.message || 'Failed to load workout calendar');
+        } finally {
+            setCalendarLoading(false);
+        }
+    }, [clientId, getAuthToken]);
+
+    useEffect(() => {
+        fetchCalendar();
+    }, [fetchCalendar]);
 
     // Detailed workout data with sets, reps, weights, rest times, and statuses
     const detailedWorkoutData = {
@@ -121,10 +216,14 @@ const WorkOut = () => {
     };
 
     const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const dayTabs = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const defaultDayTabs = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const dayTabs = useMemo(
+        () => (calendarData?.weekly_schedule?.map(d => d.day_abbrev) || defaultDayTabs),
+        [calendarData]
+    );
 
     // Workout data for day-by-day view (matching screenshot)
-    // Common workout data for all weekdays (Mon-Sat)
+    // Common workout data for all weekdays (Mon-Sat) - used as fallback when API data is not available
     const commonWorkoutData = {
         workoutName: 'Full Body Workout',
         exercises: [
@@ -221,7 +320,8 @@ const WorkOut = () => {
         ]
     };
 
-    const dayWorkoutData = {
+    // Base workout data used when API has not yet loaded
+    const baseDayWorkoutData = {
         'Mon': commonWorkoutData,
         'Tue': commonWorkoutData,
         'Wed': commonWorkoutData,
@@ -231,18 +331,17 @@ const WorkOut = () => {
         // Sun is intentionally excluded - it will show rest day or nothing
     };
 
-    const progressPhotos = [
+    // Progress photos sample data (fallback)
+    const baseProgressPhotos = [
         { date: '14 Apr 2025', image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=200&h=200&fit=crop' },
         { date: '15 May 2025', image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=200&h=200&fit=crop' },
         { date: '15 June 2025', image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&h=200&fit=crop' },
         { date: '20 July 2025', image: 'https://images.unsplash.com/photo-1549060279-7e168fcee0c2?w=200&h=200&fit=crop' },
     ];
 
-    const completed = 19;
-    const missed = 6;
-    const total = 25;
-    const completedPercent = (completed / total) * 100;
-    const missedPercent = (missed / total) * 100;
+    // Completion stats fallback
+    const baseCompleted = 19;
+    const baseMissed = 6;
 
     const formatDate = (date) => {
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -350,42 +449,168 @@ const WorkOut = () => {
         setCurrentDate(new Date());
     };
 
-    // Get calendar dates based on view mode
-    const calendarDates = useMemo(() => {
-        if (viewMode === 'Week') {
-            return getWeekDates(currentDate);
-        } else {
-            return getMonthDates(currentDate);
-        }
-    }, [currentDate, viewMode]);
-
-    const handleSaveNote = () => {
-        // Handle save note logic here
-        console.log('Note saved:', note);
-        setNote('');
-    };
 
     // Calculate pie chart path
-    const radius = 50;
-    const circumference = 2 * Math.PI * radius;
-    const completedDashOffset = circumference - (completedPercent / 100) * circumference;
+    // Effective workout data from API (if available) or fallback
+    const dayWorkoutData = useMemo(() => {
+        if (!calendarData || !calendarData.weekly_schedule) return baseDayWorkoutData;
+
+        const map = {};
+        calendarData.weekly_schedule.forEach((day) => {
+            const key = day.day_abbrev;
+            // Skip rest days - they will be handled separately
+            if (day.is_rest_day || day.rest_day) {
+                return;
+            }
+            // Skip if no sessions
+            if (!day.sessions || day.sessions.length === 0) {
+                return;
+            }
+            const groups = day.sessions.map((session) => ({
+                group: session.session_name || '',
+                status: session.status_display,
+                exercises: (session.exercises || []).map((ex) => ({
+                    label: ex.exercise_label,
+                    name: ex.exercise_name,
+                    sets: ex.sets,
+                    reps: ex.reps,
+                    instruction: ex.instructions,
+                    videoLink: '',
+                    status: ex.status_display,
+                })),
+            }));
+
+            map[key] = {
+                workoutName: day.sessions[0]?.workout_plan_title || 'Workout',
+                exercises: groups,
+            };
+        });
+
+        return Object.keys(map).length ? map : baseDayWorkoutData;
+    }, [calendarData]);
+
+    // Map of rest days from API
+    const restDaysMap = useMemo(() => {
+        if (!calendarData || !calendarData.weekly_schedule) return {};
+        
+        const map = {};
+        calendarData.weekly_schedule.forEach((day) => {
+            if (day.is_rest_day || day.rest_day) {
+                map[day.day_abbrev] = {
+                    title: day.rest_day?.title || 'Rest Day',
+                    description: day.rest_day?.description || 'Rest & Recovery',
+                    details: day.rest_day?.details || 'Active recovery or complete rest day',
+                };
+            }
+        });
+        return map;
+    }, [calendarData]);
+
+    // Check if selected day is a rest day
+    const isSelectedDayRestDay = useMemo(() => {
+        return restDaysMap[selectedDay] !== undefined;
+    }, [restDaysMap, selectedDay]);
+
+    const progressPhotos = useMemo(() => {
+        if (!calendarData || !calendarData.progress_photos || !calendarData.progress_photos.data) {
+            return baseProgressPhotos;
+        }
+        return calendarData.progress_photos.data.map((p) => ({
+            image: p.photo_url,
+            date: new Date(p.created_at).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+            }),
+        }));
+    }, [calendarData]);
+
+    const { completed, missed, total, completedPercent, missedPercent } = useMemo(() => {
+        if (!calendarData || !calendarData.completion_rate) {
+            const totalBase = baseCompleted + baseMissed;
+            return {
+                completed: baseCompleted,
+                missed: baseMissed,
+                total: totalBase,
+                completedPercent: totalBase ? (baseCompleted / totalBase) * 100 : 0,
+                missedPercent: totalBase ? (baseMissed / totalBase) * 100 : 0,
+            };
+        }
+        const stats = calendarData.completion_rate;
+        const totalVal = stats.total || (stats.completed || 0) + (stats.not_completed || 0);
+        const comp = stats.completed || 0;
+        const miss = stats.not_completed || 0;
+        return {
+            completed: comp,
+            missed: miss,
+            total: totalVal,
+            completedPercent: totalVal ? (comp / totalVal) * 100 : 0,
+            missedPercent: totalVal ? (miss / totalVal) * 100 : 0,
+        };
+    }, [calendarData]);
+
+    // Pie chart data for Recharts
+    const pieChartData = useMemo(() => {
+        // Ensure we always have data, even if values are 0
+        const data = [
+            { name: 'Completed', value: completed || 0, color: '#003F8F' },
+            { name: 'Missed', value: missed || 0, color: '#FB923C' }
+        ];
+        // If total is 0, show a placeholder (100% empty)
+        if (total === 0) {
+            return [
+                { name: 'No Data', value: 1, color: '#E5E7EB' }
+            ];
+        }
+        return data;
+    }, [completed, missed, total]);
+
+    // Custom tooltip for pie chart
+    const CustomTooltip = ({ active, payload }) => {
+        if (active && payload && payload.length) {
+            return (
+                <div className="bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                    <p className="text-sm font-semibold" style={{ color: payload[0].payload.color }}>
+                        {payload[0].name}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                        Value: {payload[0].value}
+                    </p>
+                </div>
+            );
+        }
+        return null;
+    };
 
     return (
         <div className="space-y-6 p-2 sm:p-2 bg-[#F7F7F7] text-[#003F8F]">
             {/* Interactive Workout Calendar Section */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <h2 className="text-2xl font-semibold text-[#003F8F] font-[Poppins]">Interactive Workout Calendar</h2>
+                <h2 className="text-2xl font-semibold text-[#003F8F] font-[Poppins]">
+                    Interactive Workout Calendar
+                </h2>
 
-                <div className="flex items-center gap-4">
-                    {/* Week Button */}
-                    <button
-                        onClick={() => setViewMode('Week')}
-                        className="px-4 py-2 font-semibold text-sm transition rounded-md bg-[#003F8F] text-white"
-                    >
-                        Week
-                    </button>
-                </div>
+                {calendarData && (
+                    <div className="flex flex-col items-end text-right space-y-1">
+                        <span className="text-xs uppercase tracking-wide text-gray-500 font-[Inter]">
+                            {calendarData.period === 'weekly' ? 'Week' : 'Period'}
+                        </span>
+                        <span className="text-sm font-semibold text-[#003F8F] font-[Poppins]">
+                            {calendarData.week_display}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                            Total Hours: {calendarData.progress?.total_hours ?? 0}
+                        </span>
+                    </div>
+                )}
             </div>
+
+            {/* Error & loading states */}
+            {calendarError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                    {calendarError}
+                </div>
+            )}
 
             {/* Day-by-Day Workout View */}
             <div className="bg-white rounded-xl overflow-hidden border border-gray-300" style={{ borderRadius: '12px' }}>
@@ -414,8 +639,44 @@ const WorkOut = () => {
                 {/* Workout Content */}
                 <div className="p-6 space-y-6">
 
+                    {/* Rest Day Screen - Show for any day that is a rest day */}
+                    {isSelectedDayRestDay && !calendarLoading && (
+                        <div className="space-y-6">
+                            {/* Rest Day Heading - Top Left */}
+                            <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins] text-left">
+                                {restDaysMap[selectedDay]?.title || 'Rest Day'}
+                            </h3>
+                            
+                            {/* Bordered Box with Centered Content */}
+                            <div className="bg-white border border-gray-300 rounded-xl p-6">
+                                <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                                    {/* Bed Icon */}
+                                    <div className="flex items-center justify-center">
+                                        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M7.119 40.0795V17.5795C7.119 17.2092 7.04605 16.8424 6.90432 16.5003C6.76259 16.1581 6.55485 15.8472 6.29297 15.5853C6.03108 15.3234 5.72018 15.1157 5.37802 14.974C5.03585 14.8322 4.66912 14.7593 4.29876 14.7593C3.9284 14.7593 3.56166 14.8322 3.2195 14.974C2.87733 15.1157 2.56643 15.3234 2.30455 15.5853C2.04266 15.8472 1.83492 16.1581 1.69319 16.5003C1.55146 16.8424 1.47852 17.2092 1.47852 17.5795V54.4205C1.47852 54.7908 1.55146 55.1576 1.69319 55.4997C1.83492 55.8419 2.04266 56.1528 2.30455 56.4147C2.56643 56.6766 2.87733 56.8843 3.2195 57.026C3.56166 57.1678 3.9284 57.2407 4.29876 57.2407C4.66912 57.2407 5.03585 57.1678 5.37802 57.026C5.72018 56.8843 6.03108 56.6766 6.29297 56.4147C6.55485 56.1528 6.76259 55.8419 6.90432 55.4997C7.04605 55.1576 7.119 54.7908 7.119 54.4205V49.1357L64.8817 49.0017V54.2837C64.8817 54.6539 64.9547 55.0206 65.0964 55.3627C65.238 55.7047 65.4457 56.0156 65.7076 56.2774C65.9694 56.5392 66.2802 56.7469 66.6223 56.8886C66.9643 57.0303 67.331 57.1032 67.7012 57.1032C68.0715 57.1032 68.4381 57.0303 68.7802 56.8886C69.1223 56.7469 69.4331 56.5392 69.6949 56.2774C69.9568 56.0156 70.1645 55.7047 70.3061 55.3627C70.4478 55.0206 70.5208 54.6539 70.5208 54.2837V39.9456L7.119 40.0795Z" fill="#4D6080" fillOpacity="0.3"/>
+<path d="M70.5212 37.6646H27.6523V27.0431C27.6523 25.5635 28.24 24.1444 29.2862 23.098C30.3323 22.0516 31.7512 21.4635 33.2309 21.4631H59.256C62.2437 21.4631 65.1091 22.65 67.2217 24.7626C69.3343 26.8752 70.5212 29.7406 70.5212 32.7283V37.6646Z" fill="#4D6080" fillOpacity="0.3"/>
+<path d="M17.6171 36.4493C21.4193 36.4493 24.5017 33.367 24.5017 29.5647C24.5017 25.7624 21.4193 22.6801 17.6171 22.6801C13.8148 22.6801 10.7324 25.7624 10.7324 29.5647C10.7324 33.367 13.8148 36.4493 17.6171 36.4493Z" fill="#4D6080" fillOpacity="0.3"/>
+</svg>
+                                    </div>
+                                    
+                                    {/* Rest & Recovery Text */}
+                                    <div className="flex flex-col items-center space-y-1">
+                                        <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins]">
+                                            {restDaysMap[selectedDay]?.description || 'Rest & Recovery'}
+                                        </h4>
+                                        
+                                        {/* Description Text */}
+                                        <p className="text-sm text-[#003F8F] font-regular text-center">
+                                            {restDaysMap[selectedDay]?.details || 'Active recovery or complete rest day'}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Workout Content for Selected Day */}
-                    {dayWorkoutData[selectedDay] && selectedDay !== 'Sun' && (
+                    {!isSelectedDayRestDay && dayWorkoutData[selectedDay] && !calendarLoading && (
                         <>
                             {/* Workout Name */}
                             <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">
@@ -583,42 +844,6 @@ const WorkOut = () => {
                         </>
                     )}
 
-                    {/* Rest Day Screen for Sunday */}
-                    {selectedDay === 'Sun' && (
-                        <div className="space-y-6">
-                            {/* Rest Day Heading - Top Left */}
-                            <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins] text-left">
-                                Rest Day
-                            </h3>
-                            
-                            {/* Bordered Box with Centered Content */}
-                            <div className="bg-white border border-gray-300 rounded-xl p-6">
-                                <div className="flex flex-col items-center justify-center py-12 space-y-6">
-                                    {/* Bed Icon */}
-                                    <div className="flex items-center justify-center">
-                                        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M7.119 40.0795V17.5795C7.119 17.2092 7.04605 16.8424 6.90432 16.5003C6.76259 16.1581 6.55485 15.8472 6.29297 15.5853C6.03108 15.3234 5.72018 15.1157 5.37802 14.974C5.03585 14.8322 4.66912 14.7593 4.29876 14.7593C3.9284 14.7593 3.56166 14.8322 3.2195 14.974C2.87733 15.1157 2.56643 15.3234 2.30455 15.5853C2.04266 15.8472 1.83492 16.1581 1.69319 16.5003C1.55146 16.8424 1.47852 17.2092 1.47852 17.5795V54.4205C1.47852 54.7908 1.55146 55.1576 1.69319 55.4997C1.83492 55.8419 2.04266 56.1528 2.30455 56.4147C2.56643 56.6766 2.87733 56.8843 3.2195 57.026C3.56166 57.1678 3.9284 57.2407 4.29876 57.2407C4.66912 57.2407 5.03585 57.1678 5.37802 57.026C5.72018 56.8843 6.03108 56.6766 6.29297 56.4147C6.55485 56.1528 6.76259 55.8419 6.90432 55.4997C7.04605 55.1576 7.119 54.7908 7.119 54.4205V49.1357L64.8817 49.0017V54.2837C64.8817 54.6539 64.9547 55.0206 65.0964 55.3627C65.238 55.7047 65.4457 56.0156 65.7076 56.2774C65.9694 56.5392 66.2802 56.7469 66.6223 56.8886C66.9643 57.0303 67.331 57.1032 67.7012 57.1032C68.0715 57.1032 68.4381 57.0303 68.7802 56.8886C69.1223 56.7469 69.4331 56.5392 69.6949 56.2774C69.9568 56.0156 70.1645 55.7047 70.3061 55.3627C70.4478 55.0206 70.5208 54.6539 70.5208 54.2837V39.9456L7.119 40.0795Z" fill="#4D6080" fill-opacity="0.3"/>
-<path d="M70.5212 37.6646H27.6523V27.0431C27.6523 25.5635 28.24 24.1444 29.2862 23.098C30.3323 22.0516 31.7512 21.4635 33.2309 21.4631H59.256C62.2437 21.4631 65.1091 22.65 67.2217 24.7626C69.3343 26.8752 70.5212 29.7406 70.5212 32.7283V37.6646Z" fill="#4D6080" fill-opacity="0.3"/>
-<path d="M17.6171 36.4493C21.4193 36.4493 24.5017 33.367 24.5017 29.5647C24.5017 25.7624 21.4193 22.6801 17.6171 22.6801C13.8148 22.6801 10.7324 25.7624 10.7324 29.5647C10.7324 33.367 13.8148 36.4493 17.6171 36.4493Z" fill="#4D6080" fill-opacity="0.3"/>
-</svg>
-
-                                    </div>
-                                    
-                                    {/* Rest & Recovery Text */}
-                                    <div className="flex flex-col items-center space-y-1">
-                                        <h4 className="text-xl font-bold text-[#003F8F] font-[Poppins]">
-                                            Rest & Recovery
-                                        </h4>
-                                        
-                                        {/* Description Text */}
-                                        <p className="text-sm text-[#003F8F] font-regular text-center">
-                                            Active recovery or complete rest day
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -627,20 +852,38 @@ const WorkOut = () => {
                 {/* Notes Section */}
                 <div className="bg-white rounded-xl p-6 space-y-4">
                     <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Notes</h3>
-                    <textarea
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                        placeholder="Add notes about client's progress..."
-                        className="w-full h-40 p-4 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] resize-none text-sm font-[Inter] text-gray-700"
-                    />
-                    <div className="flex justify-start">
-                        <button
-                            onClick={handleSaveNote}
-                            className="px-6 py-3 bg-[#003F8F] text-white rounded-xl font-semibold text-base hover:bg-[#002F6F] transition shadow-md"
-                        >
-                            Save Note
-                        </button>
-                    </div>
+                    
+                    {/* Notes List from API */}
+                    {calendarLoading ? (
+                        <div className="text-center py-8 text-gray-500">
+                            Loading notes...
+                        </div>
+                    ) : calendarData?.notes?.data?.length > 0 ? (
+                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                            {calendarData.notes.data.map((n, idx) => (
+                                <div key={n.id || idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div className="text-xs text-gray-500 mb-2">
+                                        {n.created_at
+                                            ? new Date(n.created_at).toLocaleString('en-GB', {
+                                                day: '2-digit',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })
+                                            : 'No date'}
+                                    </div>
+                                    <div className="text-sm text-gray-800 font-[Inter]">
+                                        {n.note || n.text || ''}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-400">
+                            No notes available
+                        </div>
+                    )}
                 </div>
 
                 {/* Progress Photos Section */}
@@ -656,11 +899,14 @@ const WorkOut = () => {
                                         className="w-full h-full object-cover"
                                         onError={(e) => {
                                             e.target.style.display = 'none';
-                                            e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>';
+                                            e.target.parentElement.innerHTML =
+                                                '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>';
                                         }}
                                     />
                                 </div>
-                                <p className="text-xs text-gray-600 font-[Inter] text-center font-medium">{photo.date}</p>
+                                <p className="text-xs text-gray-600 font-[Inter] text-center font-medium">
+                                    {photo.date}
+                                </p>
                             </div>
                         ))}
                     </div>
@@ -674,91 +920,100 @@ const WorkOut = () => {
                     {/* Left Spacer */}
                     <div></div>
 
-                    {/* Pie Chart with Labels - Centered */}
-                    <div className="relative w-48 h-48 flex-shrink-0 mx-auto">
-                        <svg className="w-48 h-48" viewBox="0 0 200 200">
-                            {(() => {
-                                // Dynamic calculations
-                                const centerX = 100;
-                                const centerY = 100;
-                                const radius = 100;
-                                const startAngle = -Math.PI / 2; // Start from top
-
-                                // Calculate angles for segments
-                                const completedAngle = (completedPercent / 100) * 2 * Math.PI;
-                                const missedAngle = (missedPercent / 100) * 2 * Math.PI;
-
-                                // Calculate end points
-                                const completedEndX = centerX + radius * Math.cos(startAngle + completedAngle);
-                                const completedEndY = centerY + radius * Math.sin(startAngle + completedAngle);
-
-                                // Calculate mid angles for labels
-                                const completedMidAngle = startAngle + completedAngle / 2;
-                                const missedMidAngle = startAngle + completedAngle + missedAngle / 2;
-
-                                return (
-                                    <>
-                                        {/* Pie Chart Segments */}
-                                        {/* Completed (Blue) */}
-                                        <path
-                                            d={`M ${centerX},${centerY} L ${centerX},${centerY - radius} A ${radius},${radius} 0 ${completedPercent > 50 ? 1 : 0},1 ${completedEndX},${completedEndY} Z`}
-                                            fill="#003F8F"
+                    {/* Pie Chart with Labels - Centered using Recharts */}
+                    <div className="relative flex-shrink-0 mx-auto" style={{ width: '256px', height: '256px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart width={256} height={256}>
+                                <Tooltip content={<CustomTooltip />} />
+                                <Pie
+                                    data={pieChartData}
+                                    cx={128}
+                                    cy={128}
+                                    labelLine={true}
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, value, payload }) => {
+                                        if (!value || value === 0) return null;
+                                        const RADIAN = Math.PI / 180;
+                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                        
+                                        // Calculate label position outside the pie
+                                        const labelRadius = outerRadius + 30;
+                                        const labelX = cx + labelRadius * Math.cos(-midAngle * RADIAN);
+                                        const labelY = cy + labelRadius * Math.sin(-midAngle * RADIAN);
+                                        
+                                        const color = payload?.color || '#003F8F';
+                                        
+                                        return (
+                                            <g>
+                                                <line
+                                                    x1={x}
+                                                    y1={y}
+                                                    x2={labelX}
+                                                    y2={labelY}
+                                                    stroke={color}
+                                                    strokeWidth={2}
+                                                />
+                                                <text
+                                                    x={labelX}
+                                                    y={labelY}
+                                                    fill={color}
+                                                    textAnchor={x > cx ? 'start' : 'end'}
+                                                    dominantBaseline="central"
+                                                    fontSize={18}
+                                                    fontWeight="bold"
+                                                >
+                                                    {value}
+                                                </text>
+                                            </g>
+                                        );
+                                    }}
+                                    outerRadius={100}
+                                    innerRadius={0}
+                                    dataKey="value"
+                                    startAngle={90}
+                                    endAngle={-270}
+                                    paddingAngle={0}
+                                    activeIndex={activeIndex}
+                                    activeShape={(props) => {
+                                        const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+                                        return (
+                                            <g>
+                                                <Sector
+                                                    cx={cx}
+                                                    cy={cy}
+                                                    innerRadius={innerRadius}
+                                                    outerRadius={outerRadius + 10}
+                                                    startAngle={startAngle}
+                                                    endAngle={endAngle}
+                                                    fill={fill}
+                                                    style={{ transition: 'all 0.3s ease' }}
+                                                />
+                                            </g>
+                                        );
+                                    }}
+                                    onMouseEnter={(_, index) => setActiveIndex(index)}
+                                    onMouseLeave={() => setActiveIndex(null)}
+                                    animationDuration={300}
+                                    animationBegin={0}
+                                >
+                                    {pieChartData.map((entry, index) => (
+                                        <Cell 
+                                            key={`cell-${index}`} 
+                                            fill={entry.color}
+                                            stroke={entry.color}
+                                            strokeWidth={activeIndex === index ? 3 : 1}
+                                            style={{
+                                                filter: activeIndex === index ? 'brightness(1.15) drop-shadow(0 4px 8px rgba(0,0,0,0.2))' : 'none',
+                                                transition: 'all 0.3s ease',
+                                                cursor: 'pointer',
+                                                opacity: activeIndex !== null && activeIndex !== index ? 0.7 : 1
+                                            }}
                                         />
-                                        {/* Missed (Orange) */}
-                                        <path
-                                            d={`M ${centerX},${centerY} L ${completedEndX},${completedEndY} A ${radius},${radius} 0 ${missedPercent > 50 ? 1 : 0},1 ${centerX},${centerY - radius} Z`}
-                                            fill="#FB923C"
-                                        />
-
-                                        {/* Lines and Labels for Completed */}
-                                        <g>
-                                            <line
-                                                x1={centerX + 80 * Math.cos(completedMidAngle)}
-                                                y1={centerY + 80 * Math.sin(completedMidAngle)}
-                                                x2={centerX + 130 * Math.cos(completedMidAngle)}
-                                                y2={centerY + 130 * Math.sin(completedMidAngle)}
-                                                stroke="#003F8F"
-                                                strokeWidth="2"
-                                            />
-                                            <text
-                                                x={centerX + 145 * Math.cos(completedMidAngle)}
-                                                y={centerY + 145 * Math.sin(completedMidAngle)}
-                                                fill="#003F8F"
-                                                fontSize="18"
-                                                fontWeight="bold"
-                                                textAnchor="middle"
-                                                dominantBaseline="middle"
-                                            >
-                                                {completed}
-                                            </text>
-                                        </g>
-
-                                        {/* Lines and Labels for Missed */}
-                                        <g>
-                                            <line
-                                                x1={centerX + 80 * Math.cos(missedMidAngle)}
-                                                y1={centerY + 80 * Math.sin(missedMidAngle)}
-                                                x2={centerX + 130 * Math.cos(missedMidAngle)}
-                                                y2={centerY + 130 * Math.sin(missedMidAngle)}
-                                                stroke="#FB923C"
-                                                strokeWidth="2"
-                                            />
-                                            <text
-                                                x={centerX + 145 * Math.cos(missedMidAngle)}
-                                                y={centerY + 145 * Math.sin(missedMidAngle)}
-                                                fill="#FB923C"
-                                                fontSize="18"
-                                                fontWeight="bold"
-                                                textAnchor="middle"
-                                                dominantBaseline="middle"
-                                            >
-                                                {missed}
-                                            </text>
-                                        </g>
-                                    </>
-                                );
-                            })()}
-                        </svg>
+                                    ))}
+                                </Pie>
+                            </PieChart>
+                        </ResponsiveContainer>
                     </div>
 
                     {/* Legend */}

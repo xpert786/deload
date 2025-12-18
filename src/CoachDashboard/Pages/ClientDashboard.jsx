@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { ArchiveIconForCoach, DeleteIconForCoach, EditIconForCoach, LocationIconForCoach, MailIconForCoach, MobileIconForCoach, PercentageIconForCoach, SearchIcon } from '../Components/Icons';
 import ProfileLogo from "../../assets/clientprofile.jpg";
 import { MessageIconForCoach } from '../Components/Icons';
@@ -44,6 +45,7 @@ const notes = [
 const ClientDashboard = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('Overview');
   const [timeRange, setTimeRange] = useState('Weekly');
   const [searchNote, setSearchNote] = useState('');
@@ -51,8 +53,109 @@ const ClientDashboard = () => {
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [clientData, setClientData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingData, setEditingData] = useState({});
+  const [saving, setSaving] = useState(false);
 
   const tabs = ['Overview', 'Workout Calendar', 'Custom Workouts'];
+
+  // Fetch client details from API
+  useEffect(() => {
+    const fetchClientDetails = async () => {
+      if (!id) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError('');
+
+      try {
+        // Get authentication token
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+
+        if (user) {
+          token = user.token || user.access_token || user.authToken || user.accessToken;
+        }
+
+        if (!token && storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+
+        if (!token) {
+          token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+        }
+
+        const isValidToken = token &&
+          typeof token === 'string' &&
+          token.trim().length > 0 &&
+          token.trim() !== 'null' &&
+          token.trim() !== 'undefined' &&
+          token.trim() !== '';
+
+        // Ensure API_BASE_URL doesn't have trailing slash
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        // Check if baseUrl already includes /api, if not add it
+        const apiUrl = baseUrl.includes('/api') 
+          ? `${baseUrl}/clients/${id}/detail/`
+          : `${baseUrl}/api/clients/${id}/detail/`;
+
+        // Prepare headers
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        if (isValidToken) {
+          headers['Authorization'] = `Bearer ${token.trim()}`;
+        }
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: headers,
+          credentials: 'include',
+        });
+
+        let result;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse client details response:', parseError);
+          setError('Failed to parse server response. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        if (response.ok && result.data) {
+          setClientData(result.data);
+          setEditingData(result.data); // Initialize editing data
+        } else {
+          console.error('Failed to fetch client details:', result);
+          setError(result.message || 'Failed to fetch client details. Please try again.');
+        }
+      } catch (err) {
+        console.error('Fetch client details error:', err);
+        setError('Network error: Unable to fetch client details. Please check your connection.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClientDetails();
+  }, [id, user]);
 
   // Calculate total for donut chart
   const total = Object.values(progressData).reduce((sum, val) => sum + val, 0);
@@ -98,9 +201,209 @@ const ClientDashboard = () => {
     };
   });
 
-  const filteredNotes = notes.filter(note =>
-    note.text.toLowerCase().includes(searchNote.toLowerCase())
+  // Prepare notes for display - use API notes if available, otherwise use sample data
+  const getClientNotes = () => {
+    if (!clientData) return notes;
+    
+    // If notes is a string, convert it to array format
+    if (typeof clientData.notes === 'string' && clientData.notes.trim() !== '') {
+      return [{ 
+        id: 1, 
+        date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }), 
+        text: clientData.notes 
+      }];
+    }
+    
+    // If notes is an array, use it
+    if (Array.isArray(clientData.notes) && clientData.notes.length > 0) {
+      return clientData.notes;
+    }
+    
+    // Otherwise use sample data
+    return notes;
+  };
+
+  const clientNotes = getClientNotes();
+  const filteredNotes = clientNotes.filter(note =>
+    (note.text && note.text.toLowerCase().includes(searchNote.toLowerCase())) || 
+    (note.date && note.date.toLowerCase().includes(searchNote.toLowerCase()))
   );
+
+  if (loading) {
+    return (
+      <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
+        <div className="bg-white rounded-xl p-6">
+          <div className="text-center py-8">
+            <p className="text-gray-500">Loading client details...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
+        <div className="bg-white rounded-xl p-6">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!clientData) {
+    return (
+      <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
+        <div className="bg-white rounded-xl p-6">
+          <div className="text-center py-8">
+            <p className="text-gray-500">No client data found.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Format phone number for display
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return 'Not Specified';
+    // Remove any non-digit characters
+    const cleaned = phone.replace(/\D/g, '');
+    // Format as (XXX) XXX-XXXX if 10 digits
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return phone;
+  };
+
+  // Handle edit mode toggle
+  const handleEditClick = () => {
+    setIsEditMode(true);
+    setEditingData({ ...clientData }); // Copy current data to editing state
+  };
+
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEditingData({ ...clientData }); // Reset to original data
+  };
+
+  // Handle save changes
+  const handleSaveChanges = async () => {
+    if (!id) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      if (!isValidToken) {
+        setError('Authentication token not found. Please login again.');
+        setSaving(false);
+        return;
+      }
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Build API URL - use /edit/ endpoint
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/clients/${id}/edit/`
+        : `${baseUrl}/api/clients/${id}/edit/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`,
+      };
+
+      // Prepare request body with edited data
+      const requestBody = {
+        fullname: editingData.fullname || clientData.fullname,
+        email: editingData.email || clientData.email,
+        phone_number: editingData.phone_number || clientData.phone_number,
+        address: editingData.address || clientData.address,
+        city: editingData.city || clientData.city,
+        gender: editingData.gender || clientData.gender,
+        age: editingData.age || clientData.age,
+        level: editingData.level || clientData.level,
+        goals: editingData.goals || clientData.goals,
+        primary_fitness_goal: editingData.primary_fitness_goal || clientData.primary_fitness_goal,
+        equipments_access: editingData.equipments_access || clientData.equipments_access,
+        medical_conditions: editingData.medical_conditions || clientData.medical_conditions,
+        notes: editingData.notes || clientData.notes,
+        weekly_session_goal: editingData.weekly_session_goal || clientData.weekly_session_goal,
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        setError('Failed to parse server response. Please try again.');
+        setSaving(false);
+        return;
+      }
+
+      if (response.ok && result.data) {
+        // Update client data with response
+        setClientData(result.data);
+        setEditingData(result.data);
+        setIsEditMode(false);
+        // Show success message
+        setShowSuccessPopup(true);
+        setTimeout(() => {
+          setShowSuccessPopup(false);
+        }, 3000);
+      } else {
+        setError(result.message || 'Failed to update client details. Please try again.');
+      }
+    } catch (err) {
+      console.error('Update client error:', err);
+      setError('Network error: Unable to update client details. Please check your connection.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
@@ -111,14 +414,28 @@ const ClientDashboard = () => {
           <div className="flex flex-col sm:flex-row items-start gap-4 flex-1">
             <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden flex-shrink-0">
               <img
-                src={ProfileLogo}
+                src={clientData.profile_photo_url || ProfileLogo}
                 alt="Profile"
                 className="w-full h-full object-cover"
               />
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-[#003F8F] font-[Poppins] mb-1">John Doe</h1>
-              <p className="text-sm text-gray-600 font-[Inter] mb-4">Male • 20 yo • Beginner</p>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={editingData.fullname || ''}
+                  onChange={(e) => setEditingData({ ...editingData, fullname: e.target.value })}
+                  className="text-2xl sm:text-3xl font-bold text-[#003F8F] font-[Poppins] mb-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#003F8F]"
+                  placeholder="Full Name"
+                />
+              ) : (
+                <h1 className="text-2xl sm:text-3xl font-bold text-[#003F8F] font-[Poppins] mb-1">
+                  {clientData.fullname || 'N/A'}
+                </h1>
+              )}
+              <p className="text-sm text-gray-600 font-[Inter] mb-4">
+                {clientData.gender_display || 'N/A'} • {clientData.age || 'N/A'} yo • {clientData.level_display || 'N/A'}
+              </p>
 
               {/* Contact Info Table */}
 
@@ -136,10 +453,32 @@ const ClientDashboard = () => {
               <MessageIconForCoach />
               Message
             </button>
-            <button className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
+            <button 
+              onClick={handleEditClick}
+              disabled={isEditMode}
+              className={`px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2 ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
               <EditIconForCoach />
               Edit
             </button>
+            {isEditMode && (
+              <>
+                <button
+                  onClick={handleSaveChanges}
+                  disabled={saving}
+                  className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={saving}
+                  className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
             <button className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
               <ArchiveIconForCoach />
               Archive
@@ -166,17 +505,47 @@ const ClientDashboard = () => {
             {/* Values */}
             <div className="flex items-center gap-2">
               <MailIconForCoach className="w-5 h-5 text-[#003F8F]" />
-              <span>john.doe@email.com</span>
+              {isEditMode ? (
+                <input
+                  type="email"
+                  value={editingData.email || ''}
+                  onChange={(e) => setEditingData({ ...editingData, email: e.target.value })}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F]"
+                  placeholder="Email"
+                />
+              ) : (
+                <span>{clientData.email || 'Not Specified'}</span>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
               <MobileIconForCoach className="w-5 h-5 text-[#003F8F]" />
-              <span>(555) 123-4567</span>
+              {isEditMode ? (
+                <input
+                  type="tel"
+                  value={editingData.phone_number || ''}
+                  onChange={(e) => setEditingData({ ...editingData, phone_number: e.target.value })}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F]"
+                  placeholder="Phone Number"
+                />
+              ) : (
+                <span>{formatPhoneNumber(clientData.phone_number)}</span>
+              )}
             </div>
 
             <div className="flex items-center gap-3">
               <LocationIconForCoach className="w-5 h-5 text-[#003F8F]" />
-              <span>789 New York, USA</span>
+              {isEditMode ? (
+                <input
+                  type="text"
+                  value={editingData.address || editingData.city || ''}
+                  onChange={(e) => setEditingData({ ...editingData, address: e.target.value })}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F]"
+                  placeholder="Address"
+                />
+              ) : (
+                <span>{clientData.address && clientData.address !== 'Not Specified' ? clientData.address : (clientData.city && clientData.city !== 'Not Specified' ? clientData.city : 'Not Specified')}</span>
+              )}
             </div>
           </div>
         </div>
@@ -200,7 +569,7 @@ const ClientDashboard = () => {
 
       {/* Render Workout Calendar when tab is active */}
       {activeTab === 'Workout Calendar' ? (
-        <WorkOut />
+        <WorkOut clientId={id} />
       ) : activeTab === 'Custom Workouts' ? (
         <CustomWorkouts />
       ) : (
@@ -215,7 +584,7 @@ const ClientDashboard = () => {
                 <div className="space-y-3">
                   <div className='border border-gray-200 p-2 rounded-lg'>
                     <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Goal</p>
-                    <p className="text-base font-medium text-gray-500 font-[Inter]">Build Muscle</p>
+                    <p className="text-base font-medium text-gray-500 font-[Inter]">{clientData.primary_fitness_goal || clientData.goals || 'Not Specified'}</p>
                   </div>
                   <div className='border border-gray-200 p-2 rounded-lg'>
                     <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Injury Risk</p>
@@ -403,18 +772,24 @@ const ClientDashboard = () => {
 
               {/* Notes List */}
               <div className="space-y-3">
-                {filteredNotes.map((note) => (
-                  <div key={note.id} className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-xs text-gray-600 font-[Inter] mb-2">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.3181 11.6819 1.33333 8 1.33333C4.3181 1.33333 1.33333 4.3181 1.33333 8C1.33333 11.6819 4.3181 14.6667 8 14.6667Z" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M8 4.66667V8L10.6667 10.6667" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <span className="font-semibold text-[#003F8F]">{note.date}</span>
+                {filteredNotes.length > 0 ? (
+                  filteredNotes.map((note) => (
+                    <div key={note.id} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs text-gray-600 font-[Inter] mb-2">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.3181 11.6819 1.33333 8 1.33333C4.3181 1.33333 1.33333 4.3181 1.33333 8C1.33333 11.6819 4.3181 14.6667 8 14.6667Z" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M8 4.66667V8L10.6667 10.6667" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        <span className="font-semibold text-[#003F8F]">{note.date || 'No date'}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 font-[Inter]">{note.text || ''}</p>
                     </div>
-                    <p className="text-sm text-gray-700 font-[Inter]">{note.text}</p>
+                  ))
+                ) : (
+                  <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500">
+                    {searchNote ? 'No notes found matching your search.' : 'No notes available.'}
                   </div>
-                ))}
+                )}
               </div>
             </div>
 

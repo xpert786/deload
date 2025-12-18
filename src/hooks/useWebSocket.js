@@ -61,8 +61,10 @@ const buildWebSocketUrl = () => {
   // If baseUrl already contains /deload, we don't need to add it again
   const hasDeload = wsUrl.includes('/deload');
   
-  // Updated WebSocket path: only add /deload if it's not already in the URL
-  const wsPath = hasDeload ? '/ws/chat/' : '/deload/ws/chat/';
+  // Updated WebSocket path (Thread Messages API):
+  // - If base already has /deload → use `/ws/messaging/`
+  // - Otherwise → use `/deload/ws/messaging/`
+  const wsPath = hasDeload ? '/ws/messaging/' : '/deload/ws/messaging/';
   
   // Ensure wsUrl doesn't end with / before adding wsPath
   if (wsUrl.endsWith('/')) {
