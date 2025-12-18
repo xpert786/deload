@@ -3,7 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import { listThreads } from '../../services/threadsApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import ThreadDetail from '../../components/ThreadDetail';
-import ProfileLogo from "../../assets/clientprofile.jpg";
 
 const Chat = () => {
   const { user } = useAuth();
@@ -284,11 +283,42 @@ const Chat = () => {
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <img
-                            src={otherUser.photo || ProfileLogo}
-                            alt={otherUser.name}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#003F8F]">
+                            {(() => {
+                              const getInitials = (name) => {
+                                if (!name) return '';
+                                const parts = name.trim().split(' ');
+                                if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+                                return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+                              };
+                              
+                              if (otherUser.photo) {
+                                return (
+                                  <>
+                                    <img
+                                      src={otherUser.photo}
+                                      alt={otherUser.name}
+                                      className="w-full h-full rounded-full object-cover"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        if (e.target.nextSibling) {
+                                          e.target.nextSibling.style.display = 'flex';
+                                        }
+                                      }}
+                                    />
+                                    <span className="text-white text-xs font-semibold hidden">
+                                      {getInitials(otherUser.name)}
+                                    </span>
+                                  </>
+                                );
+                              }
+                              return (
+                                <span className="text-white text-xs font-semibold">
+                                  {getInitials(otherUser.name)}
+                                </span>
+                              );
+                            })()}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm text-[#003F8F] font-[Inter] truncate">
                               {otherUser.name}
@@ -322,13 +352,39 @@ const Chat = () => {
                     ? { name: selectedThread.client_name, photo: selectedThread.client_photo }
                     : { name: selectedThread.coach_name, photo: selectedThread.coach_photo };
                   
+                  const getInitials = (name) => {
+                    if (!name) return '';
+                    const parts = name.trim().split(' ');
+                    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+                    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+                  };
+                  
                   return (
                     <>
-                      <img
-                        src={otherUser.photo || ProfileLogo}
-                        alt={otherUser.name}
-                        className="w-24 h-24 rounded-full object-cover border-4 border-[#E6ECF5]"
-                      />
+                      <div className="w-24 h-24 rounded-full flex items-center justify-center border-4 border-[#E6ECF5] bg-[#003F8F]">
+                        {otherUser.photo ? (
+                          <>
+                            <img
+                              src={otherUser.photo}
+                              alt={otherUser.name}
+                              className="w-full h-full rounded-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                if (e.target.nextSibling) {
+                                  e.target.nextSibling.style.display = 'flex';
+                                }
+                              }}
+                            />
+                            <span className="text-white text-2xl font-semibold hidden">
+                              {getInitials(otherUser.name)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-white text-2xl font-semibold">
+                            {getInitials(otherUser.name)}
+                          </span>
+                        )}
+                      </div>
                       <div>
                         <p className="text-xl font-semibold text-[#003F8F] font-[Poppins]">{otherUser.name}</p>
                       </div>

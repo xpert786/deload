@@ -556,6 +556,7 @@ const LogWorkout = () => {
       // If all sets are done -> completed
       // If any set is skipped -> skipped
       // Otherwise -> pending (but we'll only send done/skipped exercises)
+      // Also include notes if they exist
       const exercisesToUpdate = exercises
         .map(exercise => {
           const allSetsDone = exercise.sets.every(set => set.status === 'done');
@@ -563,9 +564,17 @@ const LogWorkout = () => {
           const hasAnyAction = exercise.sets.some(set => set.status === 'done' || set.status === 'skipped');
           
           if (allSetsDone) {
-            return { id: exercise.id, status: 'completed' };
+            return { 
+              id: exercise.id, 
+              status: 'completed',
+              notes: exercise.notes || null
+            };
           } else if (anySetSkipped && hasAnyAction) {
-            return { id: exercise.id, status: 'skipped' };
+            return { 
+              id: exercise.id, 
+              status: 'skipped',
+              notes: exercise.notes || null
+            };
           }
           return null;
         })
@@ -580,6 +589,7 @@ const LogWorkout = () => {
       // Ensure API_BASE_URL doesn't have trailing slash
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
       // Use the bulk-status API endpoint: /api/log-workout/exercises/bulk-status/
+      // Construct API URL - if baseUrl already includes /api, use it directly, otherwise add /api
       const apiUrl = baseUrl.includes('/api')
         ? `${baseUrl}/log-workout/exercises/bulk-status/`
         : `${baseUrl}/api/log-workout/exercises/bulk-status/`;

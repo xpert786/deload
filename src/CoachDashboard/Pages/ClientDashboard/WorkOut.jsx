@@ -240,6 +240,7 @@ const WorkOut = ({ clientId }) => {
                     instruction: ex.instructions,
                     videoLink: '',
                     status: ex.status_display,
+                    notes: ex.notes || '',
                 })),
             }));
 
@@ -273,6 +274,69 @@ const WorkOut = ({ clientId }) => {
     const isSelectedDayRestDay = useMemo(() => {
         return restDaysMap[selectedDay] !== undefined;
     }, [restDaysMap, selectedDay]);
+
+    // Get selected day's date from weekly_schedule
+    const selectedDayDate = useMemo(() => {
+        if (!calendarData || !calendarData.weekly_schedule) return null;
+        const dayData = calendarData.weekly_schedule.find(d => d.day_abbrev === selectedDay);
+        return dayData?.date || null;
+    }, [calendarData, selectedDay]);
+
+    // Extract exercise notes from weekly_schedule - filtered by selected day
+    const exerciseNotes = useMemo(() => {
+        if (!calendarData || !calendarData.weekly_schedule || !selectedDayDate) return [];
+
+        const notes = [];
+        // Find the selected day in weekly_schedule
+        const selectedDayData = calendarData.weekly_schedule.find(d => d.day_abbrev === selectedDay);
+
+        if (selectedDayData && selectedDayData.sessions && selectedDayData.sessions.length > 0) {
+            selectedDayData.sessions.forEach((session) => {
+                if (session.exercises && session.exercises.length > 0) {
+                    session.exercises.forEach((ex) => {
+                        if (ex.notes && ex.notes.trim() !== '') {
+                            notes.push({
+                                id: `exercise-${ex.id}`,
+                                note: ex.notes,
+                                exercise_name: ex.exercise_name,
+                                exercise_label: ex.exercise_label,
+                                date: selectedDayData.date,
+                                created_at: ex.updated_at || ex.created_at || selectedDayData.date,
+                                type: 'exercise'
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        return notes;
+    }, [calendarData, selectedDay, selectedDayDate]);
+
+    // Filter regular notes by selected day's date
+    const filteredRegularNotes = useMemo(() => {
+        if (!calendarData?.notes?.data || !selectedDayDate) return [];
+
+        const selectedDate = new Date(selectedDayDate);
+        const selectedDateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        return calendarData.notes.data.filter((note) => {
+            if (!note.created_at) return false;
+            const noteDate = new Date(note.created_at);
+            const noteDateStr = noteDate.toISOString().split('T')[0];
+            return noteDateStr === selectedDateStr;
+        });
+    }, [calendarData, selectedDayDate]);
+
+    // Combine regular notes and exercise notes for selected day only
+    const allNotes = useMemo(() => {
+        const combined = [...filteredRegularNotes, ...exerciseNotes];
+        // Sort by date (newest first)
+        return combined.sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return dateB - dateA;
+        });
+    }, [filteredRegularNotes, exerciseNotes]);
 
     const progressPhotos = useMemo(() => {
         if (!calendarData || !calendarData.progress_photos || !calendarData.progress_photos.data) {
@@ -653,25 +717,32 @@ const WorkOut = ({ clientId }) => {
                 <div className="bg-white rounded-xl p-6 space-y-4">
                     <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Notes</h3>
 
-                    {/* Notes List from API */}
+                    {/* Notes List from API - includes both regular notes and exercise notes */}
                     {calendarLoading ? (
                         <div className="text-center py-8 text-gray-500">
                             Loading notes...
                         </div>
-                    ) : calendarData?.notes?.data?.length > 0 ? (
+                    ) : allNotes.length > 0 ? (
                         <div className="space-y-3 max-h-96 overflow-y-auto">
-                            {calendarData.notes.data.map((n, idx) => (
+                            {allNotes.map((n, idx) => (
                                 <div key={n.id || idx} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                    <div className="text-xs text-gray-500 mb-2">
-                                        {n.created_at
-                                            ? new Date(n.created_at).toLocaleString('en-GB', {
-                                                day: '2-digit',
-                                                month: 'short',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })
-                                            : 'No date'}
+                                    <div className="flex items-start justify-between mb-2">
+                                        <div className="text-xs text-gray-500">
+                                            {n.created_at
+                                                ? new Date(n.created_at).toLocaleString('en-GB', {
+                                                    day: '2-digit',
+                                                    month: 'short',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })
+                                                : 'No date'}
+                                        </div>
+                                        {n.type === 'exercise' && n.exercise_name && (
+                                            <span className="text-xs text-[#003F8F] font-semibold bg-blue-100 px-2 py-1 rounded">
+                                                {n.exercise_label || ''} {n.exercise_name}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="text-sm text-gray-800 font-[Inter]">
                                         {n.note || n.text || ''}

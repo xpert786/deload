@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DloadLogo from "../../assets/DloadLogo.png";
 import { BellIcon, SearchIcon } from './icons';
-import ProfileLogo from "../../assets/ProfileLogo.png";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -16,8 +15,18 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
 
   // Fetch client profile picture
   useEffect(() => {
+    // Reset profile image when user changes
+    setProfileImage(null);
+    
+    // Clear old generic localStorage entry
+    localStorage.removeItem('clientProfilePhoto');
+    
     const fetchProfilePicture = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        // Clear profile image if no user
+        setProfileImage(null);
+        return;
+      }
 
       try {
         // Get authentication token
@@ -55,6 +64,10 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
           !token.startsWith('[');
 
         if (!isValidToken) {
+          setProfileImage(null);
+          if (user?.id) {
+            localStorage.removeItem(`clientProfilePhoto_${user.id}`);
+          }
           return;
         }
 
@@ -86,6 +99,8 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
           }
         } catch (parseError) {
           console.error('Failed to parse response:', parseError);
+          setProfileImage(null);
+          localStorage.removeItem('clientProfilePhoto');
           return;
         }
 
@@ -102,13 +117,35 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
             }
             
             imageUrl = imageUrl.trim();
-            setProfileImage(imageUrl);
-            // Store in localStorage for persistence
-            localStorage.setItem('clientProfilePhoto', imageUrl);
+            
+            // Validate image URL before setting
+            if (imageUrl && 
+                imageUrl.trim() !== '' && 
+                imageUrl !== 'null' && 
+                imageUrl !== 'undefined' &&
+                !imageUrl.includes('ProfileLogo') &&
+                !imageUrl.includes('clientprofile')) {
+              setProfileImage(imageUrl);
+              // Store in localStorage with user ID to prevent cross-user issues
+              localStorage.setItem(`clientProfilePhoto_${user.id}`, imageUrl);
+            } else {
+              setProfileImage(null);
+              localStorage.removeItem(`clientProfilePhoto_${user.id}`);
+            }
+          } else {
+            // No profile photo URL in response
+            setProfileImage(null);
+            localStorage.removeItem(`clientProfilePhoto_${user.id}`);
           }
+        } else {
+          // API call failed or no data
+          setProfileImage(null);
+          localStorage.removeItem(`clientProfilePhoto_${user.id}`);
         }
       } catch (err) {
         console.error('Error fetching profile picture:', err);
+        setProfileImage(null);
+        localStorage.removeItem(`clientProfilePhoto_${user?.id}`);
       }
     };
 
@@ -116,23 +153,26 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
     
     // Listen for profile picture updates from Settings page
     const handleProfileUpdate = (event) => {
-      if (event.detail && event.detail.profilePhotoUrl) {
+      if (event.detail && event.detail.profilePhotoUrl && event.detail.userId === user?.id) {
         setProfileImage(event.detail.profilePhotoUrl);
       }
     };
     
     window.addEventListener('profilePictureUpdated', handleProfileUpdate);
     
-    // Also check localStorage on mount and when it changes
-    const storedPhoto = localStorage.getItem('clientProfilePhoto');
-    if (storedPhoto) {
-      setProfileImage(storedPhoto);
-    }
-    
     // Listen for storage changes (when profile is updated in another tab/window)
     const handleStorageChange = (e) => {
-      if (e.key === 'clientProfilePhoto' && e.newValue) {
-        setProfileImage(e.newValue);
+      if (e.key === `clientProfilePhoto_${user?.id}`) {
+        if (e.newValue && 
+            e.newValue.trim() !== '' && 
+            e.newValue !== 'null' && 
+            e.newValue !== 'undefined' &&
+            !e.newValue.includes('ProfileLogo') &&
+            !e.newValue.includes('clientprofile')) {
+          setProfileImage(e.newValue);
+        } else {
+          setProfileImage(null);
+        }
       }
     };
     
@@ -236,17 +276,56 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
           </div>
 
           {/* Profile Image */}
-          <div className="w-10 h-10 rounded-full overflow-hidden mb-[10px] sm:mb-0 border border-gray-200">
-            <img
-              src={profileImage || user?.photo || user?.profile_photo || user?.profile_photo_url || ProfileLogo}
-              alt={user?.name || user?.fullname || "Profile"}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // Fallback to default logo if image fails to load
-                e.target.onerror = null;
-                e.target.src = ProfileLogo;
-              }}
-            />
+          <div className="w-10 h-10 rounded-full overflow-hidden mb-[10px] sm:mb-0 border border-gray-200 flex items-center justify-center">
+            {(() => {
+              const profilePhoto = profileImage || user?.photo || user?.profile_photo || user?.profile_photo_url;
+              const userName = user?.name || user?.fullname || 'U';
+              const getInitials = (name) => {
+                if (!name || name === 'U') return 'U';
+                const parts = name.trim().split(' ');
+                if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+                return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+              };
+              
+              // Check if profilePhoto is valid (not null, not empty, not default placeholder)
+              const isValidPhoto = profilePhoto && 
+                                   profilePhoto.trim() !== '' && 
+                                   profilePhoto !== 'null' && 
+                                   profilePhoto !== 'undefined' &&
+                                   !profilePhoto.includes('ProfileLogo') &&
+                                   !profilePhoto.includes('clientprofile');
+              
+              if (isValidPhoto) {
+                return (
+                  <>
+                    <img
+                      src={profilePhoto}
+                      alt={userName}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        if (e.target.nextSibling) {
+                          e.target.nextSibling.style.display = 'flex';
+                        }
+                        // Clear invalid image from state
+                        setProfileImage(null);
+                        if (user?.id) {
+                          localStorage.removeItem(`clientProfilePhoto_${user.id}`);
+                        }
+                      }}
+                    />
+                    <span className="text-[#003F8F] text-sm font-semibold hidden">
+                      {getInitials(userName)}
+                    </span>
+                  </>
+                );
+              }
+              return (
+                <span className="text-[#003F8F] text-sm font-semibold">
+                  {getInitials(userName)}
+                </span>
+              );
+            })()}
           </div>
         </div>
       </div>

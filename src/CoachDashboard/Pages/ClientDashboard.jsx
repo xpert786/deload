@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ArchiveIconForCoach, DeleteIconForCoach, EditIconForCoach, LocationIconForCoach, MailIconForCoach, MobileIconForCoach, PercentageIconForCoach, SearchIcon } from '../Components/Icons';
-import ProfileLogo from "../../assets/clientprofile.jpg";
 import { MessageIconForCoach } from '../Components/Icons';
 import WorkOut from './ClientDashboard/WorkOut';
 import CustomWorkouts from './ClientDashboard/CustomWorkouts';
@@ -412,12 +411,38 @@ const ClientDashboard = () => {
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
           {/* Profile Image and Info */}
           <div className="flex flex-col sm:flex-row items-start gap-4 flex-1">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden flex-shrink-0">
-              <img
-                src={clientData.profile_photo_url || ProfileLogo}
-                alt="Profile"
-                className="w-full h-full object-cover"
-              />
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center bg-[#003F8F]">
+              {(() => {
+                const profilePhoto = clientData.profile_photo_url;
+                const userName = clientData.fullname || 'U';
+                const getInitials = (name) => {
+                  if (!name || name === 'U') return 'U';
+                  const parts = name.trim().split(' ');
+                  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+                  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+                };
+                
+                if (profilePhoto) {
+                  return (
+                    <img
+                      src={profilePhoto}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        if (e.target.nextSibling) {
+                          e.target.nextSibling.style.display = 'flex';
+                        }
+                      }}
+                    />
+                  );
+                }
+                return (
+                  <span className="text-white text-xl sm:text-2xl font-semibold">
+                    {getInitials(userName)}
+                  </span>
+                );
+              })()}
             </div>
             <div className="flex-1">
               {isEditMode ? (

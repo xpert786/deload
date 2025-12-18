@@ -1,15 +1,215 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DloadLogo from "../../assets/DloadLogo.png";
 import { BellIcon, SearchIcon } from '../../ClientDashboard/Components/icons';
-import ProfileLogo from "../../assets/ProfileLogo.png";
 import NotificationsModal from '../../CoachDashboard/Components/NotificationsModal';
 import AddNewClientModal from '../../CoachDashboard/Components/AddNewClientModal';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
 
 const AdminHeader = ({ isSidebarOpen, toggleSidebar }) => {
   const { user } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
+  const [profileImage, setProfileImage] = useState(null);
+
+  // Fetch admin profile image
+  useEffect(() => {
+    // Reset profile image when user changes
+    setProfileImage(null);
+    
+    // Clear old generic localStorage entry
+    localStorage.removeItem('adminProfilePhoto');
+    
+    const fetchProfileImage = async () => {
+      if (!user?.id) {
+        // Clear profile image if no user
+        setProfileImage(null);
+        return;
+      }
+
+      try {
+        // Get authentication token
+        let token = null;
+        const storedUser = localStorage.getItem('user');
+        
+        if (user) {
+          token = user.token || user.access_token || user.authToken || user.accessToken || user.access;
+        }
+
+        if (!token && storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken || userData.access;
+          } catch (error) {
+            console.error('Error parsing user data:', error);
+          }
+        }
+
+        if (!token) {
+          token = localStorage.getItem('token') || 
+                  localStorage.getItem('access_token') || 
+                  localStorage.getItem('authToken') || 
+                  localStorage.getItem('accessToken') ||
+                  localStorage.getItem('access');
+        }
+
+        const isValidToken = token &&
+          typeof token === 'string' &&
+          token.trim().length > 0 &&
+          token.trim() !== 'null' &&
+          token.trim() !== 'undefined' &&
+          token.trim() !== '' &&
+          !token.startsWith('{') &&
+          !token.startsWith('[');
+
+        if (!isValidToken) {
+          setProfileImage(null);
+          if (user?.id) {
+            localStorage.removeItem(`adminProfilePhoto_${user.id}`);
+          }
+          return;
+        }
+
+        // Ensure API_BASE_URL doesn't have trailing slash
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+        // Check if baseUrl already includes /api, if not add it
+        const apiUrl = baseUrl.includes('/api') 
+          ? `${baseUrl}/admin/profile/`
+          : `${baseUrl}/api/admin/profile/`;
+
+        // Prepare headers
+        const headers = {
+          'Content-Type': 'application/json',
+        };
+
+        const cleanToken = token.trim().replace(/^["']|["']$/g, '');
+        headers['Authorization'] = `Bearer ${cleanToken}`;
+
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          headers: headers,
+          credentials: 'include',
+        });
+
+        let result;
+        try {
+          const responseText = await response.text();
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse response:', parseError);
+          setProfileImage(null);
+          if (user?.id) {
+            localStorage.removeItem(`adminProfilePhoto_${user.id}`);
+          }
+          return;
+        }
+
+        if (response.ok && result.data) {
+          if (result.data.profile_photo_url) {
+            let imageUrl = result.data.profile_photo_url;
+            
+            // If URL is relative, construct full URL
+            if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+              // Remove leading slash if present
+              const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+              // Construct full URL using API base URL
+              const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+              // Remove /api or /deload/api if present to get base domain
+              const domainUrl = baseUrl.replace(/\/api$/, '').replace(/\/deload\/api$/, '').replace(/\/deload$/, '');
+              imageUrl = `${domainUrl}/${cleanUrl}`;
+            }
+            
+            // Ensure URL is properly formatted
+            imageUrl = imageUrl.trim();
+            
+            // Validate image URL before setting
+            if (imageUrl && 
+                imageUrl.trim() !== '' && 
+                imageUrl !== 'null' && 
+                imageUrl !== 'undefined' &&
+                !imageUrl.includes('ProfileLogo') &&
+                !imageUrl.includes('clientprofile')) {
+              setProfileImage(imageUrl);
+              // Store in localStorage with user ID to prevent cross-user issues
+              if (user?.id) {
+                localStorage.setItem(`adminProfilePhoto_${user.id}`, imageUrl);
+              }
+            } else {
+              setProfileImage(null);
+              if (user?.id) {
+                localStorage.removeItem(`adminProfilePhoto_${user.id}`);
+              }
+            }
+          } else {
+            // No profile photo URL in response
+            setProfileImage(null);
+            if (user?.id) {
+              localStorage.removeItem(`adminProfilePhoto_${user.id}`);
+            }
+          }
+        } else {
+          // API call failed or no data
+          setProfileImage(null);
+          if (user?.id) {
+            localStorage.removeItem(`adminProfilePhoto_${user.id}`);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching admin profile image:', err);
+        setProfileImage(null);
+        if (user?.id) {
+          localStorage.removeItem(`adminProfilePhoto_${user?.id}`);
+        }
+      }
+    };
+
+    fetchProfileImage();
+  }, [user]);
+
+  // Listen for profile image updates from settings page
+  useEffect(() => {
+    const handleProfileImageUpdate = (event) => {
+      if (event.detail && event.detail.imageUrl && event.detail.userId === user?.id) {
+        // Update profile image with the new URL from settings
+        setProfileImage(event.detail.imageUrl);
+      }
+    };
+
+    window.addEventListener('profileImageUpdated', handleProfileImageUpdate);
+    
+    // Listen for storage changes (when profile is updated in another tab/window)
+    const handleStorageChange = (e) => {
+      if (e.key === `adminProfilePhoto_${user?.id}`) {
+        if (e.newValue && 
+            e.newValue.trim() !== '' && 
+            e.newValue !== 'null' && 
+            e.newValue !== 'undefined' &&
+            !e.newValue.includes('ProfileLogo') &&
+            !e.newValue.includes('clientprofile')) {
+          setProfileImage(e.newValue);
+        } else {
+          setProfileImage(null);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+
+    // Cleanup event listener on unmount
+    return () => {
+      window.removeEventListener('profileImageUpdated', handleProfileImageUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [user]);
 
   return (
     <>
@@ -131,12 +331,56 @@ const AdminHeader = ({ isSidebarOpen, toggleSidebar }) => {
           />
         </div>
 
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden">
-          <img
-            src={ProfileLogo}
-            alt={user?.name || "Profile"}
-            className="w-full h-full object-cover"
-          />
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center">
+          {(() => {
+            const profilePhoto = profileImage || user?.photo || user?.profile_photo || user?.profile_photo_url;
+            const userName = user?.name || user?.fullname || 'U';
+            const getInitials = (name) => {
+              if (!name || name === 'U') return 'U';
+              const parts = name.trim().split(' ');
+              if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+              return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+            };
+            
+            // Check if profilePhoto is valid (not null, not empty, not default placeholder)
+            const isValidPhoto = profilePhoto && 
+                                 profilePhoto.trim() !== '' && 
+                                 profilePhoto !== 'null' && 
+                                 profilePhoto !== 'undefined' &&
+                                 !profilePhoto.includes('ProfileLogo') &&
+                                 !profilePhoto.includes('clientprofile');
+            
+            if (isValidPhoto) {
+              return (
+                <>
+                  <img
+                    src={profilePhoto}
+                    alt={userName}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      if (e.target.nextSibling) {
+                        e.target.nextSibling.style.display = 'flex';
+                      }
+                      // Clear invalid image from state
+                      setProfileImage(null);
+                      if (user?.id) {
+                        localStorage.removeItem(`adminProfilePhoto_${user.id}`);
+                      }
+                    }}
+                  />
+                  <span className="text-[#003F8F] text-xs font-semibold hidden">
+                    {getInitials(userName)}
+                  </span>
+                </>
+              );
+            }
+            return (
+              <span className="text-[#003F8F] text-xs font-semibold">
+                {getInitials(userName)}
+              </span>
+            );
+          })()}
         </div>
       </div>
 

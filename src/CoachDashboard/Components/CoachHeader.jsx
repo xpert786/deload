@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import DloadLogo from "../../assets/DloadLogo.png";
 import { BellIcon, SearchIcon } from '../../ClientDashboard/Components/icons';
-import ProfileLogo from "../../assets/ProfileLogo.png";
 import AddNewClientModal from './AddNewClientModal';
 import NotificationsModal from './NotificationsModal';
 
@@ -16,8 +15,18 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
 
   // Fetch coach profile image
   useEffect(() => {
+    // Reset profile image when user changes
+    setProfileImage(null);
+    
+    // Clear old generic localStorage entry
+    localStorage.removeItem('coachProfilePhoto');
+    
     const fetchProfileImage = async () => {
-      if (!user) return;
+      if (!user?.id) {
+        // Clear profile image if no user
+        setProfileImage(null);
+        return;
+      }
 
       try {
         // Get authentication token
@@ -25,20 +34,24 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
         const storedUser = localStorage.getItem('user');
         
         if (user) {
-          token = user.token || user.access_token || user.authToken || user.accessToken;
+          token = user.token || user.access_token || user.authToken || user.accessToken || user.access;
         }
 
         if (!token && storedUser) {
           try {
             const userData = JSON.parse(storedUser);
-            token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+            token = userData.token || userData.access_token || userData.authToken || userData.accessToken || userData.access;
           } catch (error) {
             console.error('Error parsing user data:', error);
           }
         }
 
         if (!token) {
-          token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+          token = localStorage.getItem('token') || 
+                  localStorage.getItem('access_token') || 
+                  localStorage.getItem('authToken') || 
+                  localStorage.getItem('accessToken') ||
+                  localStorage.getItem('access');
         }
 
         const isValidToken = token &&
@@ -46,7 +59,17 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
           token.trim().length > 0 &&
           token.trim() !== 'null' &&
           token.trim() !== 'undefined' &&
-          token.trim() !== '';
+          token.trim() !== '' &&
+          !token.startsWith('{') &&
+          !token.startsWith('[');
+
+        if (!isValidToken) {
+          setProfileImage(null);
+          if (user?.id) {
+            localStorage.removeItem(`coachProfilePhoto_${user.id}`);
+          }
+          return;
+        }
 
         // Ensure API_BASE_URL doesn't have trailing slash
         const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
@@ -60,9 +83,8 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
           'Content-Type': 'application/json',
         };
 
-        if (isValidToken) {
-          headers['Authorization'] = `Bearer ${token.trim()}`;
-        }
+        const cleanToken = token.trim().replace(/^["']|["']$/g, '');
+        headers['Authorization'] = `Bearer ${cleanToken}`;
 
         const response = await fetch(apiUrl, {
           method: 'GET',
@@ -80,30 +102,69 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
           }
         } catch (parseError) {
           console.error('Failed to parse response:', parseError);
+          setProfileImage(null);
+          if (user?.id) {
+            localStorage.removeItem(`coachProfilePhoto_${user.id}`);
+          }
           return;
         }
 
-        if (response.ok && result.data && result.data.profile_photo_url) {
-          let imageUrl = result.data.profile_photo_url;
-          
-          // If URL is relative, construct full URL
-          if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-            // Remove leading slash if present
-            const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
-            // Construct full URL using API base URL
-            const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-            // Remove /api or /deload/api if present to get base domain
-            const domainUrl = baseUrl.replace(/\/api$/, '').replace(/\/deload\/api$/, '').replace(/\/deload$/, '');
-            imageUrl = `${domainUrl}/${cleanUrl}`;
+        if (response.ok && result.data) {
+          if (result.data.profile_photo_url) {
+            let imageUrl = result.data.profile_photo_url;
+            
+            // If URL is relative, construct full URL
+            if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+              // Remove leading slash if present
+              const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+              // Construct full URL using API base URL
+              const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+              // Remove /api or /deload/api if present to get base domain
+              const domainUrl = baseUrl.replace(/\/api$/, '').replace(/\/deload\/api$/, '').replace(/\/deload$/, '');
+              imageUrl = `${domainUrl}/${cleanUrl}`;
+            }
+            
+            // Ensure URL is properly formatted
+            imageUrl = imageUrl.trim();
+            
+            // Validate image URL before setting
+            if (imageUrl && 
+                imageUrl.trim() !== '' && 
+                imageUrl !== 'null' && 
+                imageUrl !== 'undefined' &&
+                !imageUrl.includes('ProfileLogo') &&
+                !imageUrl.includes('clientprofile')) {
+              setProfileImage(imageUrl);
+              // Store in localStorage with user ID to prevent cross-user issues
+              if (user?.id) {
+                localStorage.setItem(`coachProfilePhoto_${user.id}`, imageUrl);
+              }
+            } else {
+              setProfileImage(null);
+              if (user?.id) {
+                localStorage.removeItem(`coachProfilePhoto_${user.id}`);
+              }
+            }
+          } else {
+            // No profile photo URL in response
+            setProfileImage(null);
+            if (user?.id) {
+              localStorage.removeItem(`coachProfilePhoto_${user.id}`);
+            }
           }
-          
-          // Ensure URL is properly formatted
-          imageUrl = imageUrl.trim();
-          setProfileImage(imageUrl);
+        } else {
+          // API call failed or no data
+          setProfileImage(null);
+          if (user?.id) {
+            localStorage.removeItem(`coachProfilePhoto_${user.id}`);
+          }
         }
       } catch (err) {
         console.error('Error fetching coach profile image:', err);
-        // Don't set error state, just use default image
+        setProfileImage(null);
+        if (user?.id) {
+          localStorage.removeItem(`coachProfilePhoto_${user?.id}`);
+        }
       }
     };
 
@@ -113,19 +174,38 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
   // Listen for profile image updates from settings page
   useEffect(() => {
     const handleProfileImageUpdate = (event) => {
-      if (event.detail && event.detail.imageUrl) {
+      if (event.detail && event.detail.imageUrl && event.detail.userId === user?.id) {
         // Update profile image with the new URL from settings
         setProfileImage(event.detail.imageUrl);
       }
     };
 
     window.addEventListener('profileImageUpdated', handleProfileImageUpdate);
+    
+    // Listen for storage changes (when profile is updated in another tab/window)
+    const handleStorageChange = (e) => {
+      if (e.key === `coachProfilePhoto_${user?.id}`) {
+        if (e.newValue && 
+            e.newValue.trim() !== '' && 
+            e.newValue !== 'null' && 
+            e.newValue !== 'undefined' &&
+            !e.newValue.includes('ProfileLogo') &&
+            !e.newValue.includes('clientprofile')) {
+          setProfileImage(e.newValue);
+        } else {
+          setProfileImage(null);
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
 
     // Cleanup event listener on unmount
     return () => {
       window.removeEventListener('profileImageUpdated', handleProfileImageUpdate);
+      window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [user]);
 
   return (
     <>
@@ -274,19 +354,56 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
           />
         </div>
 
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden">
-          <img
-            src={profileImage || ProfileLogo}
-            alt={user?.name || user?.fullname || "Profile"}
-            className="w-full h-full object-cover"
-            key={profileImage || 'default'} // Force re-render when image changes
-            onError={(e) => {
-              // Fallback to default image if profile image fails to load
-              if (e.target.src !== ProfileLogo && !e.target.src.includes(ProfileLogo)) {
-                e.target.src = ProfileLogo;
-              }
-            }}
-          />
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full overflow-hidden border border-gray-200 flex items-center justify-center">
+          {(() => {
+            const profilePhoto = profileImage || user?.photo || user?.profile_photo || user?.profile_photo_url;
+            const userName = user?.name || user?.fullname || 'U';
+            const getInitials = (name) => {
+              if (!name || name === 'U') return 'U';
+              const parts = name.trim().split(' ');
+              if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+              return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+            };
+            
+            // Check if profilePhoto is valid (not null, not empty, not default placeholder)
+            const isValidPhoto = profilePhoto && 
+                                 profilePhoto.trim() !== '' && 
+                                 profilePhoto !== 'null' && 
+                                 profilePhoto !== 'undefined' &&
+                                 !profilePhoto.includes('ProfileLogo') &&
+                                 !profilePhoto.includes('clientprofile');
+            
+            if (isValidPhoto) {
+              return (
+                <>
+                  <img
+                    src={profilePhoto}
+                    alt={userName}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      if (e.target.nextSibling) {
+                        e.target.nextSibling.style.display = 'flex';
+                      }
+                      // Clear invalid image from state
+                      setProfileImage(null);
+                      if (user?.id) {
+                        localStorage.removeItem(`coachProfilePhoto_${user.id}`);
+                      }
+                    }}
+                  />
+                  <span className="text-[#003F8F] text-xs font-semibold hidden">
+                    {getInitials(userName)}
+                  </span>
+                </>
+              );
+            }
+            return (
+              <span className="text-[#003F8F] text-xs font-semibold">
+                {getInitials(userName)}
+              </span>
+            );
+          })()}
         </div>
       </div>
 

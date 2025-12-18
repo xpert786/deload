@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { getThreadMessages } from '../services/threadsApi';
-import ProfileLogo from '../assets/clientprofile.jpg';
 
 const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
   const [messages, setMessages] = useState([]);
@@ -73,14 +72,25 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     };
   }
 
+  // Helper function to get first letter of name
+  const getInitials = (name) => {
+    if (!name) return '';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  };
+
   // Avatar logic:
   // - Coach view  : left (received) shows client, right (sent) shows coach
   // - Client view : left (received) shows coach, right (sent) shows client
-  const clientAvatar = thread.client_photo || ProfileLogo;
-  const coachAvatar = thread.coach_photo || ProfileLogo;
+  const clientAvatar = thread.client_photo || null;
+  const coachAvatar = thread.coach_photo || null;
   
   const otherAvatar = isCoach ? clientAvatar : coachAvatar;
   const selfAvatar = isCoach ? coachAvatar : clientAvatar;
+  
+  const otherName = isCoach ? (thread.client_name || 'Client') : (thread.coach_name || 'Coach');
+  const selfName = isCoach ? (thread.coach_name || 'Coach') : (thread.client_name || 'Client');
 
   // Load messages
   const loadMessages = useCallback(async (offset = 0, append = false) => {
@@ -421,11 +431,24 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
               </svg>
             </button>
           )}
-          <img
-            src={otherUser.photo || ProfileLogo}
-            alt={otherUser.name}
-            className="w-10 h-10 rounded-full object-cover"
-          />
+          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#003F8F]">
+            {otherUser.photo ? (
+              <img
+                src={otherUser.photo}
+                alt={otherUser.name}
+                className="w-full h-full rounded-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  if (e.target.nextSibling) {
+                    e.target.nextSibling.style.display = 'flex';
+                  }
+                }}
+              />
+            ) : null}
+            <span className={`text-white text-sm font-semibold ${otherUser.photo ? 'hidden' : 'flex'}`}>
+              {getInitials(otherUser.name)}
+            </span>
+          </div>
           <div>
             <p className="font-semibold font-[Inter]">{otherUser.name}</p>
             {isTyping && (
@@ -467,7 +490,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
           </div>
         )}
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {messages.map((msg) => {
             const isOwnMessage = msg.sender_id === currentUserId || msg.sender === currentUserId;
             
@@ -479,17 +502,40 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                 {!isOwnMessage && (
                   <div className="flex items-start gap-2 max-w-[70%]">
                     <div className="flex-shrink-0">
-                      <img
-                        src={otherAvatar}
-                        alt={otherUser.name}
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
+                      {otherAvatar ? (
+                        <>
+                          <img
+                            src={otherAvatar}
+                            alt={otherUser.name}
+                            className="w-8 h-8 rounded-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              if (e.target.nextSibling) {
+                                e.target.nextSibling.style.display = 'flex';
+                              }
+                            }}
+                          />
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold hidden"
+                            style={{ backgroundColor: '#003F8F' }}
+                          >
+                            {getInitials(otherUser.name)}
+                          </div>
+                        </>
+                      ) : (
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                          style={{ backgroundColor: '#003F8F' }}
+                        >
+                          {getInitials(otherUser.name)}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex flex-col items-start">
-                      <div className="rounded-2xl px-4 py-3 text-sm font-[Inter] bg-[#F3701EB2] text-white leading-relaxed break-words whitespace-normal max-w-xs sm:max-w-sm">
+                    <div className="flex flex-col items-start flex-1">
+                      <div className="rounded-2xl px-4 py-3 text-sm font-[Inter] bg-[#F3701E] text-white leading-relaxed break-words whitespace-normal max-w-xs sm:max-w-sm">
                         {msg.content}
                       </div>
-                      <div className="mt-1.5">
+                      <div className="mt-1">
                         <span className="text-xs text-gray-500 font-[Inter]">
                           {formatTime(msg.created_at)}
                         </span>
@@ -498,28 +544,51 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                   </div>
                 )}
                 {isOwnMessage && (
-                  <div className="flex items-start gap-2 max-w-[70%]">
-                    <div className="flex flex-col items-end">
-                      <div className="rounded-2xl px-4 py-3 text-sm font-[Inter] bg-[#003F8FB2] text-white leading-relaxed break-words whitespace-normal max-w-xs sm:max-w-sm">
+                  <div className="flex items-start gap-2 max-w-[70%] ml-auto">
+                    <div className="flex flex-col items-end flex-1">
+                      <div className="rounded-2xl px-4 py-3 text-sm font-[Inter] bg-[#003F8F] text-white leading-relaxed break-words whitespace-normal max-w-xs sm:max-w-sm">
                         {msg.content}
                       </div>
-                      <div className="mt-1.5 flex items-center gap-1">
+                      <div className="mt-1 flex items-center gap-1.5 justify-end">
                         <span className="text-xs text-gray-500 font-[Inter]">
                           {formatTime(msg.created_at)}
                         </span>
                         {msg.is_read && (
                           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M2 8L6 12L14 4" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M2 8L6 12L14 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                         )}
                       </div>
                     </div>
                     <div className="flex-shrink-0">
-                      <img
-                        src={selfAvatar}
-                        alt={isCoach ? 'You' : 'Client'}
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
+                      {selfAvatar ? (
+                        <>
+                          <img
+                            src={selfAvatar}
+                            alt={isCoach ? 'You' : 'Client'}
+                            className="w-8 h-8 rounded-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              if (e.target.nextSibling) {
+                                e.target.nextSibling.style.display = 'flex';
+                              }
+                            }}
+                          />
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold hidden"
+                            style={{ backgroundColor: '#003F8F' }}
+                          >
+                            {getInitials(selfName)}
+                          </div>
+                        </>
+                      ) : (
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                          style={{ backgroundColor: '#003F8F' }}
+                        >
+                          {getInitials(selfName)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -531,28 +600,58 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
       </div>
 
       {/* Message Input */}
-      <div className="border-t border-gray-200 p-4 bg-gray-50">
+      <div className="border-t border-gray-200 p-4 bg-white">
         <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-[20px] px-4 py-3">
-          <input
-            type="text"
-            value={messageInput}
-            onChange={(e) => {
-              setMessageInput(e.target.value);
-              setError(null); // Clear error when typing
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (messageInput.trim() && !sending) {
-                  handleSendMessage();
+          {/* Attachment Icon */}
+          <button
+            type="button"
+            className="text-gray-500 hover:text-gray-700 transition-colors"
+            title="Attach file"
+          >
+            
+          </button>
+          
+          <div className="flex-1 flex items-center gap-2">
+            <svg width="25" height="27" viewBox="0 0 25 27" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+              <path d="M11.7853 3.51144C12.2667 2.97827 12.8413 2.55365 13.4758 2.26219C14.1103 1.97074 14.7921 1.81825 15.4816 1.81359C16.1711 1.80892 16.8546 1.95217 17.4925 2.23501C18.1303 2.51786 18.7098 2.93467 19.1974 3.46128C19.6849 3.98789 20.0708 4.61381 20.3326 5.30273C20.5944 5.99164 20.7269 6.72985 20.7225 7.47452C20.7181 8.21919 20.5768 8.9555 20.3068 9.64073C20.0369 10.326 19.6436 10.9465 19.1499 11.4663L11.0488 20.2166C10.7596 20.5342 10.4149 20.7868 10.0348 20.9599C9.65466 21.1329 9.24657 21.223 8.83405 21.2248C8.42153 21.2267 8.01275 21.1404 7.63129 20.9707C7.24983 20.8011 6.90324 20.5516 6.61151 20.2366C6.31977 19.9216 6.08868 19.5474 5.93154 19.1355C5.77441 18.7235 5.69435 18.2821 5.69598 17.8365C5.69761 17.391 5.7809 16.9502 5.94105 16.5397C6.10119 16.1291 6.33502 15.7568 6.62905 15.4443L14.7311 6.69406L16.204 8.28481L8.10197 17.0351C8.00248 17.1388 7.92312 17.263 7.86853 17.4002C7.81394 17.5375 7.7852 17.6851 7.784 17.8345C7.7828 17.9839 7.80915 18.132 7.86153 18.2703C7.9139 18.4085 7.99125 18.5341 8.08906 18.6398C8.18686 18.7454 8.30316 18.8289 8.43118 18.8855C8.5592 18.9421 8.69636 18.9705 8.83468 18.9692C8.97299 18.9679 9.10968 18.9369 9.23676 18.8779C9.36385 18.819 9.47879 18.7333 9.57488 18.6258L17.678 9.87557C17.9682 9.56214 18.1984 9.19005 18.3555 8.78054C18.5125 8.37104 18.5934 7.93213 18.5934 7.48888C18.5934 7.04563 18.5125 6.60672 18.3555 6.19721C18.1984 5.7877 17.9682 5.41561 17.678 5.10219C17.3878 4.78877 17.0433 4.54014 16.6641 4.37052C16.2849 4.2009 15.8785 4.11359 15.4681 4.11359C15.0577 4.11359 14.6513 4.2009 14.2721 4.37052C13.893 4.54014 13.5484 4.78877 13.2582 5.10219L5.15613 13.8536C4.20739 14.9145 3.68242 16.3353 3.69429 17.8102C3.70616 19.2851 4.25391 20.6959 5.21958 21.7388C6.18525 22.7817 7.49156 23.3733 8.85717 23.3861C10.2228 23.3989 11.5384 22.832 12.5207 21.8073L21.3603 12.2617L22.8332 13.8536L13.9947 23.3992C12.6272 24.8761 10.7724 25.7058 8.83842 25.7058C6.90446 25.7058 5.0497 24.8761 3.68218 23.3992C2.31465 21.9223 1.54639 19.9191 1.54639 17.8304C1.54639 15.7418 2.31465 13.7386 3.68218 12.2617L11.7853 3.51144Z" fill="#4D6080" fillOpacity="0.1"/>
+            </svg>
+            <input
+              type="text"
+              value={messageInput}
+              onChange={(e) => {
+                setMessageInput(e.target.value);
+                setError(null); // Clear error when typing
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (messageInput.trim() && !sending) {
+                    handleSendMessage();
+                  }
                 }
-              }
-            }}
-            placeholder="Type a message"
-            disabled={sending}
-            className="flex-1 py-1 text-sm text-gray-700 font-[Inter] focus:outline-none bg-transparent disabled:opacity-50"
-            autoFocus
-          />
+              }}
+              placeholder="Type a message"
+              disabled={sending}
+              className="flex-1 py-1 text-sm text-gray-700 font-[Inter] focus:outline-none bg-transparent disabled:opacity-50"
+              autoFocus
+            />
+          </div>
+          
+          {/* Emoji Icon */}
+          <button
+            type="button"
+            className="text-gray-500 hover:text-gray-700 transition-colors"
+            title="Add emoji"
+          >
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 18.3333C14.6024 18.3333 18.3333 14.6024 18.3333 10C18.3333 5.39763 14.6024 1.66667 10 1.66667C5.39763 1.66667 1.66667 5.39763 1.66667 10C1.66667 14.6024 5.39763 18.3333 10 18.3333Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M7.5 8.33333C7.96024 8.33333 8.33333 7.96024 8.33333 7.5C8.33333 7.03976 7.96024 6.66667 7.5 6.66667C7.03976 6.66667 6.66667 7.03976 6.66667 7.5C6.66667 7.96024 7.03976 8.33333 7.5 8.33333Z" fill="currentColor"/>
+              <path d="M12.5 8.33333C12.9602 8.33333 13.3333 7.96024 13.3333 7.5C13.3333 7.03976 12.9602 6.66667 12.5 6.66667C12.0398 6.66667 11.6667 7.03976 11.6667 7.5C11.6667 7.96024 12.0398 8.33333 12.5 8.33333Z" fill="currentColor"/>
+              <path d="M6.66667 12.5C7.16667 13.8333 8.5 14.6667 10 14.6667C11.5 14.6667 12.8333 13.8333 13.3333 12.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          
+          {/* Send Button */}
           <button
             onClick={(e) => {
               e.preventDefault();
