@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { listThreads, createThread } from '../../services/threadsApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import ThreadDetail from '../../components/ThreadDetail';
+import CoachThreadDetail from '../Components/CoachThreadDetail';
 import ProfileLogo from "../../assets/clientprofile.jpg";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -170,12 +170,21 @@ const Messages = () => {
   }, []);
 
   // Initialize WebSocket for thread list updates
-  useWebSocket(
+  const { isConnected: wsConnected, connectionStatus: wsStatus } = useWebSocket(
     handleWebSocketMessage,
     handleWebSocketError,
     handleWebSocketConnect,
     handleWebSocketDisconnect
   );
+  
+  // Debug WebSocket connection status
+  useEffect(() => {
+    console.log('📡 Messages.jsx - WebSocket status:', {
+      isConnected: wsConnected,
+      connectionStatus: wsStatus,
+      currentUserId: currentUserId
+    });
+  }, [wsConnected, wsStatus, currentUserId]);
 
   // Handle thread selection
   const handleThreadSelect = (thread) => {
@@ -419,7 +428,29 @@ const Messages = () => {
         <div className="w-1/3 min-w-[300px] bg-white rounded-[12px] border-r border-gray-200 flex flex-col mt-4 mb-4" style={{ maxHeight: '90vh' }}>
           {/* Messages Header */}
           <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
-            <h2 className="text-xl font-bold text-[#003F8F] font-[Poppins]">Messages</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-bold text-[#003F8F] font-[Poppins]">Messages</h2>
+              {/* WebSocket Connection Status Indicator */}
+              <div className="flex items-center gap-1.5">
+                {wsConnected ? (
+                  <div className="flex items-center gap-1" title="WebSocket Connected">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-xs text-gray-500 font-[Inter]">Connected</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1" title={`WebSocket ${wsStatus}`}>
+                    <div className={`w-2 h-2 rounded-full ${
+                      wsStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
+                      wsStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
+                    }`}></div>
+                    <span className="text-xs text-gray-500 font-[Inter]">
+                      {wsStatus === 'connecting' ? 'Connecting...' : 
+                       wsStatus === 'error' ? 'Error' : 'Disconnected'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
             <button
               onClick={handleComposeClick}
               className="flex items-center gap-2 px-4 py-2 bg-[#003F8F] text-white rounded-lg hover:bg-[#002d66] transition-colors text-sm font-[Inter]"
@@ -570,7 +601,7 @@ const Messages = () => {
         <div className="flex-1 flex flex-col bg-[#F7F7F7]">
           {selectedThread ? (
             <div className="flex-1 flex flex-col m-4">
-              <ThreadDetail
+              <CoachThreadDetail
                 thread={selectedThread}
                 currentUserId={currentUserId}
                 onBack={null}

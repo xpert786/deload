@@ -1,9 +1,19 @@
-// ThreadDetail Component - Shared chat view for both coach and client
+// ClientThreadDetail Component - Chat view specifically for clients
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useWebSocket } from '../hooks/useWebSocket';
-import { getThreadMessages } from '../services/threadsApi';
+import { useWebSocket } from '../../hooks/useWebSocket';
+import { getThreadMessages } from '../../services/threadsApi';
 
-const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
+const ClientThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
+  // Normalize currentUserId - extract numeric part if it's a string like "client_21"
+  const normalizedCurrentUserId = React.useMemo(() => {
+    if (!currentUserId) return null;
+    const str = String(currentUserId);
+    const numericPart = str.replace(/\D/g, '');
+    return numericPart || currentUserId;
+  }, [currentUserId]);
+  
+  const effectiveCurrentUserId = normalizedCurrentUserId || currentUserId;
+  
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,58 +29,18 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
   const typingTimeoutRef = useRef(null);
   const typingDebounceRef = useRef(null);
 
-  // Determine the other user (receiver)
-  // Check multiple ways to determine if current user is coach
-  const threadCoachId = thread.coach || thread.coach_id;
-  const threadClientId = thread.client || thread.client_id;
-  
-  // Convert to numbers/strings for comparison - handle both string and number IDs
-  const normalizeId = (id) => {
-    if (id == null) return null;
-    return typeof id === 'string' ? parseInt(id) : id;
+  // For client view: current user is always the client, other user is always the coach
+  const coachUser = {
+    id: thread.coach || thread.coach_id,
+    name: thread.coach_name || 'Coach',
+    photo: thread.coach_photo || null,
   };
-  
-  const coachIdNormalized = normalizeId(threadCoachId);
-  const currentUserIdNormalized = normalizeId(currentUserId);
-  const isCoach = coachIdNormalized === currentUserIdNormalized || 
-                  String(threadCoachId) === String(currentUserId) ||
-                  threadCoachId == currentUserId; // Loose equality for type coercion
-  
-  // Debug logging
-  console.log('ThreadDetail - Determining otherUser:', {
-    threadId: thread.id,
-    threadCoach: thread.coach,
-    threadCoachId: thread.coach_id,
-    coachIdNormalized: coachIdNormalized,
-    currentUserId: currentUserId,
-    currentUserIdNormalized: currentUserIdNormalized,
-    isCoach: isCoach,
-    client: thread.client,
-    client_id: thread.client_id,
-    client_name: thread.client_name,
-    client_email: thread.client_email,
-    coach_name: thread.coach_name,
-    stringComparison: String(threadCoachId) === String(currentUserId),
-    fullThread: thread
-  });
-  
-  // Determine conversation counterpart:
-  // - Coach view  : other user = client
-  // - Client view : other user = coach
-  let otherUser;
-  if (isCoach) {
-    otherUser = {
-      id: threadClientId,
-      name: thread.client_name || 'Client',
-      photo: thread.client_photo || null,
-    };
-  } else {
-    otherUser = {
-      id: threadCoachId,
-      name: thread.coach_name || 'Coach',
-      photo: thread.coach_photo || null,
-    };
-  }
+
+  const clientUser = {
+    id: thread.client || thread.client_id,
+    name: thread.client_name || 'Client',
+    photo: thread.client_photo || null,
+  };
 
   // Helper function to get first letter of name
   const getInitials = (name) => {
@@ -80,17 +50,13 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
   };
 
-  // Avatar logic:
-  // - Coach view  : left (received) shows client, right (sent) shows coach
-  // - Client view : left (received) shows coach, right (sent) shows client
-  const clientAvatar = thread.client_photo || null;
-  const coachAvatar = thread.coach_photo || null;
-  
-  const otherAvatar = isCoach ? clientAvatar : coachAvatar;
-  const selfAvatar = isCoach ? coachAvatar : clientAvatar;
-  
-  const otherName = isCoach ? (thread.client_name || 'Client') : (thread.coach_name || 'Coach');
-  const selfName = isCoach ? (thread.coach_name || 'Coach') : (thread.client_name || 'Client');
+  // Helper function to extract numeric ID
+  const extractNumericId = (id) => {
+    if (id == null || id === undefined) return null;
+    const str = String(id);
+    const numericPart = str.replace(/\D/g, '');
+    return numericPart ? numericPart : null;
+  };
 
   // Load messages
   const loadMessages = useCallback(async (offset = 0, append = false) => {
@@ -104,10 +70,33 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
       const result = await getThreadMessages(thread.id, 50, offset);
       
       if (result.data) {
+        // Sort messages by created_at in ascending order (oldest first, newest last)
+        const sortedMessages = [...result.data].sort((a, b) => {
+          const dateA = new Date(a.created_at || a.createdAt || 0);
+          const dateB = new Date(b.created_at || b.createdAt || 0);
+          return dateA - dateB; // Ascending: oldest first
+        });
+        
         if (append) {
-          setMessages(prev => [...result.data.reverse(), ...prev]);
+          // When loading older messages, prepend them to existing messages
+          setMessages(prev => {
+            const combined = [...sortedMessages, ...prev];
+            // Re-sort combined array to ensure correct order
+            return combined.sort((a, b) => {
+              const dateA = new Date(a.created_at || a.createdAt || 0);
+              const dateB = new Date(b.created_at || b.createdAt || 0);
+              return dateA - dateB;
+            });
+          });
         } else {
-          setMessages(result.data.reverse()); // Reverse to show oldest first
+          // Initial load: set sorted messages
+          setMessages(sortedMessages);
+          // Scroll to bottom after initial load to show most recent message
+          setTimeout(() => {
+            if (messagesEndRef.current) {
+              messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+            }
+          }, 100);
         }
         
         setHasMore(result.data.length === 50);
@@ -135,16 +124,19 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     if (data.type === 'new_message' && data.message) {
       const message = data.message;
       
-      // Only add if it belongs to this thread
       if (message.thread_id === thread.id) {
         setMessages(prev => {
-          // Check if message already exists
           const exists = prev.some(m => m.id === message.id);
           if (exists) return prev;
-          return [...prev, message];
+          // Add new message at the end and sort to maintain order
+          const updated = [...prev, message];
+          return updated.sort((a, b) => {
+            const dateA = new Date(a.created_at || a.createdAt || 0);
+            const dateB = new Date(b.created_at || b.createdAt || 0);
+            return dateA - dateB; // Ascending: oldest first, newest last
+          });
         });
 
-        // Update thread if callback provided
         if (onThreadUpdate) {
           onThreadUpdate(thread.id, {
             last_message: {
@@ -157,7 +149,6 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
           });
         }
 
-        // Scroll to bottom
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
@@ -165,35 +156,43 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     } else if (data.type === 'message_sent' && data.message) {
       const message = data.message;
       
-      // Update message if it belongs to this thread
       if (message.thread_id === thread.id) {
         setMessages(prev => {
           const exists = prev.some(m => m.id === message.id);
           if (exists) {
-            return prev.map(m => m.id === message.id ? message : m);
+            // Update existing message and re-sort
+            const updated = prev.map(m => m.id === message.id ? message : m);
+            return updated.sort((a, b) => {
+              const dateA = new Date(a.created_at || a.createdAt || 0);
+              const dateB = new Date(b.created_at || b.createdAt || 0);
+              return dateA - dateB;
+            });
           }
-          return [...prev, message];
+          // Add new message at the end and sort
+          const updated = [...prev, message];
+          return updated.sort((a, b) => {
+            const dateA = new Date(a.created_at || a.createdAt || 0);
+            const dateB = new Date(b.created_at || b.createdAt || 0);
+            return dateA - dateB;
+          });
         });
       }
     } else if (data.type === 'messages_read' && data.message_ids) {
-      // Update read status
       setMessages(prev => prev.map(m => 
         data.message_ids.includes(m.id) ? { ...m, is_read: true } : m
       ));
-    } else if (data.type === 'typing' && data.sender_id === otherUser.id) {
+    } else if (data.type === 'typing' && data.sender_id === coachUser.id) {
       setIsTyping(data.is_typing);
     }
-  }, [thread.id, otherUser.id, onThreadUpdate]);
+  }, [thread.id, coachUser.id, onThreadUpdate]);
 
   // WebSocket error handler
   const handleWebSocketError = useCallback((error) => {
     console.error('WebSocket error:', error);
     
-    // Handle error messages from WebSocket
     if (error && typeof error === 'object' && error.message) {
       const errorMessage = error.message;
       
-      // Show user-friendly error messages
       if (errorMessage.includes('not assigned')) {
         setError('You are not assigned to this conversation.');
       } else if (errorMessage.includes('receiver_id is required')) {
@@ -206,7 +205,6 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
         setError('Connection error. Please check your internet connection.');
       }
       
-      // Clear error after 5 seconds
       if (errorTimeoutRef.current) {
         clearTimeout(errorTimeoutRef.current);
       }
@@ -216,12 +214,11 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     }
   }, []);
 
-  // WebSocket connect handler
+  // WebSocket connect/disconnect handlers
   const handleWebSocketConnect = useCallback(() => {
     console.log('WebSocket connected for thread:', thread.id);
   }, [thread.id]);
 
-  // WebSocket disconnect handler
   const handleWebSocketDisconnect = useCallback(() => {
     console.log('WebSocket disconnected for thread:', thread.id);
   }, [thread.id]);
@@ -239,11 +236,11 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     if (isConnected && sendMessage) {
       sendMessage({
         type: 'typing',
-        receiver_id: otherUser.id,
+        receiver_id: coachUser.id,
         is_typing: isTypingValue,
       });
     }
-  }, [isConnected, sendMessage, otherUser.id]);
+  }, [isConnected, sendMessage, coachUser.id]);
 
   // Handle typing
   useEffect(() => {
@@ -253,12 +250,10 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
         sendTypingIndicator(true);
       }
 
-      // Clear existing timeout
       if (typingDebounceRef.current) {
         clearTimeout(typingDebounceRef.current);
       }
 
-      // Set timeout to stop typing indicator
       typingDebounceRef.current = setTimeout(() => {
         setTyping(false);
         sendTypingIndicator(false);
@@ -284,31 +279,22 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
       return;
     }
 
-    // Allow sending even if not connected (will queue or show error)
-    // The WebSocket will handle reconnection and retry
-
     const content = trimmedInput;
-    const messageToSend = content;
     setMessageInput('');
     setSending(true);
     setTyping(false);
     setError(null);
     sendTypingIndicator(false);
 
-    // Send via WebSocket (no optimistic duplicate; rely on server echo)
     try {
-      // Try to send via WebSocket (even if not connected, it might reconnect)
-      // Updated message format: { thread_id, content }
       const success = sendMessage({
         thread_id: thread.id,
-        content: messageToSend,
+        content: content,
       });
 
       if (!success && isConnected) {
-        // Connected but send failed - show error
         setError('Failed to send message. Please check your connection and try again.');
         
-        // Clear error after 5 seconds
         if (errorTimeoutRef.current) {
           clearTimeout(errorTimeoutRef.current);
         }
@@ -320,7 +306,6 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
       console.error('Error sending message:', err);
       setError('Failed to send message. Please try again.');
       
-      // Clear error after 5 seconds
       if (errorTimeoutRef.current) {
         clearTimeout(errorTimeoutRef.current);
       }
@@ -330,7 +315,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
     } finally {
       setSending(false);
     }
-  }, [messageInput, sending, isConnected, sendMessage, thread, currentUserId, otherUser, sendTypingIndicator]);
+  }, [messageInput, sending, isConnected, sendMessage, thread, sendTypingIndicator]);
 
   // Cleanup error timeout on unmount
   useEffect(() => {
@@ -345,34 +330,39 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
   useEffect(() => {
     if (messages.length > 0 && isConnected && sendMessage) {
       const unreadMessages = messages.filter(
-        m => (m.receiver === currentUserId || m.receiver_id === currentUserId) && !m.is_read
-      );
+        m => {
+          const receiverNumeric = extractNumericId(m.receiver_id || m.receiver);
+          const currentUserNumeric = extractNumericId(effectiveCurrentUserId);
+          return (receiverNumeric !== null && currentUserNumeric !== null && receiverNumeric === currentUserNumeric) ||
+                 (m.receiver == effectiveCurrentUserId || m.receiver_id == effectiveCurrentUserId);
+        }
+      ).filter(m => !m.is_read);
 
       if (unreadMessages.length > 0) {
         const messageIds = unreadMessages.map(m => m.id).filter(id => id && typeof id === 'number');
         
         if (messageIds.length > 0) {
-          // Send read receipt via WebSocket
-          // sender_id refers to the sender of the messages we're marking as read
           sendMessage({
             type: 'read',
             message_ids: messageIds,
-            sender_id: otherUser.id,
+            sender_id: coachUser.id,
           });
           
-          // Optimistically update local state
           setMessages(prev => prev.map(m => 
             messageIds.includes(m.id) ? { ...m, is_read: true } : m
           ));
         }
       }
     }
-  }, [messages, currentUserId, otherUser.id, isConnected, sendMessage]);
+  }, [messages, effectiveCurrentUserId, coachUser.id, isConnected, sendMessage]);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages or when messages change
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 0 && messagesEndRef.current) {
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     }
   }, [messages]);
 
@@ -432,10 +422,10 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
             </button>
           )}
           <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#003F8F]">
-            {otherUser.photo ? (
+            {coachUser.photo ? (
               <img
-                src={otherUser.photo}
-                alt={otherUser.name}
+                src={coachUser.photo}
+                alt={coachUser.name}
                 className="w-full h-full rounded-full object-cover"
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -445,12 +435,12 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                 }}
               />
             ) : null}
-            <span className={`text-white text-sm font-semibold ${otherUser.photo ? 'hidden' : 'flex'}`}>
-              {getInitials(otherUser.name)}
+            <span className={`text-white text-sm font-semibold ${coachUser.photo ? 'hidden' : 'flex'}`}>
+              {getInitials(coachUser.name)}
             </span>
           </div>
           <div>
-            <p className="font-semibold font-[Inter]">{otherUser.name}</p>
+            <p className="font-semibold font-[Inter]">{coachUser.name}</p>
             {isTyping && (
               <p className="text-xs text-white/80 font-[Inter]">typing...</p>
             )}
@@ -492,7 +482,72 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
 
         <div className="space-y-4">
           {messages.map((msg) => {
-            const isOwnMessage = msg.sender_id === currentUserId || msg.sender === currentUserId;
+            // For client view: client messages are "own", coach messages are "received"
+            const msgSenderNumeric = extractNumericId(msg.sender_id || msg.sender);
+            const currentUserNumeric = extractNumericId(effectiveCurrentUserId);
+            const threadClientIdNumeric = extractNumericId(thread.client || thread.client_id);
+            const threadCoachIdNumeric = extractNumericId(thread.coach || thread.coach_id);
+            
+            // Message is from client (current user) if sender matches client ID
+            // Try multiple comparison methods including sender_name check
+            const isOwnMessage = 
+              // Method 1: Compare numeric IDs
+              (msgSenderNumeric !== null && currentUserNumeric !== null && msgSenderNumeric === currentUserNumeric) ||
+              (msgSenderNumeric !== null && threadClientIdNumeric !== null && msgSenderNumeric === threadClientIdNumeric) ||
+              // Method 2: Direct comparison
+              (msg.sender_id == effectiveCurrentUserId || msg.sender == effectiveCurrentUserId) ||
+              (msg.sender_id == (thread.client || thread.client_id) || msg.sender == (thread.client || thread.client_id)) ||
+              // Method 3: String comparison after extracting digits
+              (msg.sender_id != null && effectiveCurrentUserId != null &&
+               String(msg.sender_id).replace(/\D/g, '') === String(effectiveCurrentUserId).replace(/\D/g, '')) ||
+              // Method 4: Check sender_name matches client name (fallback)
+              (msg.sender_name && clientUser.name && 
+               msg.sender_name.toLowerCase().trim() === clientUser.name.toLowerCase().trim());
+            
+            // Determine if sender is client or coach based on thread IDs
+            const senderIsClient = 
+              (msgSenderNumeric !== null && threadClientIdNumeric !== null && msgSenderNumeric === threadClientIdNumeric) ||
+              (msg.sender_id == (thread.client || thread.client_id) || msg.sender == (thread.client || thread.client_id)) ||
+              (msg.sender_id != null && (thread.client || thread.client_id) != null &&
+               String(msg.sender_id).replace(/\D/g, '') === String(thread.client || thread.client_id).replace(/\D/g, ''));
+            
+            // ALWAYS use message sender_name if available (most reliable)
+            // Fallback to determining from thread data
+            const senderName = msg.sender_name || (senderIsClient ? clientUser.name : coachUser.name);
+            const senderAvatar = senderIsClient ? clientUser.photo : coachUser.photo;
+            
+            // For own messages (client), ALWAYS use client info; for received (coach), use coach info
+            // If message has sender_name that matches client, use it; otherwise use clientUser.name
+            const displayName = isOwnMessage 
+              ? (msg.sender_name && msg.sender_name.toLowerCase().trim() === clientUser.name.toLowerCase().trim() 
+                 ? msg.sender_name 
+                 : clientUser.name)  // Always use client name for own messages
+              : coachUser.name;
+            const displayAvatar = isOwnMessage 
+              ? clientUser.photo  // Always use client avatar for own messages
+              : coachUser.photo;
+            
+            // Debug logging
+            console.log('🔍 ClientThreadDetail - Message check:', {
+              messageId: msg.id,
+              content: msg.content?.substring(0, 30),
+              msgSenderId: msg.sender_id,
+              msgSender: msg.sender,
+              msgSenderName: msg.sender_name,
+              currentUserId: currentUserId,
+              effectiveCurrentUserId: effectiveCurrentUserId,
+              threadClientId: thread.client || thread.client_id,
+              threadCoachId: thread.coach || thread.coach_id,
+              msgSenderNumeric,
+              currentUserNumeric,
+              threadClientIdNumeric,
+              isOwnMessage,
+              senderIsClient,
+              senderName,
+              displayName,
+              clientUser: clientUser.name,
+              coachUser: coachUser.name
+            });
             
             return (
               <div
@@ -502,11 +557,11 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                 {!isOwnMessage && (
                   <div className="flex items-start gap-2 max-w-[70%]">
                     <div className="flex-shrink-0">
-                      {otherAvatar ? (
+                      {displayAvatar ? (
                         <>
                           <img
-                            src={otherAvatar}
-                            alt={otherUser.name}
+                            src={displayAvatar}
+                            alt={displayName}
                             className="w-8 h-8 rounded-full object-cover"
                             onError={(e) => {
                               e.target.style.display = 'none';
@@ -519,7 +574,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold hidden"
                             style={{ backgroundColor: '#003F8F' }}
                           >
-                            {getInitials(otherUser.name)}
+                            {getInitials(displayName)}
                           </div>
                         </>
                       ) : (
@@ -527,7 +582,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                           className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
                           style={{ backgroundColor: '#003F8F' }}
                         >
-                          {getInitials(otherUser.name)}
+                          {getInitials(displayName)}
                         </div>
                       )}
                     </div>
@@ -561,11 +616,11 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                       </div>
                     </div>
                     <div className="flex-shrink-0">
-                      {selfAvatar ? (
+                      {displayAvatar ? (
                         <>
                           <img
-                            src={selfAvatar}
-                            alt={isCoach ? 'You' : 'Client'}
+                            src={displayAvatar}
+                            alt={displayName}
                             className="w-8 h-8 rounded-full object-cover"
                             onError={(e) => {
                               e.target.style.display = 'none';
@@ -578,7 +633,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                             className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold hidden"
                             style={{ backgroundColor: '#003F8F' }}
                           >
-                            {getInitials(selfName)}
+                            {getInitials(displayName)}
                           </div>
                         </>
                       ) : (
@@ -586,7 +641,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
                           className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
                           style={{ backgroundColor: '#003F8F' }}
                         >
-                          {getInitials(selfName)}
+                          {getInitials(displayName)}
                         </div>
                       )}
                     </div>
@@ -602,15 +657,6 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
       {/* Message Input */}
       <div className="border-t border-gray-200 p-4 bg-white">
         <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-[20px] px-4 py-3">
-          {/* Attachment Icon */}
-          <button
-            type="button"
-            className="text-gray-500 hover:text-gray-700 transition-colors"
-            title="Attach file"
-          >
-            
-          </button>
-          
           <div className="flex-1 flex items-center gap-2">
             <svg width="25" height="27" viewBox="0 0 25 27" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
               <path d="M11.7853 3.51144C12.2667 2.97827 12.8413 2.55365 13.4758 2.26219C14.1103 1.97074 14.7921 1.81825 15.4816 1.81359C16.1711 1.80892 16.8546 1.95217 17.4925 2.23501C18.1303 2.51786 18.7098 2.93467 19.1974 3.46128C19.6849 3.98789 20.0708 4.61381 20.3326 5.30273C20.5944 5.99164 20.7269 6.72985 20.7225 7.47452C20.7181 8.21919 20.5768 8.9555 20.3068 9.64073C20.0369 10.326 19.6436 10.9465 19.1499 11.4663L11.0488 20.2166C10.7596 20.5342 10.4149 20.7868 10.0348 20.9599C9.65466 21.1329 9.24657 21.223 8.83405 21.2248C8.42153 21.2267 8.01275 21.1404 7.63129 20.9707C7.24983 20.8011 6.90324 20.5516 6.61151 20.2366C6.31977 19.9216 6.08868 19.5474 5.93154 19.1355C5.77441 18.7235 5.69435 18.2821 5.69598 17.8365C5.69761 17.391 5.7809 16.9502 5.94105 16.5397C6.10119 16.1291 6.33502 15.7568 6.62905 15.4443L14.7311 6.69406L16.204 8.28481L8.10197 17.0351C8.00248 17.1388 7.92312 17.263 7.86853 17.4002C7.81394 17.5375 7.7852 17.6851 7.784 17.8345C7.7828 17.9839 7.80915 18.132 7.86153 18.2703C7.9139 18.4085 7.99125 18.5341 8.08906 18.6398C8.18686 18.7454 8.30316 18.8289 8.43118 18.8855C8.5592 18.9421 8.69636 18.9705 8.83468 18.9692C8.97299 18.9679 9.10968 18.9369 9.23676 18.8779C9.36385 18.819 9.47879 18.7333 9.57488 18.6258L17.678 9.87557C17.9682 9.56214 18.1984 9.19005 18.3555 8.78054C18.5125 8.37104 18.5934 7.93213 18.5934 7.48888C18.5934 7.04563 18.5125 6.60672 18.3555 6.19721C18.1984 5.7877 17.9682 5.41561 17.678 5.10219C17.3878 4.78877 17.0433 4.54014 16.6641 4.37052C16.2849 4.2009 15.8785 4.11359 15.4681 4.11359C15.0577 4.11359 14.6513 4.2009 14.2721 4.37052C13.893 4.54014 13.5484 4.78877 13.2582 5.10219L5.15613 13.8536C4.20739 14.9145 3.68242 16.3353 3.69429 17.8102C3.70616 19.2851 4.25391 20.6959 5.21958 21.7388C6.18525 22.7817 7.49156 23.3733 8.85717 23.3861C10.2228 23.3989 11.5384 22.832 12.5207 21.8073L21.3603 12.2617L22.8332 13.8536L13.9947 23.3992C12.6272 24.8761 10.7724 25.7058 8.83842 25.7058C6.90446 25.7058 5.0497 24.8761 3.68218 23.3992C2.31465 21.9223 1.54639 19.9191 1.54639 17.8304C1.54639 15.7418 2.31465 13.7386 3.68218 12.2617L11.7853 3.51144Z" fill="#4D6080" fillOpacity="0.1"/>
@@ -620,7 +666,7 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
               value={messageInput}
               onChange={(e) => {
                 setMessageInput(e.target.value);
-                setError(null); // Clear error when typing
+                setError(null);
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -637,7 +683,6 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
             />
           </div>
           
-          {/* Emoji Icon */}
           <button
             type="button"
             className="text-gray-500 hover:text-gray-700 transition-colors"
@@ -651,7 +696,6 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
             </svg>
           </button>
           
-          {/* Send Button */}
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -688,4 +732,4 @@ const ThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) => {
   );
 };
 
-export default ThreadDetail;
+export default ClientThreadDetail;

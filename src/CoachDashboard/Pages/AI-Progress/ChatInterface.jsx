@@ -46,6 +46,203 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, initialAiRespon
     }
   }, [chatMessages]);
 
+  // Helper function to make API call with retry logic
+  const makeApiCallWithRetry = useCallback(async (userMessage, maxRetries = 2) => {
+    // Get authentication token
+    let token = null;
+    const storedUser = localStorage.getItem('user');
+    
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+
+    if (!token) {
+      token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+    }
+
+    const isValidToken = token &&
+      typeof token === 'string' &&
+      token.trim().length > 0 &&
+      token.trim() !== 'null' &&
+      token.trim() !== 'undefined' &&
+      token.trim() !== '';
+
+    // Validate API_BASE_URL before making request
+    if (!API_BASE_URL || !API_BASE_URL.trim()) {
+      throw new Error('API_BASE_URL is not configured. Please check your .env file.');
+    }
+
+    // Ensure API_BASE_URL doesn't have trailing slash
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    // Check if baseUrl already includes /api, if not add it
+    const apiUrl = baseUrl.includes('/api') 
+      ? `${baseUrl}/generate-workout-plan/`
+      : `${baseUrl}/api/generate-workout-plan/`;
+
+    // Prepare headers
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    if (isValidToken) {
+      headers['Authorization'] = `Bearer ${token.trim()}`;
+    }
+
+    const requestBody = {
+      question: userMessage,
+      message: userMessage,
+      save_to_db: false
+    };
+
+    let lastError = null;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          console.log(`=== RETRY ATTEMPT ${attempt} ===`);
+          // Show retry message to user
+          setChatMessages(prev => [...prev, { 
+            type: 'ai', 
+            text: `Retrying... (Attempt ${attempt + 1}/${maxRetries + 1})` 
+          }]);
+          // Wait before retrying (exponential backoff: 1s, 2s)
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 3000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        console.log(`=== API CALL START (Attempt ${attempt + 1}/${maxRetries + 1}) ===`);
+        console.log('API URL:', apiUrl);
+        console.log('Message:', userMessage);
+        console.log('Headers:', headers);
+        console.log('Has valid token:', isValidToken);
+
+        let response;
+        try {
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: headers,
+            credentials: 'include',
+            body: JSON.stringify(requestBody),
+          });
+        } catch (fetchError) {
+          // Handle network errors (no internet, CORS, etc.)
+          console.error('Fetch error (network issue):', fetchError);
+          throw new Error(`Network error: ${fetchError.message}. Please check your internet connection.`);
+        }
+
+        console.log('=== API RESPONSE ===');
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+        console.log('Response statusText:', response.statusText);
+
+        let result;
+        try {
+          const responseText = await response.text();
+          console.log('API Response text:', responseText);
+          if (responseText) {
+            result = JSON.parse(responseText);
+          } else {
+            result = {};
+          }
+        } catch (parseError) {
+          console.error('Failed to parse response:', parseError);
+          throw new Error('Failed to parse server response');
+        }
+
+        if (response.ok && result.data) {
+          // Success!
+          console.log('=== API CALL SUCCESS ===');
+          // Remove retry message if it exists
+          setChatMessages(prev => prev.filter(msg => !msg.text.includes('Retrying')));
+          return { success: true, data: result.data, message: result.message };
+        } else {
+          // Handle API errors (non-200 status codes)
+          const status = response.status;
+          let errorMessage = result.message || result.detail || 'Failed to generate workout plan';
+          const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
+          
+          // Check if this is a Groq API parsing error that we should retry
+          const isGroqParsingError = result.detail && (
+            result.detail.includes('Failed to parse JSON response from Groq API') ||
+            result.detail.includes('Groq API') ||
+            result.detail.includes('parse JSON')
+          );
+          
+          // If it's a Groq parsing error and we have retries left, continue to retry
+          if (isGroqParsingError && attempt < maxRetries && status >= 500) {
+            console.log('Groq API parsing error detected, will retry...');
+            lastError = new Error(`Groq API parsing error (attempt ${attempt + 1})`);
+            continue; // Retry
+          }
+          
+          // Check for specific error types in detail field
+          let detailMessage = '';
+          if (result.detail) {
+            if (result.detail.includes('Failed to parse JSON response from Groq API')) {
+              detailMessage = 'The AI service returned an incomplete response. This usually happens when the response is too long or gets cut off.';
+            } else if (result.detail.includes('Groq API')) {
+              detailMessage = 'There was an issue with the AI service. Please try again.';
+            } else {
+              detailMessage = result.detail;
+            }
+          }
+          
+          // Add status code to error message for better debugging
+          if (status === 401) {
+            errorMessage = 'Authentication failed. Please log in again.';
+          } else if (status === 403) {
+            errorMessage = 'You do not have permission to perform this action.';
+          } else if (status === 404) {
+            errorMessage = 'API endpoint not found. Please contact support.';
+          } else if (status >= 500) {
+            // For 500 errors, use detail message if available, otherwise generic message
+            if (detailMessage) {
+              errorMessage = detailMessage;
+            } else {
+              errorMessage = 'Server error. Please try again later.';
+            }
+          } else if (status === 400) {
+            errorMessage = errorMessage || 'Invalid request. Please check your input.';
+          }
+          
+          // Combine error message with details
+          let fullErrorMessage = errorMessage;
+          if (errorDetails && !errorMessage.includes(errorDetails)) {
+            fullErrorMessage += ` - ${errorDetails}`;
+          }
+          fullErrorMessage += ` (Status: ${status})`;
+          
+          throw new Error(fullErrorMessage);
+        }
+      } catch (error) {
+        lastError = error;
+        
+        // Check if this is a retryable Groq API error
+        const isRetryableGroqError = (
+          error.message.includes('Groq') ||
+          error.message.includes('parse JSON') ||
+          error.message.includes('incomplete response')
+        ) && attempt < maxRetries;
+        
+        if (isRetryableGroqError) {
+          console.log(`Retryable error detected (attempt ${attempt + 1}/${maxRetries + 1}), will retry...`);
+          continue; // Retry
+        }
+        
+        // If not retryable or out of retries, throw the error
+        throw error;
+      }
+    }
+    
+    // If we exhausted all retries, throw the last error
+    throw lastError || new Error('Failed after all retry attempts');
+  }, []);
+
   // API call function - extracted for reuse
   const handleSendMessage = useCallback(async (userMessage) => {
     if (!userMessage || !userMessage.trim()) {
@@ -59,101 +256,17 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, initialAiRespon
     setIsLoading(true);
 
     try {
-      // Get authentication token
-      let token = null;
-      const storedUser = localStorage.getItem('user');
+      const result = await makeApiCallWithRetry(messageToSend, 2);
       
-      if (storedUser) {
-        try {
-          const userData = JSON.parse(storedUser);
-          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
-        } catch (error) {
-          console.error('Error parsing user data:', error);
-        }
-      }
+      // Success - Add AI response to chat
+      setChatMessages(prev => [...prev, { 
+        type: 'ai', 
+        text: result.message || "Workout plan generated successfully!" 
+      }]);
 
-      if (!token) {
-        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
-      }
-
-      const isValidToken = token &&
-        typeof token === 'string' &&
-        token.trim().length > 0 &&
-        token.trim() !== 'null' &&
-        token.trim() !== 'undefined' &&
-        token.trim() !== '';
-
-      // Ensure API_BASE_URL doesn't have trailing slash
-      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-      // Check if baseUrl already includes /api, if not add it
-      const apiUrl = baseUrl.includes('/api') 
-        ? `${baseUrl}/generate-workout-plan/`
-        : `${baseUrl}/api/generate-workout-plan/`;
-
-      // Prepare headers
-      const headers = {
-        'Content-Type': 'application/json',
-      };
-
-      if (isValidToken) {
-        headers['Authorization'] = `Bearer ${token.trim()}`;
-      }
-
-      console.log('=== API CALL START ===');
-      console.log('API URL:', apiUrl);
-      console.log('Message:', messageToSend);
-      console.log('Headers:', headers);
-
-      // Call API
-      console.log('Making fetch request...');
-      const requestBody = {
-        question: messageToSend,
-        message: messageToSend,
-        save_to_db: false
-      };
-      console.log('Request body:', requestBody);
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: headers,
-        credentials: 'include',
-        body: JSON.stringify(requestBody),
-      });
-
-      console.log('=== API RESPONSE ===');
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
-      let result;
-      try {
-        const responseText = await response.text();
-        console.log('API Response text:', responseText);
-        if (responseText) {
-          result = JSON.parse(responseText);
-        } else {
-          result = {};
-        }
-      } catch (parseError) {
-        console.error('Failed to parse response:', parseError);
-        throw new Error('Failed to parse server response');
-      }
-
-      if (response.ok && result.data) {
-        // Add AI response to chat
-        setChatMessages(prev => [...prev, { 
-          type: 'ai', 
-          text: result.message || "Workout plan generated successfully!" 
-        }]);
-
-        // Pass workout plan data to parent
-        if (onWorkoutPlanGenerated) {
-          onWorkoutPlanGenerated(result.data);
-        }
-      } else {
-        // Handle validation errors
-        const errorMessage = result.message || 'Failed to generate workout plan';
-        const errorDetails = result.errors ? JSON.stringify(result.errors) : '';
-        throw new Error(errorMessage + (errorDetails ? ` - ${errorDetails}` : ''));
+      // Pass workout plan data to parent
+      if (onWorkoutPlanGenerated) {
+        onWorkoutPlanGenerated(result.data);
       }
     } catch (error) {
       console.error('=== API ERROR ===');
@@ -161,15 +274,48 @@ const ChatInterface = ({ onWorkoutPlanGenerated, initialMessage, initialAiRespon
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
+      
+      // Remove retry messages
+      setChatMessages(prev => prev.filter(msg => !msg.text.includes('Retrying')));
+      
+      // Provide more specific error messages based on error type
+      let userFriendlyError = '';
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        userFriendlyError = 'Network error: Unable to connect to the server. Please check your internet connection and try again.';
+      } else if (error.message.includes('Failed to parse server response')) {
+        userFriendlyError = 'Server response error: The server returned an invalid response. Please try again or contact support.';
+      } else if (error.message.includes('Failed to parse JSON response from Groq API') || error.message.includes('incomplete response')) {
+        userFriendlyError = 'The AI service returned an incomplete response after multiple attempts. Please try again with a simpler request or break it into smaller parts.';
+      } else if (error.message.includes('Groq API')) {
+        userFriendlyError = 'There was an issue with the AI service after multiple attempts. Please try again in a moment.';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        userFriendlyError = 'Authentication error: Please log in again to continue.';
+      } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+        userFriendlyError = 'Permission error: You do not have permission to perform this action.';
+      } else if (error.message.includes('404') || error.message.includes('Not Found')) {
+        userFriendlyError = 'API endpoint not found. Please contact support.';
+      } else if (error.message.includes('500') || error.message.includes('Internal Server Error')) {
+        // Check if it's a Groq API parsing error
+        if (error.message.includes('Groq') || error.message.includes('parse JSON')) {
+          userFriendlyError = 'The AI service had trouble generating a complete response after multiple attempts. Please try again - this is usually a temporary issue.';
+        } else {
+          userFriendlyError = 'Server error: The server encountered an issue. Please try again later.';
+        }
+      } else if (!API_BASE_URL) {
+        userFriendlyError = 'Configuration error: API URL is not configured. Please contact support.';
+      } else {
+        userFriendlyError = `Sorry, I encountered an error: ${error.message}. Please try again.`;
+      }
+      
       setChatMessages(prev => [...prev, { 
         type: 'ai', 
-        text: `Sorry, I encountered an error: ${error.message}. Please check the console for details.` 
+        text: userFriendlyError
       }]);
     } finally {
       setIsLoading(false);
       console.log('=== API CALL END ===');
     }
-  }, [onWorkoutPlanGenerated]);
+  }, [onWorkoutPlanGenerated, makeApiCallWithRetry]);
 
   // Handle initial message and AI response from parent
   useEffect(() => {

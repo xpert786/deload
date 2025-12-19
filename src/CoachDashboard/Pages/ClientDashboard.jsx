@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ArchiveIconForCoach, DeleteIconForCoach, EditIconForCoach, LocationIconForCoach, MailIconForCoach, MobileIconForCoach, PercentageIconForCoach, SearchIcon } from '../Components/Icons';
@@ -36,11 +36,6 @@ const goals = [
   { id: 2, name: 'Weight Loss', icon: '🔥', current: 70, target: 100, unit: 'kg', percent: 60 }
 ];
 
-const notes = [
-  { id: 1, date: 'Today', text: 'Great job on completing your cardio sessions this week! Try to maintain...' },
-  { id: 2, date: '28-Aug-2025', text: 'Excellent strength training session today! Make sure to maintain correct form to avoid injuries...' }
-];
-
 const ClientDashboard = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -58,6 +53,11 @@ const ClientDashboard = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingData, setEditingData] = useState({});
   const [saving, setSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [notes, setNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
 
   const tabs = ['Overview', 'Workout Calendar', 'Custom Workouts'];
 
@@ -139,8 +139,28 @@ const ClientDashboard = () => {
         }
 
         if (response.ok && result.data) {
-          setClientData(result.data);
-          setEditingData(result.data); // Initialize editing data
+          // Clean phone number format when loading data
+          // Ensure address is properly handled - convert null/undefined/"Not Specified" to empty string
+          let loadedAddress = result.data.address;
+          if (loadedAddress === null || loadedAddress === undefined) {
+            loadedAddress = '';
+          } else {
+            loadedAddress = String(loadedAddress).trim();
+            // If API returns "Not Specified", treat it as empty string
+            if (loadedAddress === 'Not Specified' || loadedAddress === 'not specified' || loadedAddress === 'NOT SPECIFIED') {
+              loadedAddress = '';
+            }
+          }
+          
+          const cleanedData = {
+            ...result.data,
+            phone_number: result.data.phone_number ? result.data.phone_number.replace(/\D/g, '') : result.data.phone_number,
+            address: loadedAddress // Ensure address is always a string (never "Not Specified")
+          };
+          console.log('Loaded client data with address:', cleanedData.address);
+          console.log('Full loaded data:', cleanedData);
+          setClientData(cleanedData);
+          setEditingData(cleanedData); // Initialize editing data
         } else {
           console.error('Failed to fetch client details:', result);
           setError(result.message || 'Failed to fetch client details. Please try again.');
@@ -155,6 +175,118 @@ const ClientDashboard = () => {
 
     fetchClientDetails();
   }, [id, user]);
+
+  // Fetch notes from API for overview tab ONLY - DO NOT use for Workout Calendar
+  const fetchNotes = useCallback(async () => {
+    // Double check - only fetch if we're in Overview tab
+    if (activeTab !== 'Overview') {
+      return;
+    }
+    
+    if (!id) {
+      setLoadingNotes(false);
+      return;
+    }
+
+    setLoadingNotes(true);
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Build API URL - use /client/notes/ endpoint
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/client/notes/`
+        : `${baseUrl}/api/client/notes/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse notes response:', parseError);
+        setLoadingNotes(false);
+        return;
+      }
+
+      if (response.ok && result.data) {
+        // Map API response to UI format
+        const mappedNotes = result.data.map((note) => ({
+          id: note.id,
+          date: note.date_display || note.time_ago || 'No date',
+          text: note.note || '',
+          created_at: note.created_at,
+          time_ago: note.time_ago
+        }));
+        setNotes(mappedNotes);
+      } else {
+        console.error('Failed to fetch notes:', result);
+        setNotes([]);
+      }
+    } catch (err) {
+      console.error('Fetch notes error:', err);
+      setNotes([]);
+    } finally {
+      setLoadingNotes(false);
+    }
+  }, [id, user, activeTab]); // Added activeTab to dependencies
+
+  useEffect(() => {
+    // Only fetch notes when in Overview tab - DO NOT call API for Workout Calendar
+    if (activeTab === 'Overview') {
+      fetchNotes();
+    } else {
+      // Clear notes immediately when switching away from Overview tab
+      // Workout Calendar has its own notes from workout-calendar API
+      setNotes([]);
+      setLoadingNotes(false);
+    }
+  }, [activeTab, fetchNotes]);
 
   // Calculate total for donut chart
   const total = Object.values(progressData).reduce((sum, val) => sum + val, 0);
@@ -200,30 +332,8 @@ const ClientDashboard = () => {
     };
   });
 
-  // Prepare notes for display - use API notes if available, otherwise use sample data
-  const getClientNotes = () => {
-    if (!clientData) return notes;
-    
-    // If notes is a string, convert it to array format
-    if (typeof clientData.notes === 'string' && clientData.notes.trim() !== '') {
-      return [{ 
-        id: 1, 
-        date: new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }), 
-        text: clientData.notes 
-      }];
-    }
-    
-    // If notes is an array, use it
-    if (Array.isArray(clientData.notes) && clientData.notes.length > 0) {
-      return clientData.notes;
-    }
-    
-    // Otherwise use sample data
-    return notes;
-  };
-
-  const clientNotes = getClientNotes();
-  const filteredNotes = clientNotes.filter(note =>
+  // Filter notes based on search query
+  const filteredNotes = notes.filter(note =>
     (note.text && note.text.toLowerCase().includes(searchNote.toLowerCase())) || 
     (note.date && note.date.toLowerCase().includes(searchNote.toLowerCase()))
   );
@@ -240,17 +350,8 @@ const ClientDashboard = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
-        <div className="bg-white rounded-xl p-6">
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            {error}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Don't return early on error - show error inline instead
+  // This allows users to see the page and try again
 
   if (!clientData) {
     return (
@@ -264,22 +365,30 @@ const ClientDashboard = () => {
     );
   }
 
-  // Format phone number for display
+  // Format phone number for display - show in normal format (just digits)
   const formatPhoneNumber = (phone) => {
     if (!phone) return 'Not Specified';
-    // Remove any non-digit characters
+    // Remove any non-digit characters and return clean number
     const cleaned = phone.replace(/\D/g, '');
-    // Format as (XXX) XXX-XXXX if 10 digits
-    if (cleaned.length === 10) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-    }
-    return phone;
+    return cleaned || 'Not Specified';
   };
 
   // Handle edit mode toggle
   const handleEditClick = () => {
     setIsEditMode(true);
-    setEditingData({ ...clientData }); // Copy current data to editing state
+    // Copy current data to editing state, ensure address field is properly initialized
+    const initialAddress = clientData.address 
+      ? (clientData.address === null || clientData.address === undefined ? '' : String(clientData.address))
+      : '';
+    
+    console.log('Entering edit mode - initial address:', initialAddress);
+    console.log('Client data address:', clientData.address);
+    
+    setEditingData({ 
+      ...clientData,
+      address: initialAddress, // Ensure address is always a string, not undefined or null
+      phone_number: clientData.phone_number ? clientData.phone_number.replace(/\D/g, '') : '' // Clean phone number
+    });
   };
 
   // Handle cancel edit
@@ -344,12 +453,54 @@ const ClientDashboard = () => {
       };
 
       // Prepare request body with edited data
+      // Clean phone number to remove any formatting before sending
+      const cleanPhoneNumber = editingData.phone_number 
+        ? editingData.phone_number.replace(/\D/g, '') 
+        : (clientData.phone_number ? clientData.phone_number.replace(/\D/g, '') : '');
+      
+      // Handle address - always use editingData.address when in edit mode
+      // This ensures user can clear or modify address properly
+      let addressValue = '';
+      
+      // Since we're in edit mode, always use editingData.address
+      // If editingData.address exists (even if empty string), use it
+      // Otherwise fallback to clientData.address
+      if ('address' in editingData) {
+        // editingData has address property, use it (even if empty string)
+        let rawAddress = editingData.address;
+        
+        // Convert null/undefined to empty string
+        if (rawAddress === null || rawAddress === undefined) {
+          addressValue = '';
+        } else {
+          addressValue = String(rawAddress).trim();
+          // If address is "Not Specified" (display placeholder), treat it as empty
+          if (addressValue === 'Not Specified' || addressValue === 'not specified' || addressValue === 'NOT SPECIFIED') {
+            addressValue = '';
+          }
+        }
+      } else {
+        // editingData doesn't have address, use clientData.address
+        let rawAddress = clientData.address;
+        if (rawAddress && rawAddress !== 'Not Specified' && rawAddress !== 'not specified' && rawAddress !== 'NOT SPECIFIED') {
+          addressValue = String(rawAddress).trim();
+        } else {
+          addressValue = '';
+        }
+      }
+      
+      // Final safety check - ensure address is always a string and not "Not Specified"
+      if (addressValue === null || addressValue === undefined || addressValue === 'Not Specified') {
+        addressValue = '';
+      }
+      
+      // When user edits address field, send it as city field in API
+      // Address field input maps to city field in API
       const requestBody = {
         fullname: editingData.fullname || clientData.fullname,
         email: editingData.email || clientData.email,
-        phone_number: editingData.phone_number || clientData.phone_number,
-        address: editingData.address || clientData.address,
-        city: editingData.city || clientData.city,
+        phone_number: cleanPhoneNumber || clientData.phone_number,
+        city: addressValue, // Send address field value as city field
         gender: editingData.gender || clientData.gender,
         age: editingData.age || clientData.age,
         level: editingData.level || clientData.level,
@@ -360,6 +511,11 @@ const ClientDashboard = () => {
         notes: editingData.notes || clientData.notes,
         weekly_session_goal: editingData.weekly_session_goal || clientData.weekly_session_goal,
       };
+      
+      console.log('=== SAVING CLIENT DATA ===');
+      console.log('Address field value (sending as city):', addressValue);
+      console.log('Full request body:', JSON.stringify(requestBody, null, 2));
+
 
       const response = await fetch(apiUrl, {
         method: 'PUT',
@@ -384,14 +540,40 @@ const ClientDashboard = () => {
       }
 
       if (response.ok && result.data) {
+        // Clean phone number format when updating data
+        // Ensure address is properly handled - convert null/undefined/"Not Specified" to empty string
+        let savedAddress = result.data.address;
+        console.log('=== API RESPONSE ===');
+        console.log('Raw address from API:', savedAddress);
+        console.log('Type of address:', typeof savedAddress);
+        
+        if (savedAddress === null || savedAddress === undefined) {
+          savedAddress = '';
+        } else {
+          savedAddress = String(savedAddress).trim();
+          // If API returns "Not Specified", treat it as empty string
+          if (savedAddress === 'Not Specified' || savedAddress === 'not specified' || savedAddress === 'NOT SPECIFIED') {
+            savedAddress = '';
+          }
+        }
+        
+        const cleanedData = {
+          ...result.data,
+          phone_number: result.data.phone_number ? result.data.phone_number.replace(/\D/g, '') : result.data.phone_number,
+          address: savedAddress // Ensure address is always a string (never "Not Specified")
+        };
+        console.log('Processed address:', cleanedData.address);
+        console.log('Full updated data:', cleanedData);
         // Update client data with response
-        setClientData(result.data);
-        setEditingData(result.data);
+        setClientData(cleanedData);
+        setEditingData(cleanedData);
         setIsEditMode(false);
         // Show success message
+        setSuccessMessage('Client details updated successfully!');
         setShowSuccessPopup(true);
         setTimeout(() => {
           setShowSuccessPopup(false);
+          setSuccessMessage('');
         }, 3000);
       } else {
         setError(result.message || 'Failed to update client details. Please try again.');
@@ -404,8 +586,171 @@ const ClientDashboard = () => {
     }
   };
 
+  // Handle archive client
+  const handleArchiveClient = async () => {
+    if (!id) {
+      setError('Client ID is missing. Please refresh the page and try again.');
+      return;
+    }
+
+    // Clear any previous errors
+    setError('');
+    setArchiving(true);
+
+    try {
+      // Validate API_BASE_URL
+      if (!API_BASE_URL || !API_BASE_URL.trim()) {
+        setError('API configuration error: API URL is not configured. Please contact support.');
+        setArchiving(false);
+        return;
+      }
+
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      if (!isValidToken) {
+        setError('Authentication token not found. Please login again.');
+        setArchiving(false);
+        return;
+      }
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Build API URL - use /archive/ endpoint
+      // Pattern: baseUrl/coach/clients/{id}/archive/ (baseUrl should already include /api if needed)
+      const apiUrl = `${baseUrl}/coach/clients/${id}/archive/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`,
+      };
+
+      console.log('=== ARCHIVE CLIENT API CALL ===');
+      console.log('API URL:', apiUrl);
+      console.log('Client ID:', id);
+      console.log('Headers:', { ...headers, Authorization: 'Bearer ***' });
+
+      let response;
+      try {
+        response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: headers,
+          credentials: 'include',
+        });
+      } catch (fetchError) {
+        // Handle network errors (no internet, CORS, etc.)
+        console.error('Fetch error (network issue):', fetchError);
+        setError('Network error: Unable to connect to the server. Please check your internet connection and try again.');
+        setArchiving(false);
+        return;
+      }
+
+      console.log('=== ARCHIVE API RESPONSE ===');
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      console.log('Response statusText:', response.statusText);
+
+      let result;
+      try {
+        const responseText = await response.text();
+        console.log('Response text:', responseText);
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        setError('Failed to parse server response. Please try again.');
+        setArchiving(false);
+        return;
+      }
+
+      if (response.ok) {
+        // Success - clear any previous errors immediately
+        setError('');
+        console.log('=== ARCHIVE SUCCESS ===');
+        console.log('Success message:', result.message);
+        console.log('Response data:', result.data);
+        
+        // Show success message
+        setSuccessMessage(result.message || 'Client archived successfully!');
+        setShowSuccessPopup(true);
+        
+        // Clear error state to ensure no error is shown
+        setTimeout(() => {
+          setError(''); // Ensure error is cleared
+        }, 100);
+        
+        setTimeout(() => {
+          setShowSuccessPopup(false);
+          setSuccessMessage('');
+          setError(''); // Clear error again before navigation
+          // Navigate back to clients list
+          navigate('/coach/clients');
+        }, 2000);
+      } else {
+        // Handle API errors - only show error if response is not ok
+        const errorMsg = result.message || result.detail || result.error || `Failed to archive client. Server returned status ${response.status}.`;
+        console.error('Archive API error:', errorMsg);
+        console.error('Response status:', response.status);
+        console.error('Full result:', result);
+        setError(errorMsg);
+      }
+    } catch (err) {
+      console.error('=== ARCHIVE CLIENT ERROR ===');
+      console.error('Error:', err);
+      console.error('Error name:', err.name);
+      console.error('Error message:', err.message);
+      // Only show network error if it's actually a network error
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        setError('Network error: Unable to connect to the server. Please check your internet connection and try again.');
+      } else {
+        setError(err.message || 'An error occurred while archiving the client. Please try again.');
+      }
+    } finally {
+      setArchiving(false);
+      console.log('=== ARCHIVE API CALL END ===');
+    }
+  };
+
   return (
     <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F]">
+      {/* Error Message - Show inline if error exists */}
+      {error && (
+        <div className="bg-white rounded-xl p-6">
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        </div>
+      )}
+      
       {/* Profile Header Section */}
       <div className="bg-white rounded-xl p-6 space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
@@ -481,7 +826,7 @@ const ClientDashboard = () => {
             <button 
               onClick={handleEditClick}
               disabled={isEditMode}
-              className={`px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2 ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2 ${isEditMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             >
               <EditIconForCoach />
               Edit
@@ -491,24 +836,31 @@ const ClientDashboard = () => {
                 <button
                   onClick={handleSaveChanges}
                   disabled={saving}
-                  className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </button>
                 <button
                   onClick={handleCancelEdit}
                   disabled={saving}
-                  className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   Cancel
                 </button>
               </>
             )}
-            <button className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
+            <button 
+              onClick={() => {
+                setError(''); // Clear any previous errors
+                setShowArchiveModal(true);
+              }}
+              disabled={archiving || isEditMode}
+              className={`px-4 py-2  text-[#003F8F]  font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2 ${archiving || isEditMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
               <ArchiveIconForCoach />
               Archive
             </button>
-            <button className="px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2">
+            <button className="px-4 py-2  text-[#003F8F] font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2 cursor-pointer">
               <DeleteIconForCoach />
             </button>
           </div>
@@ -549,9 +901,13 @@ const ClientDashboard = () => {
                 <input
                   type="tel"
                   value={editingData.phone_number || ''}
-                  onChange={(e) => setEditingData({ ...editingData, phone_number: e.target.value })}
+                  onChange={(e) => {
+                    // Remove any non-digit characters to keep it in normal format
+                    const cleaned = e.target.value.replace(/\D/g, '');
+                    setEditingData({ ...editingData, phone_number: cleaned });
+                  }}
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F]"
-                  placeholder="Phone Number"
+                  placeholder="Phone Number (e.g., 9876543219)"
                 />
               ) : (
                 <span>{formatPhoneNumber(clientData.phone_number)}</span>
@@ -563,13 +919,56 @@ const ClientDashboard = () => {
               {isEditMode ? (
                 <input
                   type="text"
-                  value={editingData.address || editingData.city || ''}
-                  onChange={(e) => setEditingData({ ...editingData, address: e.target.value })}
+                  value={editingData.address !== undefined ? editingData.address : ''}
+                  onChange={(e) => {
+                    const newAddress = e.target.value;
+                    console.log('Address changed:', newAddress);
+                    setEditingData({ ...editingData, address: newAddress });
+                  }}
                   className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F]"
-                  placeholder="Address"
+                  placeholder="Address (Enter any address details)"
                 />
               ) : (
-                <span>{clientData.address && clientData.address !== 'Not Specified' ? clientData.address : (clientData.city && clientData.city !== 'Not Specified' ? clientData.city : 'Not Specified')}</span>
+                <span>
+                  {(() => {
+                    // Check if address exists and is not empty
+                    const address = clientData.address;
+                    console.log('Displaying address - clientData.address:', address, 'Type:', typeof address);
+                    
+                    // Check if address is a valid non-empty string (and not "Not Specified")
+                    if (address !== null && address !== undefined && address !== '') {
+                      const addressStr = String(address).trim();
+                      // Make sure it's not "Not Specified" (case insensitive)
+                      const addressLower = addressStr.toLowerCase();
+                      if (addressStr !== '' && 
+                          addressLower !== 'not specified' && 
+                          addressStr !== 'null' && 
+                          addressStr !== 'undefined' &&
+                          addressStr !== 'None') {
+                        console.log('Displaying address:', addressStr);
+                        return addressStr;
+                      }
+                    }
+                    
+                    // Fallback to city if address is not available
+                    const city = clientData.city;
+                    if (city && typeof city === 'string') {
+                      const cityStr = city.trim();
+                      const cityLower = cityStr.toLowerCase();
+                      if (cityStr !== '' && 
+                          cityLower !== 'not specified' && 
+                          cityStr !== 'null' && 
+                          cityStr !== 'undefined' &&
+                          cityStr !== 'None') {
+                        return cityStr;
+                      }
+                    }
+                    
+                    // Default to "Not Specified" only if address is truly empty
+                    console.log('No valid address found, showing "Not Specified"');
+                    return 'Not Specified';
+                  })()}
+                </span>
               )}
             </div>
           </div>
@@ -582,7 +981,7 @@ const ClientDashboard = () => {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 font-semibold text-sm transition ${activeTab === tab
+            className={`px-4 py-2 font-semibold text-sm transition cursor-pointer ${activeTab === tab
               ? 'text-[#FFFFFF] bg-[#003F8F] border border-[#003F8F] rounded-lg'
               : 'text-[#003F8F] hover:text-[#003F8F]'
               }`}
@@ -691,7 +1090,7 @@ const ClientDashboard = () => {
           <div className="bg-white rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-semibold text-[#003F8F] font-[Poppins]">Season History</h3>
-              <button className="text-sm font-semibold text-[#003F8F] font-[Inter] hover:underline">
+              <button className="text-sm font-semibold text-[#003F8F] font-[Inter] hover:underline cursor-pointer">
                 See More
               </button>
             </div>
@@ -797,7 +1196,11 @@ const ClientDashboard = () => {
 
               {/* Notes List */}
               <div className="space-y-3">
-                {filteredNotes.length > 0 ? (
+                {loadingNotes ? (
+                  <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500">
+                    Loading notes...
+                  </div>
+                ) : filteredNotes.length > 0 ? (
                   filteredNotes.map((note) => (
                   <div key={note.id} className="p-4 border border-gray-200 rounded-lg">
                     <div className="flex items-center gap-2 text-xs text-gray-600 font-[Inter] mb-2">
@@ -941,6 +1344,10 @@ const ClientDashboard = () => {
                     setTimeout(() => {
                       setShowSuccessPopup(false);
                     }, 3000);
+                    // Refetch notes after a short delay to ensure backend has processed
+                    setTimeout(() => {
+                      fetchNotes();
+                    }, 500);
                   } else {
                     // Handle error silently - just log it
                     const errorMessage = result.message || result.detail || 'Failed to save note';
@@ -954,10 +1361,61 @@ const ClientDashboard = () => {
                 }
               }}
               disabled={!noteText.trim() || savingNote}
-              className="mt-4 px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-4 px-4 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {savingNote ? 'Saving...' : 'Save Note'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Archive Confirmation Modal */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-[#003F8F] font-[Poppins]">Archive Client</h3>
+              <button
+                onClick={() => {
+                  setShowArchiveModal(false);
+                  setError('');
+                }}
+                className="text-gray-400 hover:text-gray-600 transition cursor-pointer"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-2">
+                Are you sure you want to archive 
+              </p>
+             
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowArchiveModal(false);
+                  setError('');
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition font-medium cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setShowArchiveModal(false);
+                  await handleArchiveClient();
+                }}
+                disabled={archiving}
+                className="px-4 py-2 rounded-lg bg-[#003F8F] text-white hover:bg-[#002F6F] transition font-medium disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {archiving ? 'Archiving...' : 'Archive'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -976,12 +1434,15 @@ const ClientDashboard = () => {
               {/* Success Message */}
               <div>
                 <h3 className="text-xl font-bold text-[#003F8F] font-[Poppins] mb-2">Success!</h3>
-                <p className="text-gray-600 font-[Inter]">Note saved successfully!</p>
+                <p className="text-gray-600 font-[Inter]">{successMessage || 'Operation completed successfully!'}</p>
               </div>
               {/* Close Button */}
               <button
-                onClick={() => setShowSuccessPopup(false)}
-                className="px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition"
+                onClick={() => {
+                  setShowSuccessPopup(false);
+                  setSuccessMessage('');
+                }}
+                className="px-6 py-2 bg-[#003F8F] text-white rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition cursor-pointer"
               >
                 OK
               </button>

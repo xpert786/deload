@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { listThreads } from '../../services/threadsApi';
 import { useWebSocket } from '../../hooks/useWebSocket';
-import ThreadDetail from '../../components/ThreadDetail';
+import ClientThreadDetail from '../Components/ClientThreadDetail';
 
 const Chat = () => {
   const { user } = useAuth();
@@ -244,7 +244,7 @@ const Chat = () => {
                 <div className="text-red-500">Error: {error}</div>
               </div>
             ) : selectedThread ? (
-              <ThreadDetail
+              <ClientThreadDetail
                 thread={selectedThread}
                 currentUserId={currentUserId}
                 onBack={null}

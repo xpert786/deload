@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -20,17 +20,12 @@ import {
 
 import ManImage from "../../assets/dashboard.png";
 
-const quickStats = [
-  { label: "Clients", value: 12, icon: <ClientIcon /> },
-  { label: "Completed Today", value: 5, icon: <DoumbleIcon /> },
-  { label: "Pending Check-ins", value: 4, icon: <PendingIcon /> },
-];
+// Use API URL from .env file
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
-const sessions = [
-  { name: "David Lee", time: "9:00 AM", duration: "52 min", status: "Completed" },
-  { name: "Sarah Kin", time: "12:30 PM", duration:"52 min", status: "Pending" },
-  { name: "John Doe", time: "4:30 PM", duration: "52 min", status: "Completed" },
-];
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
 
 const notifications = {
   today: [
@@ -43,12 +38,6 @@ const notifications = {
   ],
 };
 
-const clientProgress = [
-  { name: "David Lee", percent: 75 },
-  { name: "Sarah Kin", percent: 68 },
-  { name: "John Doe", percent: 52 },
-];
-
 const quickActions = [
   { name: "Add New Client", icon: <AddNewClient /> },
   { name: "AI Workout", icon: <AiWorkout /> },
@@ -59,6 +48,11 @@ const CoachDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // API data state
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // Calendar state management
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
@@ -67,11 +61,159 @@ const CoachDashboard = () => {
   }); // Default to today
   const [weekOffset, setWeekOffset] = useState(0); // For week navigation
 
+  // Sync selected date with API data when it loads
+  useEffect(() => {
+    if (dashboardData?.sessions?.selected_date) {
+      const apiSelectedDate = new Date(dashboardData.sessions.selected_date);
+      apiSelectedDate.setHours(0, 0, 0, 0);
+      setSelectedDate(apiSelectedDate);
+    }
+  }, [dashboardData]);
+
   // Selected session (for row highlight on click)
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(null);
 
   // Selected target tab for Client Progress (weekly / monthly)
   const [selectedTarget, setSelectedTarget] = useState("weekly");
+
+  // Fetch comprehensive dashboard data
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Build API URL
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/comprehensive-dashboard/`
+        : `${baseUrl}/api/comprehensive-dashboard/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse dashboard response:', parseError);
+        setError('Failed to parse server response. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      if (response.ok && result.data) {
+        setDashboardData(result.data);
+      } else {
+        console.error('Failed to fetch dashboard data:', result);
+        setError(result.message || 'Failed to fetch dashboard data. Please try again.');
+      }
+    } catch (err) {
+      console.error('Fetch dashboard error:', err);
+      setError('Network error: Unable to fetch dashboard data. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Get quick stats from API or use defaults
+  const quickStats = useMemo(() => {
+    if (dashboardData?.quick_start) {
+      return [
+        { label: "Clients", value: dashboardData.quick_start.clients || 0, icon: <ClientIcon /> },
+        { label: "Completed Today", value: dashboardData.quick_start.completed_today || 0, icon: <DoumbleIcon /> },
+        { label: "Pending Check-ins", value: dashboardData.quick_start.pending_check_ins || 0, icon: <PendingIcon /> },
+      ];
+    }
+    // Default values
+    return [
+      { label: "Clients", value: 0, icon: <ClientIcon /> },
+      { label: "Completed Today", value: 0, icon: <DoumbleIcon /> },
+      { label: "Pending Check-ins", value: 0, icon: <PendingIcon /> },
+    ];
+  }, [dashboardData]);
+
+  // Get sessions from API or use defaults
+  const sessions = useMemo(() => {
+    if (dashboardData?.sessions?.sessions_list && dashboardData.sessions.sessions_list.length > 0) {
+      return dashboardData.sessions.sessions_list.map((session) => ({
+        name: session.client_name || session.name || 'Unknown',
+        time: session.time || session.start_time || '',
+        duration: session.duration || session.duration_minutes ? `${session.duration_minutes} min` : '0 min',
+        status: session.status || session.status_display || 'Pending'
+      }));
+    }
+    // Return empty array if no sessions
+    return [];
+  }, [dashboardData]);
+
+  // Get client progress from API
+  const clientProgress = useMemo(() => {
+    if (dashboardData?.client_progress?.clients && dashboardData.client_progress.clients.length > 0) {
+      return dashboardData.client_progress.clients.map((client) => {
+        const progress = selectedTarget === 'weekly' 
+          ? client.progress?.weekly 
+          : client.progress?.monthly;
+        
+        return {
+          name: client.name || 'Unknown',
+          percent: progress?.percentage || 0,
+          id: client.id
+        };
+      });
+    }
+    // Default empty array
+    return [];
+  }, [dashboardData, selectedTarget]);
 
   // Generate week dates based on weekOffset
   const weekDates = useMemo(() => {
@@ -104,12 +246,24 @@ const CoachDashboard = () => {
     return dates;
   }, [weekOffset]);
 
-  // Format date to "Mon 21" format
-  const formatDate = (date) => {
+  // Format date to "Mon 21" format - use API data if available
+  const formatDate = (date, apiDateData = null) => {
+    if (apiDateData) {
+      return {
+        dayName: apiDateData.day_name_short || apiDateData.day_name || 'Mon',
+        dayNumber: apiDateData.day_number || date.getDate(),
+        fullDate: date,
+        isSelected: apiDateData.is_selected || false,
+        isToday: apiDateData.is_today || false,
+        hasSessions: apiDateData.has_sessions || false,
+        sessionCount: apiDateData.session_count || 0
+      };
+    }
+    // Fallback to calculated format
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dayName = dayNames[date.getDay()];
     const dayNumber = date.getDate();
-    return { dayName, dayNumber, fullDate: date };
+    return { dayName, dayNumber, fullDate: date, isSelected: false, isToday: false, hasSessions: false, sessionCount: 0 };
   };
 
   // Handle date selection
@@ -139,6 +293,23 @@ const CoachDashboard = () => {
     date2.setHours(0, 0, 0, 0);
     return date1.getTime() === date2.getTime();
   };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#003F8F] mb-4"></div>
+          <p className="text-gray-600 font-[Inter]">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state (but still show UI with default data)
+  if (error) {
+    console.error('Dashboard error:', error);
+  }
 
   return (
     <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F] overflow-x-hidden">
@@ -213,25 +384,39 @@ const CoachDashboard = () => {
 
               <div>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <p className="text-4xl font-medium text-gray-500">2,000</p>
-                  <span className="flex items-center gap-2 text-xs">
-                    {/* Blue Rounded Chip */}
-                    <span className="flex items-center gap-1 px-3 py-1 rounded-full border border-[#1E63C7] bg-[#E8F5EC] text-[#1E63C7] font-semibold">
-                      <span className="w-4 h-4 flex items-center justify-center">
-                        <ArrowUpIcon className="w-3 h-3 text-[#1E63C7]" />
+                  <p className="text-4xl font-medium text-gray-500">
+                    {dashboardData?.clients_list?.total_clients || 0}
+                  </p>
+                  {dashboardData?.clients_list?.vs_last_month !== undefined && (
+                    <span className="flex items-center gap-2 text-xs">
+                      {/* Blue Rounded Chip */}
+                      <span className="flex items-center gap-1 px-3 py-1 rounded-full border border-[#1E63C7] bg-[#E8F5EC] text-[#1E63C7] font-semibold">
+                        <span className="w-4 h-4 flex items-center justify-center">
+                          <ArrowUpIcon className="w-3 h-3 text-[#1E63C7]" />
+                        </span>
+                        {dashboardData.clients_list.vs_last_month.toFixed(0)}%
                       </span>
-                      25%
+
+                      {/* Text outside */}
+                      <span className="text-gray-500">vs Last Month</span>
                     </span>
-
-                    {/* Text outside */}
-                    <span className="text-gray-500">vs Last Month</span>
-                  </span>
-
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 w-full sm:max-w-sm ">
-                {[{ title: "Male", value: 1200, percent: "70%" }, { title: "Female", value: 800, percent: "30%" }].map((item) => (
+                {[
+                  { 
+                    title: "Male", 
+                    value: dashboardData?.clients_list?.gender_breakdown?.male?.count || 0, 
+                    percent: `${dashboardData?.clients_list?.gender_breakdown?.male?.percentage?.toFixed(0) || 0}%` 
+                  }, 
+                  { 
+                    title: "Female", 
+                    value: dashboardData?.clients_list?.gender_breakdown?.female?.count || 0, 
+                    percent: `${dashboardData?.clients_list?.gender_breakdown?.female?.percentage?.toFixed(0) || 0}%` 
+                  }
+                ].map((item) => (
                   <div key={item.title} className="rounded-xl !border border-[#4D60804D] p-3 ">
                     <p className="text-sm text-gray-500">{item.title}</p>
                     <div className="flex items-center justify-between mt-2">
@@ -246,16 +431,31 @@ const CoachDashboard = () => {
             {/* LEVEL PROGRESS */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
-                { label: "Beginner", value: 700, percent: 35, color: "bg-[#0B53BD]" },
-                { label: "Intermediate", value: 750, percent: 37.5, color: "bg-[#4A5C84]" },
-                { label: "Advanced", value: 550, percent: 27.5, color: "bg-[#E3C8B0]" },
+                { 
+                  label: "Beginner", 
+                  value: dashboardData?.clients_list?.level_breakdown?.beginner?.count || 0, 
+                  percent: dashboardData?.clients_list?.level_breakdown?.beginner?.percentage || 0, 
+                  color: "bg-[#0B53BD]" 
+                },
+                { 
+                  label: "Intermediate", 
+                  value: dashboardData?.clients_list?.level_breakdown?.intermediate?.count || 0, 
+                  percent: dashboardData?.clients_list?.level_breakdown?.intermediate?.percentage || 0, 
+                  color: "bg-[#4A5C84]" 
+                },
+                { 
+                  label: "Advanced", 
+                  value: dashboardData?.clients_list?.level_breakdown?.advanced?.count || 0, 
+                  percent: dashboardData?.clients_list?.level_breakdown?.advanced?.percentage || 0, 
+                  color: "bg-[#E3C8B0]" 
+                },
               ].map((level) => (
                 <div key={level.label} className="rounded-xl !border border-[#4D60804D] p-4 ">
                   <p className="text-lg font-medium text-[#4D6080]">{level.value}</p>
                   <p className="text-sm text-[#4D6080]">{level.label}</p>
 
                   <div className="mt-4">
-                    <p className="text-xs font-semibold text-[#333333]">{level.percent}%</p>
+                    <p className="text-xs font-semibold text-[#333333]">{level.percent.toFixed(1)}%</p>
                     <div className="h-4 bg-[#EEF2FB] rounded-[6px] overflow-hidden">
                       <div className={`${level.color} h-full`} style={{ width: `${level.percent}%` }} />
                     </div>
@@ -314,9 +514,11 @@ const CoachDashboard = () => {
               </button>
 
               <div className="flex gap-4 overflow-x-auto no-scrollbar px-2">
-                {weekDates.map((date) => {
-                  const { dayName, dayNumber } = formatDate(date);
-                  const isSelected = isDateSelected(date);
+                {weekDates.map((date, index) => {
+                  // Get API date data if available
+                  const apiDateData = dashboardData?.sessions?.calendar_dates?.[index] || null;
+                  const { dayName, dayNumber, isSelected: apiIsSelected, hasSessions, sessionCount } = formatDate(date, apiDateData);
+                  const isSelected = apiIsSelected !== undefined ? apiIsSelected : isDateSelected(date);
 
                   return (
                     <button
@@ -339,10 +541,13 @@ const CoachDashboard = () => {
                       </div>
 
                       {/* BOTTOM HALF — FIXED WHITE FOR SELECTED */}
-                      <div className="bg-white py-2">
+                      <div className="bg-white py-2 relative">
                         <span className={`text-sm font-semibold ${isSelected ? "text-black" : "text-black"}`}>
                           {dayNumber}
                         </span>
+                        {hasSessions && sessionCount > 0 && (
+                          <span className="absolute top-1 right-1 w-2 h-2 bg-[#003F8F] rounded-full"></span>
+                        )}
                       </div>
                     </button>
                   );
@@ -364,15 +569,16 @@ const CoachDashboard = () => {
 
             {/* SESSION LIST */}
             <div className="space-y-3">
-              {sessions.map((session, index) => {
-                const isPending = session.status === "Pending";
-                const isSelectedRow = selectedSessionIndex === index;
+              {sessions.length > 0 ? (
+                sessions.map((session, index) => {
+                  const isPending = session.status === "Pending" || session.status === "pending";
+                  const isSelectedRow = selectedSessionIndex === index;
 
-                return (
-                  <div
-                    key={session.name}
-                    onClick={() => setSelectedSessionIndex(index)}
-                    className={`
+                  return (
+                    <div
+                      key={`${session.name}-${index}`}
+                      onClick={() => setSelectedSessionIndex(index)}
+                      className={`
           rounded-xl border px-4 py-4 flex flex-col sm:flex-row 
           items-start sm:items-center justify-between gap-4 cursor-pointer transition
 
@@ -382,35 +588,40 @@ const CoachDashboard = () => {
               : "bg-white border-[#D5DFEE] hover:border-[#003F8F66]" 
           }
         `}
-                  >
-                    {/* LEFT Section */}
-                    <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 flex items-center justify-center rounded-full 
+                    >
+                      {/* LEFT Section */}
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 flex items-center justify-center rounded-full 
             border border-[#003F8F] text-[#003F8F] font-semibold">
-                        {index + 1}
-                      </span>
+                          {index + 1}
+                        </span>
 
-                      <p className="font-semibold text-[#003F8F]">{session.name}</p>
-                    </div>
+                        <p className="font-semibold text-[#003F8F]">{session.name}</p>
+                      </div>
 
-                    {/* MIDDLE Duration */}
-                    <div className="text-right">
-                      <span className="text-sm text-[#1E1E1E]">{session.duration}</span>
-                      <p className="text-xs text-gray-500">Duration</p>
-                    </div>
+                      {/* MIDDLE Duration */}
+                      <div className="text-right">
+                        <span className="text-sm text-[#1E1E1E]">{session.duration}</span>
+                        <p className="text-xs text-gray-500">Duration</p>
+                      </div>
 
-                    {/* RIGHT Status */}
-                    <span
-                      className={`
+                      {/* RIGHT Status */}
+                      <span
+                        className={`
             text-sm font-semibold
             ${isPending ? "text-[#F3701E]" : "text-[#003F8F]"}
           `}
-                    >
-                      {session.status}
-                    </span>
-                  </div>
-                );
-              })}
+                      >
+                        {session.status}
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No sessions scheduled for selected date
+                </div>
+              )}
             </div>
 
           </div>
@@ -452,32 +663,38 @@ const CoachDashboard = () => {
             </div>
 
             <div className="space-y-3">
-              {clientProgress.map((client) => (
-                <div
-                  key={client.name}
-                  className="rounded-xl !border border-[#4D60804D] p-4 shadow-sm"
-                >
-                  <div className="flex flex-wrap justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <p className="font-semibold text-[#003F8F]">{client.name}</p>
-                      <span className="text-xs px-3 py-1 rounded-full bg-[#003F8F] text-white">
-                        On Track
-                      </span>
+              {clientProgress.length > 0 ? (
+                clientProgress.map((client) => (
+                  <div
+                    key={client.id || client.name}
+                    className="rounded-xl !border border-[#4D60804D] p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <p className="font-semibold text-[#003F8F]">{client.name}</p>
+                        <span className="text-xs px-3 py-1 rounded-full bg-[#003F8F] text-white">
+                          On Track
+                        </span>
+                      </div>
+
+                      <p className="text-gray-500 font-semibold mt-3">
+                        {client.percent.toFixed(0)}%
+                      </p>
                     </div>
 
-                    <p className="text-gray-500 font-semibold mt-3">
-                      {client.percent}%
-                    </p>
+                    <div className="h-2 bg-[#E4EAF5] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#FF7A00]"
+                        style={{ width: `${client.percent}%` }}
+                      />
+                    </div>
                   </div>
-
-                  <div className="h-2 bg-[#E4EAF5] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#FF7A00]"
-                      style={{ width: `${client.percent}%` }}
-                    />
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No client progress data available
                 </div>
-              ))}
+              )}
             </div>
 
             <button

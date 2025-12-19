@@ -312,31 +312,24 @@ const WorkOut = ({ clientId }) => {
         return notes;
     }, [calendarData, selectedDay, selectedDayDate]);
 
-    // Filter regular notes by selected day's date
+    // DO NOT use regular notes from calendarData.notes.data - those are for Overview tab only
+    // Workout Calendar should only show exercise-specific notes
     const filteredRegularNotes = useMemo(() => {
-        if (!calendarData?.notes?.data || !selectedDayDate) return [];
+        // Return empty array - do not show regular notes in Workout Calendar
+        // Regular notes come from /client/notes/ API and should only show in Overview tab
+        return [];
+    }, []);
 
-        const selectedDate = new Date(selectedDayDate);
-        const selectedDateStr = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-
-        return calendarData.notes.data.filter((note) => {
-            if (!note.created_at) return false;
-            const noteDate = new Date(note.created_at);
-            const noteDateStr = noteDate.toISOString().split('T')[0];
-            return noteDateStr === selectedDateStr;
-        });
-    }, [calendarData, selectedDayDate]);
-
-    // Combine regular notes and exercise notes for selected day only
+    // Only show exercise notes in Workout Calendar - no regular notes
     const allNotes = useMemo(() => {
-        const combined = [...filteredRegularNotes, ...exerciseNotes];
-        // Sort by date (newest first)
-        return combined.sort((a, b) => {
+        // Only use exercise notes, not regular notes
+        // Regular notes from /client/notes/ API should only appear in Overview tab
+        return exerciseNotes.sort((a, b) => {
             const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
             const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
             return dateB - dateA;
         });
-    }, [filteredRegularNotes, exerciseNotes]);
+    }, [exerciseNotes]);
 
     const progressPhotos = useMemo(() => {
         if (!calendarData || !calendarData.progress_photos || !calendarData.progress_photos.data) {

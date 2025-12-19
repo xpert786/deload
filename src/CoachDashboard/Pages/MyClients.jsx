@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { DeleteIcon, EyeIconTable, PreviousIcon ,NextIcon, SearchIcon} from '../Components/Icons';
+import { DeleteIcon, EyeIconTable, PreviousIcon ,NextIcon, SearchIcon, ArchiveIconForCoach, UnarchiveIconForCoach} from '../Components/Icons';
 
 // Use API URL from .env file
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -23,6 +23,8 @@ const MyClients = () => {
   const [deletingClientId, setDeletingClientId] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [unarchivingClientId, setUnarchivingClientId] = useState(null);
   const clientsPerPage = 7;
 
   const filters = ['All', 'Beginner', 'Intermediate', 'Advanced'];
@@ -62,7 +64,10 @@ const MyClients = () => {
 
       // Ensure API_BASE_URL doesn't have trailing slash
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-      const apiUrl = `${baseUrl}/clients/list/`;
+      // Use archived endpoint if showing archived clients
+      const apiUrl = showArchived 
+        ? `${baseUrl}/coach/clients/archived/`
+        : `${baseUrl}/clients/list/`;
 
       // Prepare headers
       const headers = {
@@ -109,11 +114,13 @@ const MyClients = () => {
 
           return {
             id: client.id,
-            name: client.name || 'N/A',
+            name: client.name || client.fullname || 'N/A',
             email: client.email || 'N/A',
-            phone: client.phone || 'N/A',
-            address: client.address || 'N/A',
-            level: capitalizeLevel(client.level)
+            phone: client.phone || client.phone_number || 'N/A',
+            address: client.address || client.city || 'N/A',
+            level: capitalizeLevel(client.level),
+            is_archived: client.is_archived || false,
+            archived_at: client.archived_at || null
           };
         });
 
@@ -128,9 +135,9 @@ const MyClients = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, showArchived]);
 
-  // Fetch clients on component mount and when user changes
+  // Fetch clients on component mount and when user changes or showArchived changes
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
@@ -174,6 +181,97 @@ const MyClients = () => {
     const client = clientsData.find(c => c.id === clientId);
     setClientToDelete(client);
     setShowDeleteModal(true);
+  };
+
+  const handleUnarchive = async (clientId) => {
+    if (!clientId) return;
+
+    setUnarchivingClientId(clientId);
+    setError('');
+
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      if (!isValidToken) {
+        setError('Authentication token not found. Please login again.');
+        setUnarchivingClientId(null);
+        return;
+      }
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      const apiUrl = `${baseUrl}/coach/clients/${clientId}/unarchive/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse unarchive response:', parseError);
+        setError('Failed to parse server response. Please try again.');
+        setUnarchivingClientId(null);
+        return;
+      }
+
+      if (response.ok) {
+        // Refresh the clients list after successful unarchive
+        await fetchClients();
+      } else {
+        console.error('Failed to unarchive client:', result);
+        setError(result.message || result.detail || 'Failed to unarchive client. Please try again.');
+      }
+    } catch (err) {
+      console.error('Unarchive client error:', err);
+      setError('Network error: Unable to unarchive client. Please check your connection.');
+    } finally {
+      setUnarchivingClientId(null);
+    }
   };
 
   const handleDeleteConfirm = async () => {
@@ -284,10 +382,12 @@ const MyClients = () => {
   return (
     <div className="space-y-6 p-2 sm:p-4  text-[#003F8F]">
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
-        {/* Header Section */}
+          {/* Header Section */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* Title */}
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#003F8F] font-[Poppins]">Client</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#003F8F] font-[Poppins]">
+            {showArchived ? 'Archived Clients' : 'Client'}
+          </h1>
         </div>
 
         {/* Error Message */}
@@ -316,7 +416,7 @@ const MyClients = () => {
                     setSelectedFilter(filter);
                     setCurrentPage(1);
                   }}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition cursor-pointer ${
                     selectedFilter === filter
                       ? 'bg-[#003F8F] text-white'
                       : 'bg-white text-gray-500 border border-gray-300 hover:border-[#003F8F] hover:text-[#003F8F]'
@@ -327,21 +427,42 @@ const MyClients = () => {
               ))}
             </div>
 
-            {/* Search Bar */}
-            <div className="relative flex-1 sm:flex-initial sm:w-64">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <SearchIcon />
+            {/* Search Bar and Action Buttons */}
+            <div className="flex items-center gap-3 flex-1 sm:flex-initial sm:justify-end">
+              {/* Search Bar */}
+              <div className="relative flex-1 sm:flex-initial sm:w-64">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <SearchIcon />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search clients"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-transparent text-sm text-gray-700 placeholder-gray-400 bg-[#E8F0FF]"
+                />
               </div>
-              <input
-                type="text"
-                placeholder="Search clients"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
+
+              {/* Action Buttons */}
+              <button
+                onClick={() => {
+                  setShowArchived(!showArchived);
                   setCurrentPage(1);
+                  setSearchQuery('');
+                  setSelectedFilter('All');
                 }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-transparent text-sm text-gray-700 placeholder-gray-400 bg-[#E8F0FF]"
-              />
+                className={`px-4 py-2 border rounded-lg text-sm font-medium transition flex items-center gap-2 cursor-pointer ${
+                  showArchived
+                    ? 'bg-[#003F8F] text-white border-[#003F8F]'
+                    : 'bg-gray-50 border-gray-200 text-[#003F8F] hover:bg-gray-100'
+                }`}
+              >
+                <ArchiveIconForCoach />
+                <span>{showArchived ? 'Active Clients' : 'Archived'}</span>
+              </button>
             </div>
           </div>
         )}
@@ -396,36 +517,63 @@ const MyClients = () => {
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleDeleteClick(client.id)}
-                            disabled={deletingClientId === client.id}
-                            className={`border flex items-center justify-center transition cursor-pointer ${
-                              deletingClientId === client.id
-                                ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                : isHovered
-                                ? 'border-gray-300 bg-white text-gray-600 hover:bg-red-50 hover:text-red-600'
-                                : 'border-gray-300 bg-white text-gray-400'
-                            }`}
-                            title="Delete client"
-                          >
-                           {deletingClientId === client.id ? (
-                             <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                             </svg>
-                           ) : (
-                             <DeleteIcon />
-                           )}
-                          </button>
+                          {showArchived ? (
+                            // Show unarchive button for archived clients
+                            <button
+                              onClick={() => handleUnarchive(client.id)}
+                              disabled={unarchivingClientId === client.id}
+                              className={`border flex items-center justify-center transition cursor-pointer w-10 h-10 cursor-pointer ${
+                                unarchivingClientId === client.id
+                                  ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : isHovered
+                                  ? 'border-gray-300 bg-white text-gray-600 hover:bg-green-50 hover:text-green-600'
+                                  : 'border-gray-300 bg-white text-gray-400'
+                              }`}
+                              title="Unarchive client"
+                            >
+                              {unarchivingClientId === client.id ? (
+                                <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <UnarchiveIconForCoach />
+                              )}
+                            </button>
+                          ) : (
+                            // Show delete button for active clients
+                            <button
+                              onClick={() => handleDeleteClick(client.id)}
+                              disabled={deletingClientId === client.id}
+                              className={`flex items-center justify-center transition cursor-pointer ${
+                                deletingClientId === client.id
+                                  ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : isHovered
+                                  ? 'border-gray-300 bg-white text-gray-600 hover:bg-red-50 hover:text-red-600'
+                                  : 'border-gray-300 bg-white text-gray-400'
+                              }`}
+                              title="Delete client"
+                            >
+                              {deletingClientId === client.id ? (
+                                <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <DeleteIcon />
+                              )}
+                            </button>
+                          )}
                           <button
                             onClick={() => handleView(client.id)}
-                            className={` border flex items-center justify-center transition cursor-pointer ${
+                            className={` flex items-center justify-center transition cursor-pointer ${
                               isHovered
                                 ? 'bg-[#003F8F] border-[#003F8F] text-white'
                                 : 'border-gray-300 bg-white text-gray-400'
                             }`}
+                            title="View client"
                           >
-                                <EyeIconTable />
+                            <EyeIconTable />
                           </button>
                         </div>
                       </td>

@@ -269,6 +269,7 @@ const CoachSettings = () => {
       // Ensure API_BASE_URL doesn't have trailing slash
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
       // Check if baseUrl already includes /api, if not add it
+      // Use PATCH method on /coach/profile/update/ endpoint
       const apiUrl = baseUrl.includes('/api') 
         ? `${baseUrl}/coach/profile/update/`
         : `${baseUrl}/api/coach/profile/update/`;
@@ -286,13 +287,13 @@ const CoachSettings = () => {
       if (selectedImageFile) {
         const formDataToSend = new FormData();
         formDataToSend.append('profile_photo', selectedImageFile);
-        formDataToSend.append('fullname', formData.fullname);
-        formDataToSend.append('email', formData.email);
-        formDataToSend.append('phone_number', formData.phone_number);
-        formDataToSend.append('address', formData.address);
-        formDataToSend.append('email_notifications', emailNotifications);
-        formDataToSend.append('push_notifications', pushNotifications);
-        formDataToSend.append('two_factor_enabled', twoFactorAuth);
+        formDataToSend.append('fullname', formData.fullname || '');
+        formDataToSend.append('email', formData.email || '');
+        formDataToSend.append('phone_number', formData.phone_number || '');
+        formDataToSend.append('address', formData.address || '');
+        formDataToSend.append('email_notifications', emailNotifications ? 'true' : 'false');
+        formDataToSend.append('push_notifications', pushNotifications ? 'true' : 'false');
+        formDataToSend.append('two_factor_enabled', twoFactorAuth ? 'true' : 'false');
         
         requestBody = formDataToSend;
         // Don't set Content-Type header when using FormData, browser will set it with boundary
@@ -300,10 +301,10 @@ const CoachSettings = () => {
         // No image, use JSON
         headers['Content-Type'] = 'application/json';
         requestBody = JSON.stringify({
-          fullname: formData.fullname,
-          email: formData.email,
-          phone_number: formData.phone_number,
-          address: formData.address,
+          fullname: formData.fullname || '',
+          email: formData.email || '',
+          phone_number: formData.phone_number || '',
+          address: formData.address || '',
           email_notifications: emailNotifications,
           push_notifications: pushNotifications,
           two_factor_enabled: twoFactorAuth
@@ -315,7 +316,7 @@ const CoachSettings = () => {
       console.log('Update Profile Request Body:', selectedImageFile ? 'FormData' : requestBody);
 
       const response = await fetch(apiUrl, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: headers,
         credentials: 'include',
         body: requestBody,
@@ -350,7 +351,7 @@ const CoachSettings = () => {
           certification_licence_url: result.data.certification_licence || null
         });
         
-        // Update form data
+        // Update form data with all fields from response
         setFormData({
           fullname: result.data.fullname || '',
           email: result.data.email || '',
@@ -358,7 +359,7 @@ const CoachSettings = () => {
           address: result.data.address || ''
         });
 
-        // Update notification states
+        // Update notification states from API response
         if (result.data.email_notifications !== undefined) {
           setEmailNotifications(result.data.email_notifications);
         }
@@ -369,10 +370,11 @@ const CoachSettings = () => {
           setTwoFactorAuth(result.data.two_factor_enabled);
         }
 
-        // Update profile image if URL changed
+        // Update profile image if URL changed or provided
         if (result.data.profile_photo) {
           let imageUrl = result.data.profile_photo;
           
+          // If URL is already absolute, use it as is
           // If URL is relative, construct full URL
           if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
             const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
@@ -383,13 +385,11 @@ const CoachSettings = () => {
           
           imageUrl = imageUrl.trim();
           
-          // Validate image URL before setting
+          // Set the profile image URL
           if (imageUrl && 
               imageUrl.trim() !== '' && 
               imageUrl !== 'null' && 
-              imageUrl !== 'undefined' &&
-              !imageUrl.includes('ProfileLogo') &&
-              !imageUrl.includes('clientprofile')) {
+              imageUrl !== 'undefined') {
             setProfileImage(imageUrl);
             
             // Update localStorage with user-specific key
@@ -708,6 +708,20 @@ const CoachSettings = () => {
                 value={formData.phone_number}
                 onChange={handleFormChange}
                 placeholder="Enter phone number"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-[#003F8F] mb-2 font-[Inter]">
+                Address
+              </label>
+              <input
+                type="text"
+                name="address"
+                value={formData.address}
+                onChange={handleFormChange}
+                placeholder="Enter address"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
               />
             </div>

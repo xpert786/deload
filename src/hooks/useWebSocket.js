@@ -123,9 +123,18 @@ export const useWebSocket = (onMessage, onError, onConnect, onDisconnect) => {
       
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      
+      // Log WebSocket creation for debugging
+      console.log('🔌 WebSocket instance created:', {
+        url: wsUrl.replace(/token=[^&]+/, 'token=***'),
+        readyState: ws.readyState,
+        protocol: ws.protocol
+      });
 
       ws.onopen = () => {
         console.log('✅ WebSocket connection opened successfully');
+        console.log('🔗 WebSocket URL:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+        console.log('📊 WebSocket readyState:', ws.readyState);
         setIsConnected(true);
         setConnectionStatus('connected');
         reconnectAttemptsRef.current = 0;
@@ -158,6 +167,12 @@ export const useWebSocket = (onMessage, onError, onConnect, onDisconnect) => {
       ws.onerror = (error) => {
         console.error('❌ WebSocket error event:', error);
         console.error('WebSocket readyState:', ws.readyState);
+        console.error('WebSocket URL:', wsUrl.replace(/token=[^&]+/, 'token=***'));
+        console.error('Full error details:', {
+          error: error,
+          readyState: ws.readyState,
+          url: wsUrl.replace(/token=[^&]+/, 'token=***')
+        });
         setConnectionStatus('error');
         if (onError) onError(error);
       };
@@ -225,15 +240,25 @@ export const useWebSocket = (onMessage, onError, onConnect, onDisconnect) => {
     }
   }, [onError]);
 
-  // Connect on mount
+  // Connect on mount - use refs to avoid dependency issues
   useEffect(() => {
-    connect();
+    // Only connect if not already connected
+    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      console.log('🔄 useWebSocket: Initializing connection...');
+      connect();
+    }
 
     // Cleanup on unmount
     return () => {
+      console.log('🔄 useWebSocket: Cleaning up connection...');
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
       disconnect();
     };
-  }, [connect, disconnect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run on mount/unmount
 
   return {
     isConnected,

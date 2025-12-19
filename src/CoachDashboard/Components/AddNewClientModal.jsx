@@ -16,6 +16,7 @@ const AddNewClientModal = ({ isOpen, onClose, onClientAdded }) => {
     email: '',
     gender: 'Male',
     contactNumber: '',
+    address: '',
     goals: '',
     level: '',
     equipments: {
@@ -108,10 +109,13 @@ const AddNewClientModal = ({ isOpen, onClose, onClientAdded }) => {
       if (formData.equipments.machines) equipmentsArray.push('machines');
 
       // Prepare request body
+      // Send address as city field since API expects city and returns city in response
       const requestBody = {
         name: formData.name,
         email: formData.email,
         contact_number: formData.contactNumber,
+        city: formData.address || '', // Send address as city field
+        address: formData.address || '', // Also send as address for compatibility
         gender: formData.gender.toLowerCase(),
         level: formData.level ? formData.level.toLowerCase() : 'beginner',
         age: formData.age ? parseInt(formData.age) : null,
@@ -123,6 +127,8 @@ const AddNewClientModal = ({ isOpen, onClose, onClientAdded }) => {
         medical_conditions: formData.medicalConditions || '',
         notes: formData.notes || ''
       };
+      
+      console.log('Request body with address/city:', requestBody);
 
       // Prepare headers
       const headers = {
@@ -166,6 +172,7 @@ const AddNewClientModal = ({ isOpen, onClose, onClientAdded }) => {
           email: '',
           gender: 'Male',
           contactNumber: '',
+          address: '',
           goals: '',
           level: '',
           equipments: {
@@ -438,6 +445,19 @@ const AddNewClientModal = ({ isOpen, onClose, onClientAdded }) => {
                   value={formData.contactNumber}
                   onChange={handleChange}
                   placeholder="Enter contact number"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-transparent text-sm"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label className="block text-sm font-semibold text-[#003F8F] mb-2 font-[Poppins]">Address</label>
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  placeholder="Enter address"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-transparent text-sm"
                 />
               </div>
