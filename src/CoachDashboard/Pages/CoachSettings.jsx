@@ -382,12 +382,45 @@ const CoachSettings = () => {
           }
           
           imageUrl = imageUrl.trim();
-          setProfileImage(imageUrl);
           
-          // Dispatch event to notify header about profile image update
-          window.dispatchEvent(new CustomEvent('profileImageUpdated', {
-            detail: { imageUrl }
-          }));
+          // Validate image URL before setting
+          if (imageUrl && 
+              imageUrl.trim() !== '' && 
+              imageUrl !== 'null' && 
+              imageUrl !== 'undefined' &&
+              !imageUrl.includes('ProfileLogo') &&
+              !imageUrl.includes('clientprofile')) {
+            setProfileImage(imageUrl);
+            
+            // Update localStorage with user-specific key
+            const userId = user?.id;
+            if (userId) {
+              localStorage.setItem(`coachProfilePhoto_${userId}`, imageUrl);
+            }
+            
+            // Dispatch event to notify header about profile image update
+            window.dispatchEvent(new CustomEvent('profileImageUpdated', {
+              detail: { 
+                imageUrl,
+                userId: userId
+              }
+            }));
+          } else {
+            // Invalid image URL, clear it
+            setProfileImage(null);
+            const userId = user?.id;
+            if (userId) {
+              localStorage.removeItem(`coachProfilePhoto_${userId}`);
+            }
+            
+            // Dispatch event to clear profile image
+            window.dispatchEvent(new CustomEvent('profileImageUpdated', {
+              detail: { 
+                imageUrl: null,
+                userId: userId
+              }
+            }));
+          }
         }
 
         // Clear selected image file after successful upload

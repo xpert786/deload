@@ -125,7 +125,7 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
                 imageUrl !== 'undefined' &&
                 !imageUrl.includes('ProfileLogo') &&
                 !imageUrl.includes('clientprofile')) {
-              setProfileImage(imageUrl);
+            setProfileImage(imageUrl);
               // Store in localStorage with user ID to prevent cross-user issues
               localStorage.setItem(`clientProfilePhoto_${user.id}`, imageUrl);
             } else {
@@ -150,15 +150,58 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
     };
 
     fetchProfilePicture();
+  }, [user]);
+
+  // Listen for profile picture updates from Settings page
+  useEffect(() => {
+    if (!user?.id) return; // Don't set up listener if no user
     
-    // Listen for profile picture updates from Settings page
     const handleProfileUpdate = (event) => {
-      if (event.detail && event.detail.profilePhotoUrl && event.detail.userId === user?.id) {
-        setProfileImage(event.detail.profilePhotoUrl);
+      console.log('Client Header - Profile update event received:', event.detail);
+      if (event.detail) {
+        const { profilePhotoUrl, userId } = event.detail;
+        
+        // Update if userId matches current user, or if userId is not provided (same window update)
+        // For same-window updates, we trust the event regardless of userId check
+        const shouldUpdate = !userId || userId === user?.id;
+        
+        if (shouldUpdate) {
+          console.log('Client Header - Updating profile image:', { profilePhotoUrl, userId, currentUserId: user?.id });
+          if (profilePhotoUrl && 
+              profilePhotoUrl.trim() !== '' && 
+              profilePhotoUrl !== 'null' && 
+              profilePhotoUrl !== 'undefined' &&
+              !profilePhotoUrl.includes('ProfileLogo') &&
+              !profilePhotoUrl.includes('clientprofile')) {
+            // Add cache-busting parameter to force browser to reload the image
+            const cacheBustingUrl = profilePhotoUrl.includes('?') 
+              ? `${profilePhotoUrl}&t=${Date.now()}`
+              : `${profilePhotoUrl}?t=${Date.now()}`;
+            
+            // Update profile image with the new URL from settings
+            setProfileImage(cacheBustingUrl);
+            
+            // Update localStorage with user-specific key (store original URL without cache-busting)
+            if (user?.id) {
+              localStorage.setItem(`clientProfilePhoto_${user.id}`, profilePhotoUrl);
+            }
+            console.log('Client Header - Profile image updated successfully:', cacheBustingUrl);
+          } else if (profilePhotoUrl === null || profilePhotoUrl === undefined) {
+            // Clear profile image if explicitly null/undefined
+            setProfileImage(null);
+            if (user?.id) {
+              localStorage.removeItem(`clientProfilePhoto_${user.id}`);
+            }
+            console.log('Client Header - Profile image cleared');
+          }
+        } else {
+          console.log('Client Header - User ID mismatch, ignoring event:', { eventUserId: userId, currentUserId: user?.id });
+        }
       }
     };
     
     window.addEventListener('profilePictureUpdated', handleProfileUpdate);
+    console.log('Client Header - Profile update listener added for user:', user?.id);
     
     // Listen for storage changes (when profile is updated in another tab/window)
     const handleStorageChange = (e) => {
@@ -296,10 +339,18 @@ const Header = ({ isSidebarOpen, toggleSidebar }) => {
                                    !profilePhoto.includes('clientprofile');
               
               if (isValidPhoto) {
+                // Add cache-busting if it's from state (recently updated)
+                const displayUrl = profilePhoto === profileImage && profilePhoto.includes('?t=')
+                  ? profilePhoto
+                  : profilePhoto.includes('?')
+                    ? `${profilePhoto}&t=${Date.now()}`
+                    : `${profilePhoto}?t=${Date.now()}`;
+                
                 return (
                   <>
                     <img
-                      src={profilePhoto}
+                      key={`profile-${user?.id}-${profileImage ? 'img' : 'initials'}`}
+                      src={displayUrl}
                       alt={userName}
                       className="w-full h-full object-cover"
                       onError={(e) => {

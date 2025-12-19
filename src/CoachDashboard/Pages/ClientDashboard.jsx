@@ -424,10 +424,10 @@ const ClientDashboard = () => {
                 
                 if (profilePhoto) {
                   return (
-                    <img
+              <img
                       src={profilePhoto}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
+                alt="Profile"
+                className="w-full h-full object-cover"
                       onError={(e) => {
                         e.target.style.display = 'none';
                         if (e.target.nextSibling) {
@@ -799,12 +799,12 @@ const ClientDashboard = () => {
               <div className="space-y-3">
                 {filteredNotes.length > 0 ? (
                   filteredNotes.map((note) => (
-                    <div key={note.id} className="p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center gap-2 text-xs text-gray-600 font-[Inter] mb-2">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.3181 11.6819 1.33333 8 1.33333C4.3181 1.33333 1.33333 4.3181 1.33333 8C1.33333 11.6819 4.3181 14.6667 8 14.6667Z" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          <path d="M8 4.66667V8L10.6667 10.6667" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                  <div key={note.id} className="p-4 border border-gray-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 font-[Inter] mb-2">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.3181 11.6819 1.33333 8 1.33333C4.3181 1.33333 1.33333 4.3181 1.33333 8C1.33333 11.6819 4.3181 14.6667 8 14.6667Z" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M8 4.66667V8L10.6667 10.6667" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                         <span className="font-semibold text-[#003F8F]">{note.date || 'No date'}</span>
                       </div>
                       <p className="text-sm text-gray-700 font-[Inter]">{note.text || ''}</p>

@@ -14,6 +14,9 @@ const Chat = () => {
 
   const currentUserId = user?.id;
 
+  console.log('client id====================>>>', currentUserId);
+  const number = Number(currentUserId.replace(/\D/g, ""));
+  console.log('coachid====================>>>', number);
   // Load threads
   const loadThreads = useCallback(async () => {
     try {

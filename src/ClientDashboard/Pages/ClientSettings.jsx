@@ -344,15 +344,48 @@ const ClientSettings = () => {
           }
           
           imageUrl = imageUrl.trim();
-          setProfileImage(imageUrl);
           
-          // Dispatch custom event to notify Header component about profile update
-          window.dispatchEvent(new CustomEvent('profilePictureUpdated', {
-            detail: { profilePhotoUrl: imageUrl }
-          }));
-          
-          // Also store in localStorage for persistence
-          localStorage.setItem('clientProfilePhoto', imageUrl);
+          // Validate image URL before setting
+          if (imageUrl && 
+              imageUrl.trim() !== '' && 
+              imageUrl !== 'null' && 
+              imageUrl !== 'undefined' &&
+              !imageUrl.includes('ProfileLogo') &&
+              !imageUrl.includes('clientprofile')) {
+            setProfileImage(imageUrl);
+            
+            const userId = user?.id;
+            
+            // Update localStorage with user-specific key
+            if (userId) {
+              localStorage.setItem(`clientProfilePhoto_${userId}`, imageUrl);
+            }
+            
+            // Dispatch custom event to notify Header component about profile update
+            console.log('Client Settings - Dispatching profilePictureUpdated event:', { profilePhotoUrl: imageUrl, userId });
+            window.dispatchEvent(new CustomEvent('profilePictureUpdated', {
+              detail: { 
+                profilePhotoUrl: imageUrl,
+                userId: userId
+              }
+            }));
+            console.log('Client Settings - Event dispatched successfully');
+          } else {
+            // Invalid image URL, clear it
+            setProfileImage(null);
+            const userId = user?.id;
+            if (userId) {
+              localStorage.removeItem(`clientProfilePhoto_${userId}`);
+            }
+            
+            // Dispatch event to clear profile image
+            window.dispatchEvent(new CustomEvent('profilePictureUpdated', {
+              detail: { 
+                profilePhotoUrl: null,
+                userId: userId
+              }
+            }));
+          }
         }
 
         // Clear selected image file after successful upload

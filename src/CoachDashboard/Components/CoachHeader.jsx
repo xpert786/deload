@@ -174,9 +174,32 @@ const CoachHeader = ({ isSidebarOpen, toggleSidebar }) => {
   // Listen for profile image updates from settings page
   useEffect(() => {
     const handleProfileImageUpdate = (event) => {
-      if (event.detail && event.detail.imageUrl && event.detail.userId === user?.id) {
-        // Update profile image with the new URL from settings
-        setProfileImage(event.detail.imageUrl);
+      if (event.detail) {
+        const { imageUrl, userId } = event.detail;
+        
+        // Only update if userId matches or if userId is not provided (for backward compatibility)
+        if (!userId || userId === user?.id) {
+          if (imageUrl && 
+              imageUrl.trim() !== '' && 
+              imageUrl !== 'null' && 
+              imageUrl !== 'undefined' &&
+              !imageUrl.includes('ProfileLogo') &&
+              !imageUrl.includes('clientprofile')) {
+            // Update profile image with the new URL from settings
+            setProfileImage(imageUrl);
+            
+            // Update localStorage with user-specific key
+            if (user?.id) {
+              localStorage.setItem(`coachProfilePhoto_${user.id}`, imageUrl);
+            }
+          } else {
+            // Clear profile image if invalid or null
+            setProfileImage(null);
+            if (user?.id) {
+              localStorage.removeItem(`coachProfilePhoto_${user.id}`);
+            }
+          }
+        }
       }
     };
 
