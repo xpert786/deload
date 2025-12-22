@@ -180,6 +180,7 @@ const LogWorkout = () => {
   const [uploadFiles, setUploadFiles] = useState([]); // Store actual File objects
   const [completingWorkout, setCompletingWorkout] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [workoutCompleted, setWorkoutCompleted] = useState(false);
 
   // Fetch today's workout from API
   useEffect(() => {
@@ -263,23 +264,48 @@ const LogWorkout = () => {
 
           // Transform API exercises to UI format
           const transformedExercises = result.data.exercises.map((exercise, index) => {
+            // Check if exercise is already completed/skipped from API
+            const exerciseStatus = exercise.status || exercise.status_display || null;
+            const isCompleted = exerciseStatus === 'completed' || exerciseStatus === 'Completed';
+            const isSkipped = exerciseStatus === 'skipped' || exerciseStatus === 'Skipped';
+            
             // Create sets array based on the sets count
             const setsArray = [];
             for (let i = 0; i < exercise.sets; i++) {
+              // If exercise is already completed/skipped from API, use that status
+              let defaultStatus = 'pending';
+              if (isCompleted) {
+                defaultStatus = 'done';
+              } else if (isSkipped) {
+                defaultStatus = 'skipped';
+              }
+              
               setsArray.push({
                 id: exercise.id * 100 + i, // Unique ID for each set - MUST match when loading
                 setNum: i + 1,
                 reps: exercise.reps,
                 weight: exercise.weight_kg || null,
                 rest: null, // API doesn't provide rest time
-                status: 'pending', // Default to pending, will be loaded from localStorage
+                status: defaultStatus,
                 type: 'normal' // API doesn't provide type, default to normal
               });
             }
 
-            // Load saved status from localStorage and merge - IMPORTANT: This must happen here
-            const setsWithStatus = loadSetsStatus(exercise.id, setsArray);
-            console.log(`Exercise ${exercise.id} (${exercise.exercise_name}): Loaded ${setsWithStatus.filter(s => s.status !== 'pending').length} sets with saved status`);
+            // Only load from localStorage if exercise is NOT already completed/skipped
+            // Once completed via API, we should use API status, not localStorage
+            let setsWithStatus;
+            if (isCompleted || isSkipped) {
+              // Exercise is already completed/skipped - use API status and clear localStorage
+              setsWithStatus = setsArray;
+              // Clear localStorage for this exercise since it's already saved to API
+              const key = getSetsStatusKey(exercise.id);
+              localStorage.removeItem(key);
+              console.log(`Exercise ${exercise.id} (${exercise.exercise_name}): Using API status (${exerciseStatus}), cleared localStorage`);
+            } else {
+              // Exercise is pending - load from localStorage for in-progress workout
+              setsWithStatus = loadSetsStatus(exercise.id, setsArray);
+              console.log(`Exercise ${exercise.id} (${exercise.exercise_name}): Loaded ${setsWithStatus.filter(s => s.status !== 'pending').length} sets with saved status from localStorage`);
+            }
 
             return {
               id: exercise.id,
@@ -292,7 +318,7 @@ const LogWorkout = () => {
               },
               instructions: exercise.cue || '',
               sets: setsWithStatus, // Use sets with loaded status
-              notes: '',
+              notes: exercise.notes || '', // Load notes from API if available
               group_label: exercise.group_label || '',
               order: exercise.order || index
             };
@@ -300,6 +326,18 @@ const LogWorkout = () => {
 
           // Sort exercises by order
           transformedExercises.sort((a, b) => a.order - b.order);
+
+          // Check if workout is already completed (all exercises are done or skipped)
+          const allExercisesCompleted = transformedExercises.every(exercise => {
+            const allSetsDone = exercise.sets.every(set => set.status === 'done');
+            const allSetsSkipped = exercise.sets.every(set => set.status === 'skipped');
+            const allSetsDoneOrSkipped = exercise.sets.every(set => set.status === 'done' || set.status === 'skipped');
+            return allSetsDone || allSetsSkipped || allSetsDoneOrSkipped;
+          });
+
+          if (allExercisesCompleted && transformedExercises.length > 0) {
+            setWorkoutCompleted(true);
+          }
 
           setExercises(transformedExercises);
         } else {
@@ -322,12 +360,24 @@ const LogWorkout = () => {
   }, [user]);
 
   // Ensure status persists when navigating back - reload from localStorage if needed
+  // BUT: Don't reload if exercise is already completed/skipped (should come from API)
   useEffect(() => {
     if (exercises.length > 0 && !loading) {
       // Reload status from localStorage to ensure persistence
       setExercises(prevExercises => {
         let hasChanges = false;
         const updatedExercises = prevExercises.map(exercise => {
+          // Check if exercise is already completed (all sets done) or skipped
+          const allSetsDone = exercise.sets.every(set => set.status === 'done');
+          const anySetSkipped = exercise.sets.some(set => set.status === 'skipped');
+          const isCompleted = allSetsDone || (anySetSkipped && exercise.sets.every(set => set.status === 'done' || set.status === 'skipped'));
+          
+          // Don't reload from localStorage if exercise is already completed
+          // This ensures completed workouts from API are not overridden
+          if (isCompleted) {
+            return exercise;
+          }
+          
           const savedSets = loadSetsStatus(exercise.id, exercise.sets);
           // Check if any set status changed
           const statusChanged = savedSets.some((set, idx) =>
@@ -627,6 +677,23 @@ const LogWorkout = () => {
 
       if (response.ok) {
         console.log('Bulk exercise status updated successfully:', result);
+        
+        // Clear localStorage for all completed exercises since they're now saved to API
+        exercises.forEach(exercise => {
+          const allSetsDone = exercise.sets.every(set => set.status === 'done');
+          const anySetSkipped = exercise.sets.some(set => set.status === 'skipped');
+          const hasAnyAction = exercise.sets.some(set => set.status === 'done' || set.status === 'skipped');
+          
+          if ((allSetsDone || anySetSkipped) && hasAnyAction) {
+            const key = getSetsStatusKey(exercise.id);
+            localStorage.removeItem(key);
+            console.log(`Cleared localStorage for completed exercise ${exercise.id}`);
+          }
+        });
+        
+        // Mark workout as completed - hide all interactive elements
+        setWorkoutCompleted(true);
+        
         // Show success popup
         setShowSuccessPopup(true);
         // Auto-hide popup after 3 seconds
@@ -908,17 +975,19 @@ const LogWorkout = () => {
             </p>
           )}
         </div>
-        <div className="relative w-full max-w-xs">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <SearchIcon />
+        {!workoutCompleted && (
+          <div className="relative w-full max-w-xs">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <SearchIcon />
+            </div>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search here..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm text-gray-600 font-[Inter]"
+            />
           </div>
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search here..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm text-gray-600 font-[Inter]"
-          />
-        </div>
+        )}
       </div>
 
       {/* Exercise Details Section */}
@@ -948,8 +1017,30 @@ const LogWorkout = () => {
         </div>
       )}
 
-      {/* Workout Log Table */}
-      {displayedExercise && (
+      {/* Workout Completed Message */}
+      {workoutCompleted && displayedExercise && (
+        <div className="bg-white rounded-lg p-8 sm:p-12 text-center">
+          <div className="flex flex-col items-center space-y-4">
+            {/* Success Icon */}
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
+              <svg width="50" height="50" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M25 0C11.1925 0 0 11.1925 0 25C0 38.8075 11.1925 50 25 50C38.8075 50 50 38.8075 50 25C50 11.1925 38.8075 0 25 0ZM25 47.1875C12.7412 47.1875 2.8125 37.2588 2.8125 25C2.8125 12.7412 12.7412 2.8125 25 2.8125C37.2588 2.8125 47.1875 12.7412 47.1875 25C47.1875 37.2588 37.2588 47.1875 25 47.1875Z" fill="#25CD25"/>
+                <path d="M34.9775 16.2725L22.9775 28.2725L15.0225 20.3175C14.4825 19.7775 13.6425 19.7775 13.1025 20.3175C12.5625 20.8575 12.5625 21.6975 13.1025 22.2375L22.3025 31.4375C22.8425 31.9775 23.6825 31.9775 24.2225 31.4375C24.3575 31.3025 24.4662 31.1488 24.5488 30.9837L37.3975 18.135C37.9375 17.595 37.9375 16.755 37.3975 16.215C36.8575 15.675 36.0175 15.675 35.4775 16.215L34.9775 16.2725Z" fill="#25CD25"/>
+              </svg>
+            </div>
+            
+            <h3 className="text-2xl sm:text-3xl font-bold text-[#003F8F] font-[Poppins]">
+              Workout Completed!
+            </h3>
+            <p className="text-lg text-gray-600 font-[Inter] max-w-md">
+              Your workout has been successfully completed and saved. Great job!
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Workout Log Table - Only show if workout is not completed */}
+      {!workoutCompleted && displayedExercise && (
         <div className="bg-white rounded-lg p-4 sm:p-6 overflow-x-auto">
           <div className="min-w-full">
             {/* Table Header */}
@@ -1026,8 +1117,8 @@ const LogWorkout = () => {
         </div>
       )}
 
-      {/* Exercise Notes Section */}
-      {displayedExercise && (
+      {/* Exercise Notes Section - Only show if workout is not completed */}
+      {!workoutCompleted && displayedExercise && (
         <div className="bg-white rounded-lg p-4 sm:p-6">
           <div className="flex flex-wrap items-center gap-4 mb-3">
             <span className="text-[#003F8F] font-semibold font-[Inter] cursor-pointer">Exercise</span>
@@ -1042,8 +1133,8 @@ const LogWorkout = () => {
         </div>
       )}
 
-      {/* Footer Actions */}
-      {displayedExercise && (
+      {/* Footer Actions - Only show if workout is not completed */}
+      {!workoutCompleted && displayedExercise && (
         <div className={`flex flex-col sm:flex-row sm:items-center gap-4 ${displayedExercise?.allowUpload ? 'justify-between' : 'justify-end'}`}>
           {displayedExercise?.allowUpload && (
             <button

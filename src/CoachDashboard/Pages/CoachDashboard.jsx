@@ -20,12 +20,10 @@ import {
 
 import ManImage from "../../assets/dashboard.png";
 
-// Use API URL from .env file
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-
-if (!API_BASE_URL) {
-  console.error('VITE_API_BASE_URL is not defined in .env file');
-}
+// API URLs
+const API_BASE_URL = 'http://168.231.121.7/deload/api/comprehensive-dashboard/';
+const SESSIONS_API_URL = 'http://168.231.121.7/deload/api/sessions/';
+const CLIENT_PROGRESS_API_URL = 'http://168.231.121.7/deload/api/coach/client-progress';
 
 const notifications = {
   today: [
@@ -50,6 +48,8 @@ const CoachDashboard = () => {
 
   // API data state
   const [dashboardData, setDashboardData] = useState(null);
+  const [sessionsData, setSessionsData] = useState(null);
+  const [clientProgressData, setClientProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -63,12 +63,12 @@ const CoachDashboard = () => {
 
   // Sync selected date with API data when it loads
   useEffect(() => {
-    if (dashboardData?.sessions?.selected_date) {
-      const apiSelectedDate = new Date(dashboardData.sessions.selected_date);
+    if (sessionsData?.selected_date) {
+      const apiSelectedDate = new Date(sessionsData.selected_date);
       apiSelectedDate.setHours(0, 0, 0, 0);
       setSelectedDate(apiSelectedDate);
     }
-  }, [dashboardData]);
+  }, [sessionsData]);
 
   // Selected session (for row highlight on click)
   const [selectedSessionIndex, setSelectedSessionIndex] = useState(null);
@@ -110,12 +110,8 @@ const CoachDashboard = () => {
         token.trim() !== 'undefined' &&
         token.trim() !== '';
 
-      // Ensure API_BASE_URL doesn't have trailing slash
-      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-      // Build API URL
-      const apiUrl = baseUrl.includes('/api')
-        ? `${baseUrl}/comprehensive-dashboard/`
-        : `${baseUrl}/api/comprehensive-dashboard/`;
+      // Use hardcoded API URL
+      const apiUrl = API_BASE_URL;
 
       // Prepare headers
       const headers = {
@@ -161,9 +157,163 @@ const CoachDashboard = () => {
     }
   }, [user]);
 
+  // Fetch sessions data
+  const fetchSessionsData = useCallback(async () => {
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(SESSIONS_API_URL, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse sessions response:', parseError);
+        return;
+      }
+
+      if (response.ok && result.data) {
+        setSessionsData(result.data);
+        
+        // Sync selected date if API provides one
+        if (result.data.selected_date) {
+          const apiSelectedDate = new Date(result.data.selected_date);
+          apiSelectedDate.setHours(0, 0, 0, 0);
+          setSelectedDate(apiSelectedDate);
+        }
+      } else {
+        console.error('Failed to fetch sessions data:', result);
+      }
+    } catch (err) {
+      console.error('Fetch sessions error:', err);
+    }
+  }, [user]);
+
+  // Fetch client progress data
+  const fetchClientProgressData = useCallback(async () => {
+    try {
+      // Get authentication token
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(CLIENT_PROGRESS_API_URL, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse client progress response:', parseError);
+        return;
+      }
+
+      if (response.ok) {
+        // Set data even if it's an empty array
+        if (result.data && Array.isArray(result.data)) {
+          setClientProgressData(result.data);
+        } else {
+          // If data is not an array or doesn't exist, set empty array
+          setClientProgressData([]);
+        }
+      } else {
+        console.error('Failed to fetch client progress data:', result);
+        setClientProgressData([]);
+      }
+    } catch (err) {
+      console.error('Fetch client progress error:', err);
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchDashboardData();
-  }, [fetchDashboardData]);
+    fetchSessionsData();
+    fetchClientProgressData();
+  }, [fetchDashboardData, fetchSessionsData, fetchClientProgressData]);
 
   // Get quick stats from API or use defaults
   const quickStats = useMemo(() => {
@@ -182,41 +332,104 @@ const CoachDashboard = () => {
     ];
   }, [dashboardData]);
 
-  // Get sessions from API or use defaults
+  // Get sessions from API filtered by selected date
   const sessions = useMemo(() => {
-    if (dashboardData?.sessions?.sessions_list && dashboardData.sessions.sessions_list.length > 0) {
-      return dashboardData.sessions.sessions_list.map((session) => ({
-        name: session.client_name || session.name || 'Unknown',
-        time: session.time || session.start_time || '',
+    if (sessionsData?.sessions && sessionsData.sessions.length > 0) {
+      // Filter sessions by selected date
+      const selectedDateStr = selectedDate.toISOString().split('T')[0];
+      
+      const filteredSessions = sessionsData.sessions.filter(session => {
+        if (session.date) {
+          const sessionDate = new Date(session.date);
+          const sessionDateStr = sessionDate.toISOString().split('T')[0];
+          return sessionDateStr === selectedDateStr;
+        }
+        return false;
+      });
+
+      return filteredSessions.map((session) => ({
+        name: session.client_name || session.name || session.client?.name || 'Unknown',
+        time: session.time || session.start_time || session.scheduled_time || '',
         duration: session.duration || session.duration_minutes ? `${session.duration_minutes} min` : '0 min',
-        status: session.status || session.status_display || 'Pending'
+        status: session.status || session.status_display || 'Pending',
+        id: session.id
       }));
     }
+    
+    // Also check if there are clients_on_day for the selected date
+    if (sessionsData?.clients_on_day && sessionsData.clients_on_day.length > 0) {
+      const selectedDateStr = selectedDate.toISOString().split('T')[0];
+      const dayClients = sessionsData.clients_on_day.find(day => {
+        if (day.date) {
+          const dayDate = new Date(day.date);
+          return dayDate.toISOString().split('T')[0] === selectedDateStr;
+        }
+        return false;
+      });
+
+      if (dayClients && dayClients.clients && dayClients.clients.length > 0) {
+        return dayClients.clients.map((client, index) => ({
+          name: client.name || client.client_name || 'Unknown',
+          time: client.time || client.start_time || '',
+          duration: client.duration || '0 min',
+          status: client.status || 'Pending',
+          id: client.id || index
+        }));
+      }
+    }
+    
     // Return empty array if no sessions
     return [];
-  }, [dashboardData]);
+  }, [sessionsData, selectedDate]);
 
   // Get client progress from API
   const clientProgress = useMemo(() => {
-    if (dashboardData?.client_progress?.clients && dashboardData.client_progress.clients.length > 0) {
-      return dashboardData.client_progress.clients.map((client) => {
+    if (clientProgressData && Array.isArray(clientProgressData) && clientProgressData.length > 0) {
+      return clientProgressData.map((client) => {
+        // Handle different possible API response structures
         const progress = selectedTarget === 'weekly' 
-          ? client.progress?.weekly 
-          : client.progress?.monthly;
+          ? client.weekly_progress || client.progress?.weekly || client.weekly_percentage
+          : client.monthly_progress || client.progress?.monthly || client.monthly_percentage;
+        
+        // Extract percentage value
+        let percentage = 0;
+        if (typeof progress === 'number') {
+          percentage = progress;
+        } else if (progress?.percentage) {
+          percentage = progress.percentage;
+        } else if (progress?.percent) {
+          percentage = progress.percent;
+        }
         
         return {
-          name: client.name || 'Unknown',
-          percent: progress?.percentage || 0,
-          id: client.id
+          name: client.client_name || client.name || client.client?.name || 'Unknown',
+          percent: percentage,
+          id: client.id || client.client_id || client.client?.id
         };
       });
     }
     // Default empty array
     return [];
-  }, [dashboardData, selectedTarget]);
+  }, [clientProgressData, selectedTarget]);
 
-  // Generate week dates based on weekOffset
+  // Generate week dates based on weekOffset - use API data if available
   const weekDates = useMemo(() => {
+    // If API provides calendar_dates, use them (first 7 for current week)
+    if (sessionsData?.calendar_dates && sessionsData.calendar_dates.length > 0) {
+      const startIndex = weekOffset * 7;
+      const endIndex = startIndex + 7;
+      const weekDatesFromAPI = sessionsData.calendar_dates.slice(startIndex, endIndex);
+      
+      if (weekDatesFromAPI.length === 7) {
+        return weekDatesFromAPI.map(dateData => {
+          const date = new Date(dateData.date);
+          date.setHours(0, 0, 0, 0);
+          return date;
+        });
+      }
+    }
+    
+    // Fallback to calculated dates
     const dates = [];
     const today = new Date();
     const startOfWeek = new Date(today);
@@ -244,21 +457,53 @@ const CoachDashboard = () => {
     }
     
     return dates;
-  }, [weekOffset]);
+  }, [weekOffset, sessionsData]);
 
   // Format date to "Mon 21" format - use API data if available
   const formatDate = (date, apiDateData = null) => {
     if (apiDateData) {
+      const dateStr = date.toISOString().split('T')[0];
+      const isSelected = isDateSelected(date);
+      const hasSessions = (apiDateData.total_clients > 0) || (apiDateData.clients && apiDateData.clients.length > 0);
+      
       return {
-        dayName: apiDateData.day_name_short || apiDateData.day_name || 'Mon',
+        dayName: apiDateData.day_name || 'Mon',
         dayNumber: apiDateData.day_number || date.getDate(),
         fullDate: date,
-        isSelected: apiDateData.is_selected || false,
-        isToday: apiDateData.is_today || false,
-        hasSessions: apiDateData.has_sessions || false,
-        sessionCount: apiDateData.session_count || 0
+        isSelected: isSelected,
+        isToday: false, // Can be calculated if needed
+        hasSessions: hasSessions,
+        sessionCount: apiDateData.total_clients || (apiDateData.clients ? apiDateData.clients.length : 0)
       };
     }
+    
+    // Try to find date in API calendar_dates
+    if (sessionsData?.calendar_dates) {
+      const dateStr = date.toISOString().split('T')[0];
+      const apiDateData = sessionsData.calendar_dates.find(d => {
+        if (d.date) {
+          const dDate = new Date(d.date);
+          return dDate.toISOString().split('T')[0] === dateStr;
+        }
+        return false;
+      });
+      
+      if (apiDateData) {
+        const isSelected = isDateSelected(date);
+        const hasSessions = (apiDateData.total_clients > 0) || (apiDateData.clients && apiDateData.clients.length > 0);
+        
+        return {
+          dayName: apiDateData.day_name || 'Mon',
+          dayNumber: apiDateData.day_number || date.getDate(),
+          fullDate: date,
+          isSelected: isSelected,
+          isToday: false,
+          hasSessions: hasSessions,
+          sessionCount: apiDateData.total_clients || (apiDateData.clients ? apiDateData.clients.length : 0)
+        };
+      }
+    }
+    
     // Fallback to calculated format
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dayName = dayNames[date.getDay()];
@@ -271,7 +516,7 @@ const CoachDashboard = () => {
     const normalizedDate = new Date(date);
     normalizedDate.setHours(0, 0, 0, 0);
     setSelectedDate(normalizedDate);
-    // You can add additional logic here, like fetching sessions for the selected date
+    // Sessions will automatically filter based on selectedDate via useMemo
     console.log('Selected date:', normalizedDate.toISOString().split('T')[0]);
   };
 
@@ -515,8 +760,16 @@ const CoachDashboard = () => {
 
               <div className="flex gap-4 overflow-x-auto no-scrollbar px-2">
                 {weekDates.map((date, index) => {
-                  // Get API date data if available
-                  const apiDateData = dashboardData?.sessions?.calendar_dates?.[index] || null;
+                  // Get API date data if available from sessions API
+                  let apiDateData = null;
+                  if (sessionsData?.calendar_dates) {
+                    const startIndex = weekOffset * 7;
+                    const apiIndex = startIndex + index;
+                    if (sessionsData.calendar_dates[apiIndex]) {
+                      apiDateData = sessionsData.calendar_dates[apiIndex];
+                    }
+                  }
+                  
                   const { dayName, dayNumber, isSelected: apiIsSelected, hasSessions, sessionCount } = formatDate(date, apiDateData);
                   const isSelected = apiIsSelected !== undefined ? apiIsSelected : isDateSelected(date);
 
@@ -664,7 +917,7 @@ const CoachDashboard = () => {
 
             <div className="space-y-3">
               {clientProgress.length > 0 ? (
-                clientProgress.map((client) => (
+                clientProgress.slice(0, 3).map((client) => (
                   <div
                     key={client.id || client.name}
                     className="rounded-xl !border border-[#4D60804D] p-4 shadow-sm"
@@ -699,7 +952,7 @@ const CoachDashboard = () => {
 
             <button
               onClick={() => navigate("/coach/dashboard/client-progress")}
-              className="px-4 py-2 !border border-[#4D60804D] rounded-xl flex items-center gap-2 text-[#003F8F] text-sm"
+              className="px-4 py-2 !border border-[#4D60804D] rounded-xl flex items-center gap-2 text-[#003F8F] text-sm cursor-pointer"
             >
               See All <ArrowRightIcon />
             </button>
@@ -779,7 +1032,7 @@ const CoachDashboard = () => {
           <div className="bg-white rounded-2xl p-6 space-y-4">
             <div className="flex justify-between">
               <p className="text-xl font-semibold">Notifications</p>
-              <button className="px-4 py-2 bg-[#003F8F] text-white rounded-xl text-sm">
+              <button className="px-4 py-2 bg-[#003F8F] text-white rounded-xl text-sm cursor-pointer">
                 View All
               </button>
             </div>

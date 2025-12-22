@@ -1,5 +1,3 @@
-
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DloadLogo from "../../assets/DloadLogo.png";
@@ -386,7 +384,7 @@ const CoachRegister = () => {
 
             {success && (
               <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm font-[Inter]">
-                Registration successful! Redirecting to dashboard...
+                Registration successful! 
               </div>
             )}
 

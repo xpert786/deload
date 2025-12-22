@@ -467,128 +467,133 @@ const MyClients = () => {
           </div>
         )}
 
-        {/* Table Section */}
+        {/* Cards Section */}
         {!loading && (
-          <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 font-[Inter]">Name</th>
-                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 font-[Inter]">Email</th>
-                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 font-[Inter]">Phone</th>
-                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 font-[Inter]">Address</th>
-                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-500 font-[Inter]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedClients.length > 0 ? (
-                paginatedClients.map((client, index) => {
-                  const isHovered = hoveredRow === client.id;
-                  return (
-                    <tr
-                      key={client.id}
-                      onMouseEnter={() => setHoveredRow(client.id)}
-                      onMouseLeave={() => setHoveredRow(null)}
-                      className={`border-b border-gray-100 transition ${
-                        isHovered ? 'bg-[#4D60801A]' : 'bg-white'
-                      }`}
-                    >
-                      <td className="py-4 px-4">
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                          <p className="text-sm font-medium text-[#003F8F] font-[Inter]">{client.name}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                          <p className="text-sm text-[#003F8F] font-medium font-[Inter]">{client.email}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                          <p className="text-sm text-[#003F8F] font-medium font-[Inter]">{client.phone}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                          <p className="text-sm text-[#003F8F] font-medium font-[Inter] truncate max-w-[200px]" title={client.address}>
-                            {client.address}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2">
-                          {showArchived ? (
-                            // Show unarchive button for archived clients
-                            <button
-                              onClick={() => handleUnarchive(client.id)}
-                              disabled={unarchivingClientId === client.id}
-                              className={`border flex items-center justify-center transition cursor-pointer w-10 h-10 cursor-pointer ${
-                                unarchivingClientId === client.id
-                                  ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                  : isHovered
-                                  ? 'border-gray-300 bg-white text-gray-600 hover:bg-green-50 hover:text-green-600'
-                                  : 'border-gray-300 bg-white text-gray-400'
-                              }`}
-                              title="Unarchive client"
-                            >
-                              {unarchivingClientId === client.id ? (
-                                <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                              ) : (
-                                <UnarchiveIconForCoach />
-                              )}
-                            </button>
-                          ) : (
-                            // Show delete button for active clients
-                            <button
-                              onClick={() => handleDeleteClick(client.id)}
-                              disabled={deletingClientId === client.id}
-                              className={`flex items-center justify-center transition cursor-pointer ${
-                                deletingClientId === client.id
-                                  ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                  : isHovered
-                                  ? 'border-gray-300 bg-white text-gray-600 hover:bg-red-50 hover:text-red-600'
-                                  : 'border-gray-300 bg-white text-gray-400'
-                              }`}
-                              title="Delete client"
-                            >
-                              {deletingClientId === client.id ? (
-                                <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                              ) : (
-                                <DeleteIcon />
-                              )}
-                            </button>
-                          )}
+          <div className="space-y-4">
+            {/* Header Row */}
+            {paginatedClients.length > 0 && (
+              <div className="flex items-center gap-4 flex-wrap pb-2 border-b border-gray-200 px-4">
+                <div className="flex-1 min-w-[150px]">
+                  <p className="text-sm font-semibold text-gray-500 font-[Inter]">Name</p>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-sm font-semibold text-gray-500 font-[Inter]">Email</p>
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <p className="text-sm font-semibold text-gray-500 font-[Inter]">Phone</p>
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <p className="text-sm font-semibold text-gray-500 font-[Inter]">Address</p>
+                </div>
+                <div className="flex items-center gap-2 min-w-[100px]">
+                  <p className="text-sm font-semibold text-gray-500 font-[Inter]">Actions</p>
+                </div>
+              </div>
+            )}
+            
+            {paginatedClients.length > 0 ? (
+              paginatedClients.map((client) => {
+                const isHovered = hoveredRow === client.id;
+                return (
+                  <div
+                    key={client.id}
+                    onMouseEnter={() => setHoveredRow(client.id)}
+                    onMouseLeave={() => setHoveredRow(null)}
+                    className="bg-white rounded-lg !border border-[#4D60804D] p-4 hover:bg-[#4D60801A] cursor-pointer"
+                  >
+                    <div className="flex items-center gap-4 flex-wrap">
+                      {/* Name */}
+                      <div className="flex-1 min-w-[150px]">
+                        <p className="text-sm font-medium text-[#003F8F] font-[Inter]">{client.name}</p>
+                      </div>
+
+                      {/* Email */}
+                      <div className="flex-1 min-w-[200px]">
+                        <p className="text-sm font-medium text-[#003F8F] font-[Inter]">{client.email}</p>
+                      </div>
+
+                      {/* Phone Number */}
+                      <div className="flex-1 min-w-[150px]">
+                        <p className="text-sm font-medium text-[#003F8F] font-[Inter]">{client.phone}</p>
+                      </div>
+
+                      {/* Address */}
+                      <div className="flex-1 min-w-[180px]">
+                        <p className="text-sm font-medium text-[#003F8F] font-[Inter] truncate" title={client.address}>
+                          {client.address}
+                        </p>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 min-w-[100px]">
+                        {showArchived ? (
+                          // Show unarchive button for archived clients
                           <button
-                            onClick={() => handleView(client.id)}
-                            className={` flex items-center justify-center transition cursor-pointer ${
-                              isHovered
-                                ? 'bg-[#003F8F] border-[#003F8F] text-white'
+                            onClick={() => handleUnarchive(client.id)}
+                            disabled={unarchivingClientId === client.id}
+                            className={`w-10 h-10 rounded-lg border flex items-center justify-center transition cursor-pointer ${
+                              unarchivingClientId === client.id
+                                ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : isHovered
+                                ? 'border-gray-300 bg-white text-gray-600 hover:bg-green-50 hover:text-green-600 hover:border-green-300'
                                 : 'border-gray-300 bg-white text-gray-400'
                             }`}
-                            title="View client"
+                            title="Unarchive client"
                           >
-                            <EyeIconTable />
+                            {unarchivingClientId === client.id ? (
+                              <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            ) : (
+                              <UnarchiveIconForCoach />
+                            )}
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan="5" className="py-8 text-center text-gray-500">
-                    No clients found matching your criteria.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                        ) : (
+                          // Show delete button for active clients
+                          <button
+                            onClick={() => handleDeleteClick(client.id)}
+                            disabled={deletingClientId === client.id}
+                            className={` border flex items-center justify-center transition cursor-pointer ${
+                              deletingClientId === client.id
+                                ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : isHovered
+                                ? 'border-gray-300 bg-white text-gray-600  hover:text-red-600 hover:border-red-300'
+                                : 'border-gray-300 bg-white text-gray-400'
+                            }`}
+                            title="Delete client"
+                          >
+                            {deletingClientId === client.id ? (
+                              <svg className="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            ) : (
+                              <DeleteIcon />
+                            )}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleView(client.id)}
+                          className={` border flex items-center justify-center transition cursor-pointer ${
+                            isHovered
+                              ? 'bg-[#003F8F] border-[#003F8F] text-white'
+                              : 'border-gray-300 bg-white text-gray-400 hover:border-[#003F8F]'
+                          }`}
+                          title="View client"
+                        >
+                          <EyeIconTable />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="py-8 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+                No clients found matching your criteria.
+              </div>
+            )}
           </div>
         )}
 

@@ -505,25 +505,89 @@ const WorkOut = ({ clientId }) => {
                             {/* Workout Cards */}
                             <div className="space-y-4">
                                 {dayWorkoutData[selectedDay].exercises.map((group, groupIndex) => {
-                                    // If group has multiple exercises, render as one card (superset like A1, A2 or group like C-G)
-                                    // Otherwise, render each exercise as separate card
+                                    // Check if exercises have individual statuses
+                                    const hasIndividualStatuses = group.exercises.some(ex => ex.status);
                                     const isGrouped = group.exercises.length > 1;
 
-                                    if (isGrouped) {
-                                        // Check if exercises have individual statuses
-                                        const hasIndividualStatuses = group.exercises.some(ex => ex.status);
-                                        // Use group status for background only if no individual statuses
-                                        const cardStatus = hasIndividualStatuses ? null : group.status;
-
-                                        // Render as one card for superset
-                                        return (
+                                    // If exercises have individual statuses, render each as separate card
+                                    // Otherwise, if grouped, render as one card with group status
+                                    if (hasIndividualStatuses) {
+                                        // Render each exercise as separate card with its own status colors
+                                        return group.exercises.map((exercise, exIndex) => (
                                             <div
-                                                key={groupIndex}
-                                                className={`rounded-xl p-6 border relative ${cardStatus === 'Completed' ? 'bg-green-50' : cardStatus === 'Skipped' ? 'bg-red-50' : 'bg-white'
+                                                key={`${groupIndex}-${exIndex}`}
+                                                className={`rounded-xl p-6 border relative ${exercise.status === 'Completed' ? 'bg-[#25CD251A]' : exercise.status === 'Skipped' ? 'bg-[#E53E3E1A]' : 'bg-white'
                                                     }`}
                                                 style={{
                                                     borderRadius: '12px',
-                                                    borderColor: cardStatus === 'Completed' ? '#25CD25' : cardStatus === 'Skipped' ? '#fca5a5' : '#d1d5db',
+                                                    borderColor: exercise.status === 'Completed' ? '#25CD25' : exercise.status === 'Skipped' ? '#E53E3E' : '#d1d5db',
+                                                    borderWidth: '1px'
+                                                }}
+                                            >
+                                                {/* Status Badge - Top Right Corner */}
+                                                {exercise.status && (
+                                                    <div className="absolute top-6 right-6 flex flex-col items-center gap-1">
+                                                        {exercise.status === 'Completed' ? (
+                                                            <>
+                                                                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                    <g clipPath={`url(#clip0_1300_205_ex_${groupIndex}_${exIndex})`}>
+                                                                        <path d="M18 0C8.05894 0 0 8.05894 0 18C0 27.9416 8.05894 36 18 36C27.9416 36 36 27.9416 36 18C36 8.05894 27.9416 0 18 0ZM18 33.7854C9.31556 33.7854 2.25 26.6844 2.25 17.9999C2.25 9.31549 9.31556 2.24993 18 2.24993C26.6844 2.24993 33.75 9.31553 33.75 17.9999C33.75 26.6843 26.6844 33.7854 18 33.7854ZM25.1837 11.4137L14.6227 22.041L9.86678 17.2851C9.42746 16.8458 8.71534 16.8458 8.27547 17.2851C7.83615 17.7244 7.83615 18.4365 8.27547 18.8758L13.8437 24.4446C14.283 24.8833 14.9951 24.8833 15.435 24.4446C15.4856 24.3939 15.5289 24.3388 15.5683 24.2814L26.7756 13.005C27.2143 12.5657 27.2143 11.8535 26.7756 11.4137C26.3357 10.9744 25.6236 10.9744 25.1837 11.4137Z" fill="#25CD25" />
+                                                                    </g>
+                                                                    <defs>
+                                                                        <clipPath id={`clip0_1300_205_ex_${groupIndex}_${exIndex}`}>
+                                                                            <rect width="36" height="36" fill="white" />
+                                                                        </clipPath>
+                                                                    </defs>
+                                                                </svg>
+                                                                <span className="text-xs font-semibold" style={{ color: '#25CD25' }}>{exercise.status}</span>
+                                                            </>
+                                                        ) : exercise.status === 'Skipped' ? (
+                                                            <>
+                                                                <div className="w-9 h-9 flex items-center justify-center">
+                                                                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                        <path d="M25.9197 11.67C26.1185 11.4568 26.2266 11.1747 26.2215 10.8832C26.2164 10.5918 26.0983 10.3137 25.8922 10.1076C25.6861 9.90146 25.408 9.78339 25.1165 9.77825C24.8251 9.77311 24.543 9.88129 24.3297 10.08L10.0797 24.33C9.96921 24.433 9.88056 24.5572 9.81907 24.6952C9.75758 24.8332 9.72452 24.9822 9.72185 25.1332C9.71919 25.2843 9.74698 25.4343 9.80356 25.5744C9.86014 25.7145 9.94436 25.8417 10.0512 25.9486C10.158 26.0554 10.2853 26.1396 10.4253 26.1962C10.5654 26.2528 10.7155 26.2806 10.8665 26.2779C11.0176 26.2752 11.1666 26.2422 11.3045 26.1807C11.4425 26.1192 11.5667 26.0305 11.6697 25.92L25.9197 11.67Z" fill="#E53E3E" />
+                                                                        <path d="M18 1.5C27.1125 1.5 34.5 8.8875 34.5 18C34.5 27.1125 27.1125 34.5 18 34.5C8.8875 34.5 1.5 27.1125 1.5 18C1.5 8.8875 8.8875 1.5 18 1.5ZM3.75 18C3.75 21.7793 5.25133 25.4039 7.92373 28.0763C10.5961 30.7487 14.2207 32.25 18 32.25C21.7793 32.25 25.4039 30.7487 28.0763 28.0763C30.7487 25.4039 32.25 21.7793 32.25 18C32.25 14.2207 30.7487 10.5961 28.0763 7.92373C25.4039 5.25133 21.7793 3.75 18 3.75C14.2207 3.75 10.5961 5.25133 7.92373 7.92373C5.25133 10.5961 3.75 14.2207 3.75 18Z" fill="#E53E3E" />
+                                                                    </svg>
+                                                                </div>
+                                                                <span className="text-xs font-semibold" style={{ color: '#E53E3E' }}>{exercise.status}</span>
+                                                            </>
+                                                        ) : null}
+                                                    </div>
+                                                )}
+
+                                                {/* Exercise Content */}
+                                                <div className="pr-20">
+                                                    <h4 className="text-lg font-bold text-[#003F8F] font-[Poppins] mb-2">
+                                                        {exercise.label}. {exercise.name}
+                                                    </h4>
+                                                    <div className="text-sm text-[#003F8F] font-medium mb-2">
+                                                        {exercise.sets} x {exercise.reps}
+                                                    </div>
+                                                    <p className="text-sm text-[#003F8F] font-[Inter] mb-2">
+                                                        {exercise.instruction}
+                                                    </p>
+                                                    {exercise.videoLink && (
+                                                        <a href="#" className="inline-flex items-center gap-1.5 bg-blue-100 px-3 py-1.5 rounded-full text-xs font-medium hover:bg-blue-200 transition" style={{ color: '#003F8F' }}>
+                                                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                <path d="M7.5 5L9.7765 3.862C9.85271 3.82392 9.93739 3.80594 10.0225 3.80977C10.1076 3.81361 10.1903 3.83912 10.2628 3.8839C10.3353 3.92868 10.3951 3.99124 10.4366 4.06564C10.4781 4.14003 10.5 4.2238 10.5 4.309V7.691C10.5 7.7762 10.4781 7.85997 10.4366 7.93436C10.3951 8.00876 10.3353 8.07132 10.2628 8.1161C10.1903 8.16088 10.1076 8.18639 10.0225 8.19023C9.93739 8.19406 9.85271 8.17608 9.7765 8.138L7.5 7V5ZM1.5 4C1.5 3.73478 1.60536 3.48043 1.79289 3.29289C1.98043 3.10536 2.23478 3 2.5 3H6.5C6.76522 3 7.01957 3.10536 7.20711 3.29289C7.39464 3.48043 7.5 3.73478 7.5 4V8C7.5 8.26522 7.39464 8.51957 7.20711 8.70711C7.01957 8.89464 6.76522 9 6.5 9H2.5C2.23478 9 1.98043 8.89464 1.79289 8.70711C1.60536 8.51957 1.5 8.26522 1.5 8V4Z" stroke="#003F8F" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                                                            </svg>
+                                                            <span>{exercise.videoLink}</span>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ));
+                                    } else if (isGrouped) {
+                                        // Render as one card for superset when no individual statuses
+                                        const cardStatus = group.status;
+                                        return (
+                                            <div
+                                                key={groupIndex}
+                                                className={`rounded-xl p-6 border relative ${cardStatus === 'Completed' ? 'bg-[#25CD251A]' : cardStatus === 'Skipped' ? 'bg-[#E53E3E1A]' : 'bg-white'
+                                                    }`}
+                                                style={{
+                                                    borderRadius: '12px',
+                                                    borderColor: cardStatus === 'Completed' ? '#25CD25' : cardStatus === 'Skipped' ? '#E53E3E' : '#d1d5db',
                                                     borderWidth: '1px'
                                                 }}
                                             >
@@ -541,31 +605,32 @@ const WorkOut = ({ clientId }) => {
                                                     ></div>
                                                 )}
 
-                                                {/* Group Status Badge - Top Right Corner (only if exercises don't have individual statuses) */}
-                                                {group.exercises.every(ex => !ex.status) && group.status && (
+                                                {/* Group Status Badge - Top Right Corner */}
+                                                {group.status && (
                                                     <div className="absolute top-6 right-6 flex flex-col items-center gap-1">
                                                         {group.status === 'Completed' ? (
                                                             <>
                                                                 <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                                    <g clipPath="url(#clip0_1300_205)">
+                                                                    <g clipPath={`url(#clip0_1300_205_group_${groupIndex})`}>
                                                                         <path d="M18 0C8.05894 0 0 8.05894 0 18C0 27.9416 8.05894 36 18 36C27.9416 36 36 27.9416 36 18C36 8.05894 27.9416 0 18 0ZM18 33.7854C9.31556 33.7854 2.25 26.6844 2.25 17.9999C2.25 9.31549 9.31556 2.24993 18 2.24993C26.6844 2.24993 33.75 9.31553 33.75 17.9999C33.75 26.6843 26.6844 33.7854 18 33.7854ZM25.1837 11.4137L14.6227 22.041L9.86678 17.2851C9.42746 16.8458 8.71534 16.8458 8.27547 17.2851C7.83615 17.7244 7.83615 18.4365 8.27547 18.8758L13.8437 24.4446C14.283 24.8833 14.9951 24.8833 15.435 24.4446C15.4856 24.3939 15.5289 24.3388 15.5683 24.2814L26.7756 13.005C27.2143 12.5657 27.2143 11.8535 26.7756 11.4137C26.3357 10.9744 25.6236 10.9744 25.1837 11.4137Z" fill="#25CD25" />
                                                                     </g>
                                                                     <defs>
-                                                                        <clipPath id="clip0_1300_205">
+                                                                        <clipPath id={`clip0_1300_205_group_${groupIndex}`}>
                                                                             <rect width="36" height="36" fill="white" />
                                                                         </clipPath>
                                                                     </defs>
                                                                 </svg>
-                                                                <span className="text-xs font-semibold text-green-700">{group.status}</span>
+                                                                <span className="text-xs font-semibold" style={{ color: '#25CD25' }}>{group.status}</span>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <div className="w-9 h-9 bg-red-500 rounded-full flex items-center justify-center">
-                                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                                        <path d="M4 4L12 12M12 4L4 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                                                <div className="w-9 h-9 flex items-center justify-center">
+                                                                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                                        <path d="M25.9197 11.67C26.1185 11.4568 26.2266 11.1747 26.2215 10.8832C26.2164 10.5918 26.0983 10.3137 25.8922 10.1076C25.6861 9.90146 25.408 9.78339 25.1165 9.77825C24.8251 9.77311 24.543 9.88129 24.3297 10.08L10.0797 24.33C9.96921 24.433 9.88056 24.5572 9.81907 24.6952C9.75758 24.8332 9.72452 24.9822 9.72185 25.1332C9.71919 25.2843 9.74698 25.4343 9.80356 25.5744C9.86014 25.7145 9.94436 25.8417 10.0512 25.9486C10.158 26.0554 10.2853 26.1396 10.4253 26.1962C10.5654 26.2528 10.7155 26.2806 10.8665 26.2779C11.0176 26.2752 11.1666 26.2422 11.3045 26.1807C11.4425 26.1192 11.5667 26.0305 11.6697 25.92L25.9197 11.67Z" fill="#E53E3E" />
+                                                                        <path d="M18 1.5C27.1125 1.5 34.5 8.8875 34.5 18C34.5 27.1125 27.1125 34.5 18 34.5C8.8875 34.5 1.5 27.1125 1.5 18C1.5 8.8875 8.8875 1.5 18 1.5ZM3.75 18C3.75 21.7793 5.25133 25.4039 7.92373 28.0763C10.5961 30.7487 14.2207 32.25 18 32.25C21.7793 32.25 25.4039 30.7487 28.0763 28.0763C30.7487 25.4039 32.25 21.7793 32.25 18C32.25 14.2207 30.7487 10.5961 28.0763 7.92373C25.4039 5.25133 21.7793 3.75 18 3.75C14.2207 3.75 10.5961 5.25133 7.92373 7.92373C5.25133 10.5961 3.75 14.2207 3.75 18Z" fill="#E53E3E" />
                                                                     </svg>
                                                                 </div>
-                                                                <span className="text-xs font-semibold text-red-700">{group.status}</span>
+                                                                <span className="text-xs font-semibold" style={{ color: '#E53E3E' }}>{group.status}</span>
                                                             </>
                                                         )}
                                                     </div>
@@ -575,35 +640,6 @@ const WorkOut = ({ clientId }) => {
                                                 <div className={`space-y-4 pr-20 ${group.group === 'A' ? 'pl-4' : ''}`}>
                                                     {group.exercises.map((exercise, exIndex) => (
                                                         <div key={exIndex} className={`relative ${exIndex < group.exercises.length - 1 ? 'border-b border-gray-300 pb-4' : ''}`}>
-                                                            {/* Individual Exercise Status Badge - Top Right */}
-                                                            {exercise.status && (
-                                                                <div className="absolute top-0 right-0 flex flex-col items-center gap-1">
-                                                                    {exercise.status === 'Completed' ? (
-                                                                        <>
-                                                                            <svg width="24" height="24" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                                                <g clipPath="url(#clip0_1300_205_ex_ind)">
-                                                                                    <path d="M18 0C8.05894 0 0 8.05894 0 18C0 27.9416 8.05894 36 18 36C27.9416 36 36 27.9416 36 18C36 8.05894 27.9416 0 18 0ZM18 33.7854C9.31556 33.7854 2.25 26.6844 2.25 17.9999C2.25 9.31549 9.31556 2.24993 18 2.24993C26.6844 2.24993 33.75 9.31553 33.75 17.9999C33.75 26.6843 26.6844 33.7854 18 33.7854ZM25.1837 11.4137L14.6227 22.041L9.86678 17.2851C9.42746 16.8458 8.71534 16.8458 8.27547 17.2851C7.83615 17.7244 7.83615 18.4365 8.27547 18.8758L13.8437 24.4446C14.283 24.8833 14.9951 24.8833 15.435 24.4446C15.4856 24.3939 15.5289 24.3388 15.5683 24.2814L26.7756 13.005C27.2143 12.5657 27.2143 11.8535 26.7756 11.4137C26.3357 10.9744 25.6236 10.9744 25.1837 11.4137Z" fill="#25CD25" />
-                                                                                </g>
-                                                                                <defs>
-                                                                                    <clipPath id="clip0_1300_205_ex_ind">
-                                                                                        <rect width="36" height="36" fill="white" />
-                                                                                    </clipPath>
-                                                                                </defs>
-                                                                            </svg>
-                                                                            <span className="text-xs font-semibold text-green-700">{exercise.status}</span>
-                                                                        </>
-                                                                    ) : exercise.status === 'Skipped' ? (
-                                                                        <>
-                                                                            <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-                                                                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                                                    <path d="M4 4L12 12M12 4L4 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                                                                                </svg>
-                                                                            </div>
-                                                                            <span className="text-xs font-semibold text-red-700">{exercise.status}</span>
-                                                                        </>
-                                                                    ) : null}
-                                                                </div>
-                                                            )}
                                                             <div className="pr-16">
                                                                 <h4 className="text-lg font-bold text-[#003F8F] font-[Poppins] mb-2">
                                                                     {exercise.label}. {exercise.name}
@@ -633,11 +669,11 @@ const WorkOut = ({ clientId }) => {
                                         return group.exercises.map((exercise, exIndex) => (
                                             <div
                                                 key={`${groupIndex}-${exIndex}`}
-                                                className={`rounded-xl p-6 border relative ${exercise.status === 'Completed' ? 'bg-green-50' : exercise.status === 'Skipped' ? 'bg-red-50' : 'bg-white'
+                                                className={`rounded-xl p-6 border relative ${exercise.status === 'Completed' ? 'bg-[#25CD251A]' : exercise.status === 'Skipped' ? 'bg-[#E53E3E1A]' : 'bg-white'
                                                     }`}
                                                 style={{
                                                     borderRadius: '12px',
-                                                    borderColor: exercise.status === 'Completed' ? '#25CD25' : exercise.status === 'Skipped' ? '#fca5a5' : '#d1d5db',
+                                                    borderColor: exercise.status === 'Completed' ? '#25CD25' : exercise.status === 'Skipped' ? '#E53E3E' : '#d1d5db',
                                                     borderWidth: '1px'
                                                 }}
                                             >
@@ -656,7 +692,7 @@ const WorkOut = ({ clientId }) => {
                                                                         </clipPath>
                                                                     </defs>
                                                                 </svg>
-                                                                <span className="text-xs font-semibold text-green-700">{exercise.status}</span>
+                                                                <span className="text-xs font-semibold" style={{ color: '#25CD25' }}>{exercise.status}</span>
                                                             </>
                                                         ) : (
                                                             <>
@@ -667,7 +703,7 @@ const WorkOut = ({ clientId }) => {
                                                                     </svg>
 
                                                                 </div>
-                                                                <span className="text-xs font-semibold text-red-700">{exercise.status}</span>
+                                                                <span className="text-xs font-semibold" style={{ color: '#E53E3E' }}>{exercise.status}</span>
                                                             </>
                                                         )}
                                                     </div>
