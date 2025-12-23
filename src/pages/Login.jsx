@@ -405,7 +405,7 @@ const Login = () => {
                   </label>
                 </div>
                 <Link
-                  to="#"
+                  to="/forgot-password"
                   className="text-sm font-normal font-[Inter] cursor-pointer"
                   style={{
                     color: '#333333',

@@ -1,5 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Link, useNavigate } from 'react-router-dom';
+import { Formik, Form, Field, ErrorMessage } from 'formik';
+import * as Yup from 'yup';
 import DloadLogo from "../../assets/DloadLogo.png";
 import ClientRegisterImg from "../../assets/ClientRegisterImg.png";
 
@@ -9,6 +11,40 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 if (!API_BASE_URL) {
   console.error('VITE_API_BASE_URL is not defined in .env file');
 }
+
+// Validation Schemas
+const step1ValidationSchema = Yup.object().shape({
+  name: Yup.string()
+    .required('Full name is required')
+    .min(2, 'Name must be at least 2 characters')
+    .max(50, 'Name must be less than 50 characters'),
+  email: Yup.string()
+    .required('Email is required')
+    .email('Please enter a valid email address'),
+  password: Yup.string()
+    .required('Password is required')
+    .min(5, 'Password must be at least 5 characters'),
+  confirmPassword: Yup.string()
+    .required('Please confirm your password')
+    .oneOf([Yup.ref('password')], 'Passwords must match'),
+});
+
+const step2ValidationSchema = Yup.object().shape({
+  phone: Yup.string()
+    .required('Phone number is required')
+    .matches(
+      /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/,
+      'Please enter a valid phone number'
+    ),
+  location: Yup.string()
+    .required('Location is required')
+    .max(100, 'Location must be less than 100 characters'),
+  profileImage: Yup.mixed()
+    .required('Profile picture is required'),
+  bio: Yup.string()
+    .required('Short bio is required')
+    .max(500, 'Bio must be less than 500 characters'),
+});
 
 const ClientRegister = () => {
   const [step, setStep] = useState(1);
@@ -29,22 +65,20 @@ const ClientRegister = () => {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    setError('');
-  };
-
-  const handleImageSelect = (event) => {
+  const handleImageSelect = (event, formikValues = null) => {
     const file = event.target.files[0];
     if (file) {
       // Store the actual file for API submission
+      // Preserve current form values if provided
       setFormData(prev => ({
         ...prev,
-        profileImage: file
+        profileImage: file,
+        // Preserve current form values to prevent data loss
+        ...(formikValues && {
+          phone: formikValues.phone || prev.phone,
+          location: formikValues.location || prev.location,
+          bio: formikValues.bio || prev.bio
+        })
       }));
       // Create preview
       const reader = new FileReader();
@@ -59,28 +93,27 @@ const ClientRegister = () => {
     fileInputRef.current?.click();
   };
 
-  const handleStep1Submit = (e) => {
-    e.preventDefault();
+  const handleStep1Submit = (values) => {
     setError('');
-
-    // Validation
-    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
-      setError('Please fill in all fields');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
+    // Update formData with validated values
+    setFormData(prev => ({
+      ...prev,
+      name: values.name,
+      email: values.email,
+      password: values.password,
+      confirmPassword: values.confirmPassword
+    }));
     setStep(2);
   };
 
-  const handleStep2Submit = async (e) => {
-    e.preventDefault();
+  const handleStep2Submit = async (step2Values = null) => {
     setError('');
     setLoading(true);
+
+    // Use provided values or fallback to formData
+    const phone = step2Values?.phone ?? formData.phone;
+    const location = step2Values?.location ?? formData.location;
+    const bio = step2Values?.bio ?? formData.bio;
 
     try {
       // Create FormData for file upload
@@ -89,9 +122,9 @@ const ClientRegister = () => {
       submitData.append('email', formData.email);
       submitData.append('password', formData.password);
       submitData.append('confirm_password', formData.confirmPassword);
-      submitData.append('phone_number', formData.phone || '');
-      submitData.append('city', formData.location || '');
-      submitData.append('short_bio', formData.bio || '');
+      submitData.append('phone_number', phone || '');
+      submitData.append('city', location || '');
+      submitData.append('short_bio', bio || '');
 
       // Add profile photo if exists
       if (formData.profileImage) {
@@ -288,242 +321,313 @@ const ClientRegister = () => {
             )}
 
             {step === 1 ? (
-              <form onSubmit={handleStep1Submit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Full name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    placeholder="Jane Doe"
-                    required
-                    className="mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder"
-                    style={{ 
-                      border: '1px solid #003F8F',
-                      fontFamily: 'Inter',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="you@domain.com"
-                    required
-                    className="mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder"
-                    style={{ 
-                      border: '1px solid #003F8F',
-                      fontFamily: 'Inter'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Password</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    placeholder="Choose a secure password"
-                    required
-                    className="mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder"
-                    style={{ 
-                      border: '1px solid #003F8F',
-                      fontFamily: 'Inter'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Confirm Password</label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleInputChange}
-                    placeholder="Repeat password"
-                    required
-                    className="mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder"
-                    style={{ 
-                      border: '1px solid #003F8F',
-                      fontFamily: 'Inter'
-                    }}
-                  />
-                </div>
-                <div className="flex justify-end font-medium ">
-                  <button
-                    type="submit"
-                    className="px-6 py-2 rounded-md text-white transition font-[BasisGrotesquePro] cursor-pointer"
-                    style={{ backgroundColor: '#003F8F' }}
-                  >
-                    Next
-                  </button>
-                </div>
-              </form>
+              <Formik
+                initialValues={{
+                  name: formData.name,
+                  email: formData.email,
+                  password: formData.password,
+                  confirmPassword: formData.confirmPassword
+                }}
+                validationSchema={step1ValidationSchema}
+                onSubmit={handleStep1Submit}
+                enableReinitialize={true}
+              >
+                {({ errors, touched }) => (
+                  <Form className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Full name</label>
+                      <Field
+                        type="text"
+                        name="name"
+                        placeholder="Jane Doe"
+                        className={`mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder ${
+                          errors.name && touched.name ? 'border-red-500' : ''
+                        }`}
+                        style={{ 
+                          border: errors.name && touched.name ? '1px solid #EF4444' : '1px solid #003F8F',
+                          fontFamily: 'Inter',
+                        }}
+                      />
+                      <ErrorMessage name="name" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Email</label>
+                      <Field
+                        type="email"
+                        name="email"
+                        placeholder="you@domain.com"
+                        className={`mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder ${
+                          errors.email && touched.email ? 'border-red-500' : ''
+                        }`}
+                        style={{ 
+                          border: errors.email && touched.email ? '1px solid #EF4444' : '1px solid #003F8F',
+                          fontFamily: 'Inter'
+                        }}
+                      />
+                      <ErrorMessage name="email" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Password</label>
+                      <Field
+                        type="password"
+                        name="password"
+                        placeholder="Choose a secure password"
+                        className={`mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder ${
+                          errors.password && touched.password ? 'border-red-500' : ''
+                        }`}
+                        style={{ 
+                          border: errors.password && touched.password ? '1px solid #EF4444' : '1px solid #003F8F',
+                          fontFamily: 'Inter'
+                        }}
+                      />
+                      <ErrorMessage name="password" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Confirm Password</label>
+                      <Field
+                        type="password"
+                        name="confirmPassword"
+                        placeholder="Repeat password"
+                        className={`mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder ${
+                          errors.confirmPassword && touched.confirmPassword ? 'border-red-500' : ''
+                        }`}
+                        style={{ 
+                          border: errors.confirmPassword && touched.confirmPassword ? '1px solid #EF4444' : '1px solid #003F8F',
+                          fontFamily: 'Inter'
+                        }}
+                      />
+                      <ErrorMessage name="confirmPassword" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+                    <div className="flex justify-end font-medium ">
+                      <button
+                        type="submit"
+                        className="px-6 py-2 rounded-md text-white transition font-[BasisGrotesquePro] cursor-pointer"
+                        style={{ backgroundColor: '#003F8F' }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </Form>
+                )}
+              </Formik>
             ) : (
-              <form onSubmit={handleStep2Submit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Phone</label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    placeholder="+1 555 555 5555"
-                    className="mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder"
-                    style={{ 
-                      border: '1px solid #003F8F',
-                      fontFamily: 'Inter',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Location (City)</label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    placeholder="Mumbai"
-                    className="mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder"
-                    style={{ 
-                      border: '1px solid #003F8F',
-                      fontFamily: 'Inter'
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins] mb-3" style={{ color: '#003F8F' }}>Profile picture (optional)</label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleImageSelect}
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                    />
-                    <div 
-                      className="w-24 h-24 rounded-full flex items-center justify-center overflow-hidden"
-                      style={{ 
-                        background: '#4D60801A',
-                        border: '0.5px solid #003F8F'
-                      }}
-                    >
-                      {selectedImage ? (   
-                        <img
-                          src={selectedImage}
-                          alt="Selected profile"
-                          className="w-full h-full object-cover rounded-full"
+              <Formik
+                initialValues={{
+                  phone: formData.phone,
+                  location: formData.location,
+                  profileImage: formData.profileImage,
+                  bio: formData.bio
+                }}
+                validationSchema={step2ValidationSchema}
+                onSubmit={async (values, { setSubmitting }) => {
+                  // Update formData with step 2 values
+                  setFormData(prev => ({
+                    ...prev,
+                    phone: values.phone,
+                    location: values.location,
+                    bio: values.bio
+                  }));
+                  
+                  // Call the actual submission with values
+                  await handleStep2Submit(values);
+                  setSubmitting(false);
+                }}
+                enableReinitialize={true}
+              >
+                {({ errors, touched, isSubmitting, setFieldValue, values }) => (
+                  <Form className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Phone</label>
+                      <Field
+                        type="tel"
+                        name="phone"
+                        placeholder="+1 555 555 5555"
+                        className={`mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder ${
+                          errors.phone && touched.phone ? 'border-red-500' : ''
+                        }`}
+                        style={{ 
+                          border: errors.phone && touched.phone ? '1px solid #EF4444' : '1px solid #003F8F',
+                          fontFamily: 'Inter',
+                        }}
+                      />
+                      <ErrorMessage name="phone" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>Location (City)</label>
+                      <Field
+                        type="text"
+                        name="location"
+                        placeholder="Mumbai"
+                        className={`mt-1 block w-full rounded-md px-3 py-2 focus:outline-none inter-placeholder ${
+                          errors.location && touched.location ? 'border-red-500' : ''
+                        }`}
+                        style={{ 
+                          border: errors.location && touched.location ? '1px solid #EF4444' : '1px solid #003F8F',
+                          fontFamily: 'Inter'
+                        }}
+                      />
+                      <ErrorMessage name="location" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins] mb-3" style={{ color: '#003F8F' }}>Profile picture (optional)</label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              const file = e.target.files[0];
+                              // Update Formik field first
+                              setFieldValue('profileImage', file);
+                              // Update formData with current form values preserved
+                              setFormData(prev => ({
+                                ...prev,
+                                profileImage: file,
+                                phone: values.phone || prev.phone,
+                                location: values.location || prev.location,
+                                bio: values.bio || prev.bio
+                              }));
+                              // Handle image preview
+                              handleImageSelect(e, values);
+                            }
+                          }}
+                          accept="image/*"
+                          style={{ display: 'none' }}
                         />
-                      ) : (
-                        <span 
-                          className="text-sm font-medium"
+                        <div 
+                          className={`w-24 h-24 rounded-full flex items-center justify-center overflow-hidden ${
+                            errors.profileImage && touched.profileImage ? 'border-red-500' : ''
+                          }`}
                           style={{ 
-                            color: '#6C757D',
-                            fontFamily: 'sans-serif'
+                            background: '#4D60801A',
+                            border: errors.profileImage && touched.profileImage ? '2px solid #EF4444' : '0.5px solid #003F8F'
                           }}
                         >
-                          No Image
-                        </span>
-                      )}
+                          {selectedImage ? (   
+                            <img
+                              src={selectedImage}
+                              alt="Selected profile"
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          ) : (
+                            <span 
+                              className="text-sm font-medium"
+                              style={{ 
+                                color: '#6C757D',
+                                fontFamily: 'sans-serif'
+                              }}
+                            >
+                              No Image
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleChoosePicture}
+                          className="px-4 py-2 rounded-md font-[Inter] font-medium text-sm transition-colors hover:bg-gray-200"
+                          style={{ 
+                            background: '#4D60801A',
+                            border: '0.5px solid #003F8F',
+                            color: '#003F8F',
+                            fontFamily: 'Inter, sans-serif'
+                          }}
+                        >
+                          Choose Picture
+                        </button>
+                      </div>
+                      <ErrorMessage name="profileImage" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleChoosePicture}
-                      className="px-4 py-2 rounded-md font-[Inter] font-medium text-sm transition-colors hover:bg-gray-200"
-                      style={{ 
-                        background: '#4D60801A',
-                        border: '0.5px solid #003F8F',
-                        color: '#003F8F',
-                        fontFamily: 'Inter, sans-serif'
-                      }}
-                    >
-                      Choose Picture
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium font-[Poppins] mb-3" style={{ color: '#003F8F' }}>Short bio</label>
-                  <textarea 
-                    name="bio"
-                    value={formData.bio}
-                    onChange={handleInputChange}
-                    placeholder="Tell coaches and clients about yourself..."
-                    rows="4"
-                    className="w-full rounded-md px-3 py-3 focus:outline-none resize-none"
-                    style={{ 
-                      border: '1px solid #003F8F',
-                      backgroundColor: 'white',
-                      fontFamily: 'Inter',
-                      color: '#333'
-                    }}
-                  ></textarea>
-                </div>
-                <div className="flex justify-between gap-3 font-medium ">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setStep(1);
-                      setError('');
-                    }}
-                    className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50 cursor-pointer"
-                    style={{ 
-                      backgroundColor: 'white',
-                      border: '1px solid #003F8F',
-                      color: '#003F8F',
-                      fontFamily: 'Inter',
-                    }}
-                  >
-                    Back
-                  </button>
-                  <div className="flex gap-3">
-                    <button
-                      type="submit"
-                      disabled={loading || success}
-                      className="px-6 py-2 rounded-md font-medium font-[Inter] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      style={{ 
-                        backgroundColor: '#003F8F',
-                        color: 'white',
-                        fontFamily: 'Inter',
-                      }}
-                    >
-                      {loading ? 'Creating...' : success ? 'Success!' : 'Create Account'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleReset}
-                      className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50 cursor-pointer"
-                      style={{ 
-                        backgroundColor: 'white',
-                        border: '1px solid #003F8F',
-                        color: '#003F8F',
-                        fontFamily: 'Inter',
-                      }}
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </div>
-                
-                {/* Login Link */}
-                <div className="flex justify-center mt-4">
-                  <p className="text-sm font-[Inter]" style={{ color: '#6C757D', fontFamily: 'sans-serif' }}>
-                    Already have an account?{' '}
-                    <Link 
-                      to="/login" 
-                      className="underline hover:no-underline font-[Inter] transition-all cursor-pointer"
-                      style={{ color: '#003F8F' }}
-                    >
-                      Login
-                    </Link>
-                  </p>
-                </div>
-              </form>
+                    <div>
+                      <label className="block text-sm font-medium font-[Poppins] mb-3" style={{ color: '#003F8F' }}>Short bio</label>
+                      <Field
+                        as="textarea"
+                        name="bio"
+                        placeholder="Tell coaches and clients about yourself..."
+                        rows="4"
+                        className={`w-full rounded-md px-3 py-3 focus:outline-none resize-none ${
+                          errors.bio && touched.bio ? 'border-red-500' : ''
+                        }`}
+                        style={{ 
+                          border: errors.bio && touched.bio ? '1px solid #EF4444' : '1px solid #003F8F',
+                          backgroundColor: 'white',
+                          fontFamily: 'Inter',
+                          color: '#333'
+                        }}
+                      />
+                      <ErrorMessage name="bio" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+                    <div className="flex justify-between gap-3 font-medium ">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          // Save current form values before going back
+                          setFormData(prev => ({
+                            ...prev,
+                            phone: values.phone || '',
+                            location: values.location || '',
+                            bio: values.bio || '',
+                            profileImage: values.profileImage || formData.profileImage
+                          }));
+                          setStep(1);
+                          setError('');
+                        }}
+                        className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50 cursor-pointer"
+                        style={{ 
+                          backgroundColor: 'white',
+                          border: '1px solid #003F8F',
+                          color: '#003F8F',
+                          fontFamily: 'Inter',
+                        }}
+                      >
+                        Back
+                      </button>
+                      <div className="flex gap-3">
+                        <button
+                          type="submit"
+                          disabled={loading || success || isSubmitting}
+                          className="px-6 py-2 rounded-md font-medium font-[Inter] transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                          style={{ 
+                            backgroundColor: '#003F8F',
+                            color: 'white',
+                            fontFamily: 'Inter',
+                          }}
+                        >
+                          {loading ? 'Creating...' : success ? 'Success!' : 'Create Account'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleReset}
+                          className="px-6 py-2 rounded-md font-[Inter] font-bold transition-colors hover:bg-gray-50 cursor-pointer"
+                          style={{ 
+                            backgroundColor: 'white',
+                            border: '1px solid #003F8F',
+                            color: '#003F8F',
+                            fontFamily: 'Inter',
+                          }}
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Login Link */}
+                    <div className="flex justify-center mt-4">
+                      <p className="text-sm font-[Inter]" style={{ color: '#6C757D', fontFamily: 'sans-serif' }}>
+                        Already have an account?{' '}
+                        <Link 
+                          to="/login" 
+                          className="underline hover:no-underline font-[Inter] transition-all cursor-pointer"
+                          style={{ color: '#003F8F' }}
+                        >
+                          Login
+                        </Link>
+                      </p>
+                    </div>
+                  </Form>
+                )}
+              </Formik>
             )}
           </div>
         </div>

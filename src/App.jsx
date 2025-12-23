@@ -7,6 +7,8 @@ import Register from './ClientDashboard/Pages/Register';
 import ClientRegister from './ClientDashboard/Pages/ClientRegister';
 import CoachRegister from './CoachDashboard/Pages/CoachRegister';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import OTPVerify from './pages/OTPVerify';
 import { useAuth } from './context/AuthContext';
 
 const App = () => {
@@ -17,6 +19,8 @@ const App = () => {
       {/* Public Routes */}
       <Route path="/register" element={<Register />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/otp-verify" element={<OTPVerify />} />
       <Route path="/clientregister" element={<ClientRegister />} />
       <Route path="/coachregister" element={<CoachRegister />} />
       

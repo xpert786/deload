@@ -1,12 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip, Area, AreaChart, PieChart, Pie, Cell } from 'recharts';
+
+// Use API URL from .env file
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
 
 const BillingSubscriptions = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddPlanModal, setShowAddPlanModal] = useState(false);
+  const [showEditPlanModal, setShowEditPlanModal] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  
+  // Form state for Add Plan Modal
+  const [planFormData, setPlanFormData] = useState({
+    name: '',
+    description: '',
+    monthly_price: '',
+    yearly_price: '',
+    max_clients: '',
+    max_users: '1',
+    storage_limit_gb: '',
+    features: [],
+    stripe_monthly_price_id: '',
+    stripe_yearly_price_id: '',
+    is_active: true
+  });
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState('');
+  const [planSuccess, setPlanSuccess] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({});
+
+  // State for subscription plans from API
+  const [subscriptionPlans, setSubscriptionPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [plansError, setPlansError] = useState('');
+
+  // Ref for scrollable container
+  const plansScrollRef = useRef(null);
 
   const itemsPerPage = 3;
+
+  // Scroll functions for plans carousel
+  const scrollPlansLeft = () => {
+    if (plansScrollRef.current) {
+      const containerWidth = plansScrollRef.current.offsetWidth;
+      plansScrollRef.current.scrollBy({
+        left: -containerWidth,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const scrollPlansRight = () => {
+    if (plansScrollRef.current) {
+      const containerWidth = plansScrollRef.current.offsetWidth;
+      plansScrollRef.current.scrollBy({
+        left: containerWidth,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   // Key Metrics Data
   const keyMetrics = {
@@ -69,48 +126,123 @@ const BillingSubscriptions = () => {
     { month: 'Aug', revenue: 7500 }
   ];
 
-  // Subscription Plans Data
-  const subscriptionPlans = [
-    {
-      name: 'Basic Plan',
-      price: '$19.99',
-      period: 'per month',
-      features: [
-        'Up to 10 clients',
-        'Basic workout templates',
-        'Email support',
-        'Advanced analytics',
-        'Custom branding'
-      ],
-      checkmarkColor: '#10B981'
-    },
-    {
-      name: 'Professional Plan',
-      price: '$79.99',
-      period: 'per month',
-      features: [
-        'Up to 50 clients',
-        'Advanced workout builder',
-        'Priority support',
-        'Advanced analytics',
-        'Custom branding'
-      ],
-      checkmarkColor: '#F97316'
-    },
-    {
-      name: 'Enterprise Plan',
-      price: '$149.99',
-      period: 'per month',
-      features: [
-        'Unlimited clients',
-        'Custom workout templates',
-        '24/7 dedicated support',
-        'Advanced analytics & reporting',
-        'White-label solution'
-      ],
-      checkmarkColor: '#F97316'
+  // Function to map API features to display-friendly strings
+  const mapFeatureToDisplay = (feature) => {
+    const featureMap = {
+      'advanced_workout_builder': 'Advanced workout builder',
+      'custom_branding': 'Custom branding',
+      'priority_support': 'Priority support',
+      'advanced_analytics': 'Advanced analytics'
+    };
+    return featureMap[feature] || feature;
+  };
+
+  // Function to fetch subscription plans from API
+  const fetchSubscriptionPlans = async () => {
+    setPlansLoading(true);
+    setPlansError('');
+
+    try {
+      // Get authentication token
+      const storedUser = localStorage.getItem('user');
+      let token = null;
+
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/plan-list/`
+        : `${baseUrl}/api/plan-list/`;
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok) {
+        // Map API response to UI format
+        const mappedPlans = result.data.map((plan) => {
+          // Map features array to display strings
+          const displayFeatures = plan.features.map(mapFeatureToDisplay);
+          
+          // Add additional features based on plan data
+          const features = [
+            ...displayFeatures,
+            `Up to ${plan.max_clients} clients`
+          ];
+
+          return {
+            id: plan.id,
+            name: plan.name,
+            price: `$${parseFloat(plan.monthly_price).toFixed(2)}`,
+            period: 'per month',
+            features: features,
+            checkmarkColor: '#F4721E', // Default checkmark color
+            originalData: plan // Keep original data for reference
+          };
+        });
+
+        setSubscriptionPlans(mappedPlans);
+        console.log('Plans fetched successfully:', mappedPlans);
+      } else {
+        const errorMessage = result.message || result.detail || result.error || 'Failed to fetch subscription plans';
+        setPlansError(errorMessage);
+        console.error('Failed to fetch plans:', errorMessage);
+      }
+    } catch (err) {
+      console.error('Error fetching plans:', err);
+      setPlansError(err.message || 'Failed to fetch subscription plans. Please try again.');
+    } finally {
+      setPlansLoading(false);
     }
-  ];
+  };
+
+  // Fetch plans on component mount
+  useEffect(() => {
+    fetchSubscriptionPlans();
+  }, []);
 
   // Recent Transactions Data
   const recentTransactions = [
@@ -203,6 +335,414 @@ const BillingSubscriptions = () => {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  // Validate Plan Form
+  const validatePlanForm = () => {
+    const errors = {};
+
+    if (!planFormData.name || planFormData.name.trim() === '') {
+      errors.name = 'Plan Name is required';
+    }
+
+    if (!planFormData.monthly_price || planFormData.monthly_price.trim() === '') {
+      errors.monthly_price = 'Monthly Price is required';
+    } else if (isNaN(parseFloat(planFormData.monthly_price)) || parseFloat(planFormData.monthly_price) <= 0) {
+      errors.monthly_price = 'Monthly Price must be a valid positive number';
+    }
+
+    if (!planFormData.max_clients || planFormData.max_clients.trim() === '') {
+      errors.max_clients = 'Maximum Clients is required';
+    } else if (isNaN(parseInt(planFormData.max_clients)) || parseInt(planFormData.max_clients) < 1) {
+      errors.max_clients = 'Maximum Clients must be at least 1';
+    }
+
+    if (!planFormData.features || planFormData.features.length === 0) {
+      errors.features = 'At least one feature must be selected';
+    }
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Handle Create Plan
+  const handleCreatePlan = async (e) => {
+    e.preventDefault();
+    setPlanError('');
+    setPlanSuccess(false);
+    
+    // Validate form
+    if (!validatePlanForm()) {
+      return;
+    }
+    
+    setPlanLoading(true);
+
+    try {
+      // Get authentication token
+      const storedUser = localStorage.getItem('user');
+      let token = null;
+
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/plans/`
+        : `${baseUrl}/api/plans/`;
+
+      // Prepare request body - set defaults for hidden fields
+      const requestBody = {
+        name: planFormData.name,
+        description: planFormData.description || '',
+        monthly_price: planFormData.monthly_price,
+        yearly_price: planFormData.yearly_price || (parseFloat(planFormData.monthly_price) * 12).toFixed(2),
+        max_clients: parseInt(planFormData.max_clients) || 10,
+        max_users: parseInt(planFormData.max_users) || 1,
+        storage_limit_gb: parseInt(planFormData.storage_limit_gb) || 5,
+        features: planFormData.features,
+        is_active: planFormData.is_active
+      };
+
+      // Add optional Stripe price IDs if provided
+      if (planFormData.stripe_monthly_price_id) {
+        requestBody.stripe_monthly_price_id = planFormData.stripe_monthly_price_id;
+      }
+      if (planFormData.stripe_yearly_price_id) {
+        requestBody.stripe_yearly_price_id = planFormData.stripe_yearly_price_id;
+      }
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log('Creating plan:', requestBody);
+      console.log('API URL:', apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok) {
+        console.log('Plan created successfully:', result);
+        setPlanSuccess(true);
+        setPlanError('');
+        // Refresh plans list
+        fetchSubscriptionPlans();
+        // Reset form after 3 seconds and close modal (don't reload page)
+        setTimeout(() => {
+          setShowAddPlanModal(false);
+          setPlanSuccess(false);
+          setValidationErrors({});
+          setPlanFormData({
+            name: '',
+            description: '',
+            monthly_price: '',
+            yearly_price: '',
+            max_clients: '',
+            max_users: '1',
+            storage_limit_gb: '',
+            features: [],
+            stripe_monthly_price_id: '',
+            stripe_yearly_price_id: '',
+            is_active: true
+          });
+        }, 3000);
+      } else {
+        // Handle API validation errors
+        const apiErrors = {};
+        
+        // Field name mapping (API field names to form field names)
+        const fieldMapping = {
+          'monthly_price': 'monthly_price',
+          'max_clients': 'max_clients',
+          'plan_name': 'name',
+          'name': 'name'
+        };
+        
+        // Check for field-specific validation errors in result.errors
+        if (result.errors && typeof result.errors === 'object') {
+          Object.keys(result.errors).forEach((field) => {
+            const mappedField = fieldMapping[field] || field;
+            const fieldErrors = result.errors[field];
+            if (Array.isArray(fieldErrors)) {
+              apiErrors[mappedField] = fieldErrors[0]; // Take first error message
+            } else if (typeof fieldErrors === 'string') {
+              apiErrors[mappedField] = fieldErrors;
+            }
+          });
+        }
+        
+        // Check for direct field errors in response (non-standard format)
+        Object.keys(result).forEach((key) => {
+          if (key !== 'message' && key !== 'detail' && key !== 'error' && key !== 'errors' && key !== 'success' && key !== 'data') {
+            const mappedField = fieldMapping[key] || key;
+            const fieldValue = result[key];
+            if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+              apiErrors[mappedField] = fieldValue[0];
+            } else if (typeof fieldValue === 'string' && fieldValue.trim() !== '') {
+              apiErrors[mappedField] = fieldValue;
+            }
+          }
+        });
+        
+        if (Object.keys(apiErrors).length > 0) {
+          setValidationErrors(apiErrors);
+        }
+        
+        const errorMessage = result.message || result.detail || result.error || 'Failed to create subscription plan';
+        setPlanError(errorMessage);
+        console.error('Failed to create plan:', errorMessage, apiErrors);
+      }
+    } catch (err) {
+      console.error('Error creating plan:', err);
+      setPlanError(err.message || 'Failed to create subscription plan. Please try again.');
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  // Handle Edit Plan - Open modal with plan data
+  const handleOpenEditPlan = (plan) => {
+    if (plan.originalData) {
+      const originalPlan = plan.originalData;
+      setEditingPlanId(originalPlan.id);
+      setPlanFormData({
+        name: originalPlan.name || '',
+        description: originalPlan.description || '',
+        monthly_price: originalPlan.monthly_price || '',
+        yearly_price: originalPlan.yearly_price || '',
+        max_clients: originalPlan.max_clients?.toString() || '',
+        max_users: originalPlan.max_users?.toString() || '1',
+        storage_limit_gb: originalPlan.storage_limit_gb?.toString() || '',
+        features: originalPlan.features || [],
+        stripe_monthly_price_id: originalPlan.stripe_monthly_price_id || '',
+        stripe_yearly_price_id: originalPlan.stripe_yearly_price_id || '',
+        is_active: originalPlan.is_active !== undefined ? originalPlan.is_active : true
+      });
+      setPlanError('');
+      setPlanSuccess(false);
+      setValidationErrors({});
+      setShowEditPlanModal(true);
+    }
+  };
+
+  // Handle Update Plan
+  const handleUpdatePlan = async (e) => {
+    e.preventDefault();
+    if (!editingPlanId) return;
+
+    setPlanError('');
+    setPlanSuccess(false);
+    
+    // Validate form
+    if (!validatePlanForm()) {
+      return;
+    }
+    
+    setPlanLoading(true);
+
+    try {
+      // Get authentication token
+      const storedUser = localStorage.getItem('user');
+      let token = null;
+
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined';
+
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/plan-update/${editingPlanId}/`
+        : `${baseUrl}/api/plan-update/${editingPlanId}/`;
+
+      // Prepare request body
+      const requestBody = {
+        name: planFormData.name,
+        description: planFormData.description || '',
+        monthly_price: planFormData.monthly_price,
+        yearly_price: planFormData.yearly_price || (parseFloat(planFormData.monthly_price) * 12).toFixed(2),
+        max_clients: parseInt(planFormData.max_clients) || 10,
+        max_users: parseInt(planFormData.max_users) || 1,
+        storage_limit_gb: parseInt(planFormData.storage_limit_gb) || 5,
+        features: planFormData.features,
+        is_active: planFormData.is_active
+      };
+
+      // Add optional Stripe price IDs if provided
+      if (planFormData.stripe_monthly_price_id) {
+        requestBody.stripe_monthly_price_id = planFormData.stripe_monthly_price_id;
+      }
+      if (planFormData.stripe_yearly_price_id) {
+        requestBody.stripe_yearly_price_id = planFormData.stripe_yearly_price_id;
+      }
+
+      // Prepare headers
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      console.log('Updating plan:', requestBody);
+      console.log('API URL:', apiUrl);
+
+      const response = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok) {
+        console.log('Plan updated successfully:', result);
+        setPlanSuccess(true);
+        setPlanError('');
+        // Refresh plans list
+        fetchSubscriptionPlans();
+        // Reset form after 3 seconds and close modal
+        setTimeout(() => {
+          setShowEditPlanModal(false);
+          setEditingPlanId(null);
+          setPlanSuccess(false);
+          setValidationErrors({});
+          setPlanFormData({
+            name: '',
+            description: '',
+            monthly_price: '',
+            yearly_price: '',
+            max_clients: '',
+            max_users: '1',
+            storage_limit_gb: '',
+            features: [],
+            stripe_monthly_price_id: '',
+            stripe_yearly_price_id: '',
+            is_active: true
+          });
+        }, 3000);
+      } else {
+        // Handle API validation errors
+        const apiErrors = {};
+        
+        // Field name mapping (API field names to form field names)
+        const fieldMapping = {
+          'monthly_price': 'monthly_price',
+          'max_clients': 'max_clients',
+          'plan_name': 'name',
+          'name': 'name'
+        };
+        
+        // Check for field-specific validation errors in result.errors
+        if (result.errors && typeof result.errors === 'object') {
+          Object.keys(result.errors).forEach((field) => {
+            const mappedField = fieldMapping[field] || field;
+            const fieldErrors = result.errors[field];
+            if (Array.isArray(fieldErrors)) {
+              apiErrors[mappedField] = fieldErrors[0]; // Take first error message
+            } else if (typeof fieldErrors === 'string') {
+              apiErrors[mappedField] = fieldErrors;
+            }
+          });
+        }
+        
+        // Check for direct field errors in response (non-standard format)
+        Object.keys(result).forEach((key) => {
+          if (key !== 'message' && key !== 'detail' && key !== 'error' && key !== 'errors' && key !== 'success' && key !== 'data') {
+            const mappedField = fieldMapping[key] || key;
+            const fieldValue = result[key];
+            if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+              apiErrors[mappedField] = fieldValue[0];
+            } else if (typeof fieldValue === 'string' && fieldValue.trim() !== '') {
+              apiErrors[mappedField] = fieldValue;
+            }
+          }
+        });
+        
+        if (Object.keys(apiErrors).length > 0) {
+          setValidationErrors(apiErrors);
+        }
+        
+        const errorMessage = result.message || result.detail || result.error || 'Failed to update subscription plan';
+        setPlanError(errorMessage);
+        console.error('Failed to update plan:', errorMessage, apiErrors);
+      }
+    } catch (err) {
+      console.error('Error updating plan:', err);
+      setPlanError(err.message || 'Failed to update subscription plan. Please try again.');
+    } finally {
+      setPlanLoading(false);
+    }
+  };
 
   // Calculate total for donut chart
   const total = subscriptionDistribution.reduce((sum, item) => sum + item.value, 0);
@@ -439,68 +979,130 @@ const BillingSubscriptions = () => {
 
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          {subscriptionPlans.map((plan, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200"
+        {/* Loading State */}
+        {plansLoading && (
+          <div className="text-center py-8">
+            <p className="text-[#4D6080CC] font-[Inter]">Loading plans...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {plansError && !plansLoading && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+            <p className="text-sm font-[Inter]">{plansError}</p>
+            <button
+              onClick={fetchSubscriptionPlans}
+              className="mt-2 text-sm underline hover:no-underline"
             >
-              {/* Plan Name */}
-              <h3 className="text-xl font-bold text-[#003F8F] font-[BasisGrotesquePro] mb-2">
-                {plan.name}
-              </h3>
+              Try again
+            </button>
+          </div>
+        )}
 
-              {/* Price */}
-              <p className="text-2xl font-bold text-[#F47C20] font-[BasisGrotesquePro] leading-none">
-                {plan.price}
-              </p>
-              <p className="text-sm text-[#7A869A] font-[Inter] mt-1">
-                per month
-              </p>
+        {/* Plans Carousel */}
+        {!plansLoading && !plansError && (
+          <div className="relative px-12">
+            {/* Left Arrow - Outside card container */}
+            <button
+              onClick={scrollPlansLeft}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg border border-gray-200 hover:bg-gray-50 transition flex items-center justify-center cursor-pointer"
+              aria-label="Scroll left"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 18L9 12L15 6" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
 
+            {/* Scrollable Container - Shows exactly 3 cards */}
+            <div className="overflow-hidden w-full">
+              <div
+                ref={plansScrollRef}
+                className="flex gap-6 overflow-x-auto scroll-smooth pb-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full"
+              >
+                {subscriptionPlans.length > 0 ? (
+                  subscriptionPlans.map((plan, index) => (
+                    <div
+                      key={plan.id || index}
+                      className="plan-card bg-white rounded-lg p-4 sm:p-6 border border-gray-200 flex-shrink-0"
+                      style={{ width: 'calc((100% - 72px) / 3)' }}
+                    >
+                  {/* Plan Name */}
+                  <h3 className="text-xl font-bold text-[#003F8F] font-[BasisGrotesquePro] mb-2">
+                    {plan.name}
+                  </h3>
 
-              {/* Features */}
-              <div className="space-y-3 mb-6 mt-6">
-                {plan.features.map((feature, featureIndex) => (
-                  <div key={featureIndex} className="flex items-center gap-2">
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4.5 9.00061L7.68225 12.1829L14.0452 5.81836" stroke="#F4721E" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
+                  {/* Price */}
+                  <p className="text-2xl font-bold text-[#F47C20] font-[BasisGrotesquePro] leading-none">
+                    {plan.price}
+                  </p>
+                  <p className="text-sm text-[#7A869A] font-[Inter] mt-1">
+                    {plan.period}
+                  </p>
 
-                    <p className="text-sm text-[#4B5563] font-[Inter]">{feature}</p>
+                  {/* Features */}
+                  <div className="space-y-3 mb-6 mt-6">
+                    {plan.features.map((feature, featureIndex) => (
+                      <div key={featureIndex} className="flex items-center gap-2">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M4.5 9.00061L7.68225 12.1829L14.0452 5.81836" stroke="#F4721E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+
+                        <p className="text-sm text-[#003F8F] font-[Inter]">{feature}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
 
-              {/* Edit Button */}
-              <button className="w-full px-4 py-2 border border-[#003F8F] rounded-lg text-sm font-semibold text-[#003F8F] hover:bg-[#003F8F] hover:text-white transition flex items-center justify-center gap-2 cursor-pointer bg-white">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 18 18"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M12.3562 4.05611L13.944 5.64386M13.377 2.65736L9.08175 6.95261C8.85916 7.17375 8.70768 7.45632 8.64675 7.76411L8.25 9.75011L10.236 9.35261C10.5435 9.29111 10.8255 9.14036 11.0475 8.91836L15.3427 4.62311C15.4718 4.49404 15.5742 4.34081 15.6441 4.17217C15.7139 4.00353 15.7499 3.82278 15.7499 3.64024C15.7499 3.4577 15.7139 3.27695 15.6441 3.10831C15.5742 2.93967 15.4718 2.78644 15.3427 2.65736C15.2137 2.52829 15.0604 2.4259 14.8918 2.35605C14.7232 2.2862 14.5424 2.25024 14.3599 2.25024C14.1773 2.25024 13.9966 2.2862 13.8279 2.35605C13.6593 2.4259 13.5061 2.52829 13.377 2.65736Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M14.25 11.25V13.5C14.25 13.8978 14.092 14.2794 13.8107 14.5607C13.5294 14.842 13.1478 15 12.75 15H4.5C4.10218 15 3.72064 14.842 3.43934 14.5607C3.15804 14.2794 3 13.8978 3 13.5V5.25C3 4.85218 3.15804 4.47064 3.43934 4.18934C3.72064 3.90804 4.10218 3.75 4.5 3.75H6.75"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Edit Plan
-              </button>
+                  {/* Edit Button */}
+                  <button 
+                    onClick={() => handleOpenEditPlan(plan)}
+                    className="w-full px-4 py-2 border border-[#003F8F] rounded-lg text-sm font-semibold text-[#003F8F] hover:bg-[#003F8F] hover:text-white transition flex items-center justify-center gap-2 cursor-pointer bg-white"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 18 18"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M12.3562 4.05611L13.944 5.64386M13.377 2.65736L9.08175 6.95261C8.85916 7.17375 8.70768 7.45632 8.64675 7.76411L8.25 9.75011L10.236 9.35261C10.5435 9.29111 10.8255 9.14036 11.0475 8.91836L15.3427 4.62311C15.4718 4.49404 15.5742 4.34081 15.6441 4.17217C15.7139 4.00353 15.7499 3.82278 15.7499 3.64024C15.7499 3.4577 15.7139 3.27695 15.6441 3.10831C15.5742 2.93967 15.4718 2.78644 15.3427 2.65736C15.2137 2.52829 15.0604 2.4259 14.8918 2.35605C14.7232 2.2862 14.5424 2.25024 14.3599 2.25024C14.1773 2.25024 13.9966 2.2862 13.8279 2.35605C13.6593 2.4259 13.5061 2.52829 13.377 2.65736Z"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M14.25 11.25V13.5C14.25 13.8978 14.092 14.2794 13.8107 14.5607C13.5294 14.842 13.1478 15 12.75 15H4.5C4.10218 15 3.72064 14.842 3.43934 14.5607C3.15804 14.2794 3 13.8978 3 13.5V5.25C3 4.85218 3.15804 4.47064 3.43934 4.18934C3.72064 3.90804 4.10218 3.75 4.5 3.75H6.75"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Edit Plan
+                  </button>
+                  </div>
+                ))
+              ) : (
+                <div className="flex-shrink-0 w-full text-center py-8">
+                  <p className="text-[#4D6080CC] font-[Inter]">No subscription plans found.</p>
+                </div>
+              )}
+              </div>
             </div>
-          ))}
-        </div>
+
+            {/* Right Arrow - Outside card container */}
+            <button
+              onClick={scrollPlansRight}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg border border-gray-200 hover:bg-gray-50 transition flex items-center justify-center cursor-pointer"
+              aria-label="Scroll right"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 18L15 12L9 6" stroke="#003F8F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
 
@@ -660,20 +1262,35 @@ const BillingSubscriptions = () => {
       </div>
 
       {showAddPlanModal && (
-        <div className="fixed inset-0 bg-black/60 bg-opacity-30  flex items-center justify-center z-50">
-
-          <div className="bg-white w-full max-w-lg rounded-xl shadow-lg p-6 border border-gray-200 relative">
-
+        <div className="fixed inset-0 bg-black/60 bg-opacity-30 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 relative my-auto max-h-[90vh] overflow-y-auto">
             {/* Close Button */}
             <button
-              onClick={() => setShowAddPlanModal(false)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 cursor-pointer mt-3"
+              onClick={() => {
+                setShowAddPlanModal(false);
+                setPlanError('');
+                setPlanSuccess(false);
+                setValidationErrors({});
+                setPlanFormData({
+                  name: '',
+                  description: '',
+                  monthly_price: '',
+                  yearly_price: '',
+                  max_clients: '',
+                  max_users: '1',
+                  storage_limit_gb: '',
+                  features: [],
+                  stripe_monthly_price_id: '',
+                  stripe_yearly_price_id: '',
+                  is_active: true
+                });
+              }}
+              className="absolute top-2 right-2 sm:top-3 sm:right-3 text-gray-500 hover:text-gray-700 cursor-pointer z-10"
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="20" height="20" rx="10" fill="#4D6080" fill-opacity="0.8" />
+                <rect width="20" height="20" rx="10" fill="#4D6080" fillOpacity="0.8" />
                 <path d="M13.3888 7.49584C13.4485 7.43821 13.4962 7.36927 13.529 7.29303C13.5618 7.2168 13.579 7.13479 13.5798 7.05181C13.5806 6.96882 13.5648 6.88651 13.5334 6.80969C13.502 6.73286 13.4556 6.66306 13.397 6.60435C13.3383 6.54564 13.2686 6.4992 13.1918 6.46774C13.115 6.43628 13.0327 6.42042 12.9497 6.4211C12.8667 6.42179 12.7847 6.43899 12.7084 6.47171C12.6322 6.50443 12.5632 6.55201 12.5055 6.61167L10.0005 9.11584L7.49632 6.61167C7.4391 6.55027 7.3701 6.50102 7.29343 6.46686C7.21677 6.4327 7.13401 6.41433 7.05009 6.41285C6.96617 6.41137 6.88281 6.4268 6.80499 6.45824C6.72716 6.48967 6.65647 6.53646 6.59712 6.59581C6.53777 6.65516 6.49098 6.72585 6.45955 6.80368C6.42812 6.8815 6.41268 6.96486 6.41416 7.04878C6.41564 7.1327 6.43401 7.21546 6.46817 7.29212C6.50233 7.36879 6.55158 7.43779 6.61299 7.49501L9.11549 10L6.61132 12.5042C6.50092 12.6227 6.44082 12.7794 6.44367 12.9413C6.44653 13.1032 6.51212 13.2577 6.62663 13.3722C6.74115 13.4867 6.89563 13.5523 7.05755 13.5552C7.21947 13.558 7.37617 13.4979 7.49465 13.3875L10.0005 10.8833L12.5047 13.3883C12.6231 13.4987 12.7798 13.5588 12.9418 13.556C13.1037 13.5531 13.2582 13.4875 13.3727 13.373C13.4872 13.2585 13.5528 13.104 13.5556 12.9421C13.5585 12.7802 13.4984 12.6235 13.388 12.505L10.8855 10L13.3888 7.49584Z" fill="white" />
               </svg>
-
             </button>
 
             {/* Title */}
@@ -681,82 +1298,244 @@ const BillingSubscriptions = () => {
               Add New Subscription Plan
             </h2>
 
-            {/* Form */}
-            <div className="space-y-5">
+            {/* Error Message */}
+            {planError && (
+              <div className="mb-3 sm:mb-4 bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
+                {planError}
+              </div>
+            )}
 
+            {/* Success Message */}
+            {planSuccess && (
+              <div className="mb-3 sm:mb-4 bg-green-50 border border-green-200 text-green-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
+                Create plan successfully!
+              </div>
+            )}
+
+            {/* Form */}
+            <div className="space-y-4 sm:space-y-5">
               {/* Plan Name */}
               <div>
-                <label className="text-sm font-semibold text-[#003F8F]">Plan Name</label>
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F]">Plan Name</label>
                 <input
                   type="text"
+                  required
+                  value={planFormData.name}
+                  onChange={(e) => {
+                    setPlanFormData({ ...planFormData, name: e.target.value });
+                    if (validationErrors.name) {
+                      setValidationErrors({ ...validationErrors, name: '' });
+                    }
+                  }}
                   placeholder="Enter Plan Name"
-                  className="w-full text-[#4D6080CC] mt-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                  className={`w-full text-[#4D6080CC] mt-1 px-3 py-2 border rounded-lg text-xs sm:text-sm focus:ring-[#003F8F] focus:border-[#003F8F] ${
+                    validationErrors.name ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {validationErrors.name && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>
+                )}
               </div>
 
-              {/* Price */}
+              {/* Monthly Price */}
               <div>
-                <label className="text-sm font-semibold text-[#003F8F]">Monthly Price ($)</label>
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F]">Monthly Price ($)</label>
                 <input
                   type="number"
+                  required
+                  step="0.01"
+                  min="0"
+                  value={planFormData.monthly_price}
+                  onChange={(e) => {
+                    const monthly = e.target.value;
+                    setPlanFormData({ 
+                      ...planFormData, 
+                      monthly_price: monthly,
+                      yearly_price: monthly ? (parseFloat(monthly) * 12).toFixed(2) : ''
+                    });
+                    if (validationErrors.monthly_price) {
+                      setValidationErrors({ ...validationErrors, monthly_price: '' });
+                    }
+                  }}
                   placeholder="0.00"
-                  className="w-full mt-1 px-3 py-2 text-[#4D6080CC] border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                  className={`w-full mt-1 px-3 py-2 text-[#4D6080CC] border rounded-lg text-xs sm:text-sm focus:ring-[#003F8F] focus:border-[#003F8F] ${
+                    validationErrors.monthly_price ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {validationErrors.monthly_price && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.monthly_price}</p>
+                )}
               </div>
 
-              {/* Max Clients */}
+              {/* Maximum Clients */}
               <div>
-                <label className="text-sm font-semibold text-[#003F8F]">Maximum Clients</label>
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F]">Maximum Clients</label>
                 <input
                   type="number"
+                  required
+                  min="1"
+                  value={planFormData.max_clients}
+                  onChange={(e) => {
+                    setPlanFormData({ ...planFormData, max_clients: e.target.value });
+                    if (validationErrors.max_clients) {
+                      setValidationErrors({ ...validationErrors, max_clients: '' });
+                    }
+                  }}
                   placeholder="Enter Maximum Clients"
-                  className="w-full mt-1 px-3 py-2 text-[#4D6080CC] border border-gray-300 rounded-lg text-sm focus:ring-[#003F8F] focus:border-[#003F8F]"
+                  className={`w-full mt-1 px-3 py-2 text-[#4D6080CC] border rounded-lg text-xs sm:text-sm focus:ring-[#003F8F] focus:border-[#003F8F] ${
+                    validationErrors.max_clients ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 />
+                {validationErrors.max_clients && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.max_clients}</p>
+                )}
               </div>
 
               {/* Features */}
               <div>
-                <label className="text-sm font-semibold text-[#003F8F]">Maximum Clients</label>
-
-                <div className="mt-2 space-y-2 text-sm text-[#4D6080CC]">
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F] mb-2">Features</label>
+                <div className="mt-2 space-y-2 text-xs sm:text-sm text-[#4D6080CC]">
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" />
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('advanced_workout_builder')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'advanced_workout_builder']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'advanced_workout_builder')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
                     <span>Advanced Workout Builder</span>
                   </label>
 
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" />
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('custom_branding')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'custom_branding']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'custom_branding')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
                     <span>Custom Branding</span>
                   </label>
 
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" />
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('priority_support')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'priority_support']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'priority_support')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
                     <span>Priority Support</span>
                   </label>
 
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" />
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('advanced_analytics')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'advanced_analytics']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'advanced_analytics')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
                     <span>Advanced analytics</span>
                   </label>
                 </div>
+                {validationErrors.features && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.features}</p>
+                )}
               </div>
-
             </div>
 
             {/* Footer Buttons */}
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
               <button
-                onClick={() => setShowAddPlanModal(false)}
-                className="px-4 py-2 !border border-[#4D6080CC] rounded-lg text-sm font-semibold hover:bg-gray-100 cursor-pointer"
+                onClick={() => {
+                  setShowAddPlanModal(false);
+                  setPlanError('');
+                  setPlanSuccess(false);
+                  setValidationErrors({});
+                  setPlanFormData({
+                    name: '',
+                    description: '',
+                    monthly_price: '',
+                    yearly_price: '',
+                    max_clients: '',
+                    max_users: '1',
+                    storage_limit_gb: '',
+                    features: [],
+                    stripe_monthly_price_id: '',
+                    stripe_yearly_price_id: '',
+                    is_active: true
+                  });
+                }}
+                disabled={planLoading}
+                className="w-full sm:w-auto px-4 py-2 border border-[#4D6080CC] rounded-lg text-xs sm:text-sm font-semibold hover:bg-gray-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
 
-              <button className="px-5 py-2 bg-[#003F8F] text-white text-sm font-semibold rounded-lg hover:bg-[#002A6A] cursor-pointer">
-                Create Plan
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleCreatePlan(e);
+                }}
+                disabled={planLoading}
+                className="w-full sm:w-auto px-5 py-2 bg-[#003F8F] text-white text-xs sm:text-sm font-semibold rounded-lg hover:bg-[#002A6A] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {planLoading ? 'Creating...' : 'Create Plan'}
               </button>
             </div>
-
           </div>
         </div>
       )}
@@ -765,6 +1544,288 @@ const BillingSubscriptions = () => {
 
 
 
+
+      {/* Edit Plan Modal */}
+      {showEditPlanModal && (
+        <div className="fixed inset-0 bg-black/60 bg-opacity-30 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-lg p-4 sm:p-6 border border-gray-200 relative my-auto max-h-[90vh] overflow-y-auto">
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setShowEditPlanModal(false);
+                setEditingPlanId(null);
+                setPlanError('');
+                setPlanSuccess(false);
+                setValidationErrors({});
+                setPlanFormData({
+                  name: '',
+                  description: '',
+                  monthly_price: '',
+                  yearly_price: '',
+                  max_clients: '',
+                  max_users: '1',
+                  storage_limit_gb: '',
+                  features: [],
+                  stripe_monthly_price_id: '',
+                  stripe_yearly_price_id: '',
+                  is_active: true
+                });
+              }}
+              className="absolute top-2 right-2 sm:top-3 sm:right-3 text-gray-500 hover:text-gray-700 cursor-pointer z-10"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="20" height="20" rx="10" fill="#4D6080" fillOpacity="0.8" />
+                <path d="M13.3888 7.49584C13.4485 7.43821 13.4962 7.36927 13.529 7.29303C13.5618 7.2168 13.579 7.13479 13.5798 7.05181C13.5806 6.96882 13.5648 6.88651 13.5334 6.80969C13.502 6.73286 13.4556 6.66306 13.397 6.60435C13.3383 6.54564 13.2686 6.4992 13.1918 6.46774C13.115 6.43628 13.0327 6.42042 12.9497 6.4211C12.8667 6.42179 12.7847 6.43899 12.7084 6.47171C12.6322 6.50443 12.5632 6.55201 12.5055 6.61167L10.0005 9.11584L7.49632 6.61167C7.4391 6.55027 7.3701 6.50102 7.29343 6.46686C7.21677 6.4327 7.13401 6.41433 7.05009 6.41285C6.96617 6.41137 6.88281 6.4268 6.80499 6.45824C6.72716 6.48967 6.65647 6.53646 6.59712 6.59581C6.53777 6.65516 6.49098 6.72585 6.45955 6.80368C6.42812 6.8815 6.41268 6.96486 6.41416 7.04878C6.41564 7.1327 6.43401 7.21546 6.46817 7.29212C6.50233 7.36879 6.55158 7.43779 6.61299 7.49501L9.11549 10L6.61132 12.5042C6.50092 12.6227 6.44082 12.7794 6.44367 12.9413C6.44653 13.1032 6.51212 13.2577 6.62663 13.3722C6.74115 13.4867 6.89563 13.5523 7.05755 13.5552C7.21947 13.558 7.37617 13.4979 7.49465 13.3875L10.0005 10.8833L12.5047 13.3883C12.6231 13.4987 12.7798 13.5588 12.9418 13.556C13.1037 13.5531 13.2582 13.4875 13.3727 13.373C13.4872 13.2585 13.5528 13.104 13.5556 12.9421C13.5585 12.7802 13.4984 12.6235 13.388 12.505L10.8855 10L13.3888 7.49584Z" fill="white" />
+              </svg>
+            </button>
+
+            {/* Title */}
+            <h2 className="text-[22px] font-bold text-[#003F8F] mb-4">
+              Edit Subscription Plan
+            </h2>
+
+            {/* Error Message */}
+            {planError && (
+              <div className="mb-3 sm:mb-4 bg-red-50 border border-red-200 text-red-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
+                {planError}
+              </div>
+            )}
+
+            {/* Success Message */}
+            {planSuccess && (
+              <div className="mb-3 sm:mb-4 bg-green-50 border border-green-200 text-green-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-xs sm:text-sm">
+                Plan updated successfully!
+              </div>
+            )}
+
+            {/* Form */}
+            <div className="space-y-4 sm:space-y-5">
+              {/* Plan Name */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F]">Plan Name</label>
+                <input
+                  type="text"
+                  required
+                  value={planFormData.name}
+                  onChange={(e) => {
+                    setPlanFormData({ ...planFormData, name: e.target.value });
+                    if (validationErrors.name) {
+                      setValidationErrors({ ...validationErrors, name: '' });
+                    }
+                  }}
+                  placeholder="Enter Plan Name"
+                  className={`w-full text-[#4D6080CC] mt-1 px-3 py-2 border rounded-lg text-xs sm:text-sm focus:ring-[#003F8F] focus:border-[#003F8F] ${
+                    validationErrors.name ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {validationErrors.name && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>
+                )}
+              </div>
+
+              {/* Monthly Price */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F]">Monthly Price ($)</label>
+                <input
+                  type="number"
+                  required
+                  step="0.01"
+                  min="0"
+                  value={planFormData.monthly_price}
+                  onChange={(e) => {
+                    const monthly = e.target.value;
+                    setPlanFormData({ 
+                      ...planFormData, 
+                      monthly_price: monthly,
+                      yearly_price: monthly ? (parseFloat(monthly) * 12).toFixed(2) : ''
+                    });
+                    if (validationErrors.monthly_price) {
+                      setValidationErrors({ ...validationErrors, monthly_price: '' });
+                    }
+                  }}
+                  placeholder="0.00"
+                  className={`w-full mt-1 px-3 py-2 text-[#4D6080CC] border rounded-lg text-xs sm:text-sm focus:ring-[#003F8F] focus:border-[#003F8F] ${
+                    validationErrors.monthly_price ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {validationErrors.monthly_price && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.monthly_price}</p>
+                )}
+              </div>
+
+              {/* Maximum Clients */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F]">Maximum Clients</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={planFormData.max_clients}
+                  onChange={(e) => {
+                    setPlanFormData({ ...planFormData, max_clients: e.target.value });
+                    if (validationErrors.max_clients) {
+                      setValidationErrors({ ...validationErrors, max_clients: '' });
+                    }
+                  }}
+                  placeholder="Enter Maximum Clients"
+                  className={`w-full mt-1 px-3 py-2 text-[#4D6080CC] border rounded-lg text-xs sm:text-sm focus:ring-[#003F8F] focus:border-[#003F8F] ${
+                    validationErrors.max_clients ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {validationErrors.max_clients && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.max_clients}</p>
+                )}
+              </div>
+
+              {/* Features */}
+              <div>
+                <label className="block text-xs sm:text-sm font-semibold text-[#003F8F] mb-2">Features</label>
+                <div className="mt-2 space-y-2 text-xs sm:text-sm text-[#4D6080CC]">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('advanced_workout_builder')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'advanced_workout_builder']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'advanced_workout_builder')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
+                    <span>Advanced Workout Builder</span>
+                  </label>
+
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('custom_branding')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'custom_branding']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'custom_branding')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
+                    <span>Custom Branding</span>
+                  </label>
+
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('priority_support')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'priority_support']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'priority_support')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
+                    <span>Priority Support</span>
+                  </label>
+
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={planFormData.features.includes('advanced_analytics')}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: [...planFormData.features, 'advanced_analytics']
+                          });
+                        } else {
+                          setPlanFormData({
+                            ...planFormData,
+                            features: planFormData.features.filter(f => f !== 'advanced_analytics')
+                          });
+                        }
+                        if (validationErrors.features) {
+                          setValidationErrors({ ...validationErrors, features: '' });
+                        }
+                      }}
+                    />
+                    <span>Advanced analytics</span>
+                  </label>
+                </div>
+                {validationErrors.features && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.features}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+              <button
+                onClick={() => {
+                  setShowEditPlanModal(false);
+                  setEditingPlanId(null);
+                  setPlanError('');
+                  setPlanSuccess(false);
+                  setValidationErrors({});
+                  setPlanFormData({
+                    name: '',
+                    description: '',
+                    monthly_price: '',
+                    yearly_price: '',
+                    max_clients: '',
+                    max_users: '1',
+                    storage_limit_gb: '',
+                    features: [],
+                    stripe_monthly_price_id: '',
+                    stripe_yearly_price_id: '',
+                    is_active: true
+                  });
+                }}
+                disabled={planLoading}
+                className="w-full sm:w-auto px-4 py-2 border border-[#4D6080CC] rounded-lg text-xs sm:text-sm font-semibold hover:bg-gray-100 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleUpdatePlan(e);
+                }}
+                disabled={planLoading}
+                className="w-full sm:w-auto px-5 py-2 bg-[#003F8F] text-white text-xs sm:text-sm font-semibold rounded-lg hover:bg-[#002A6A] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {planLoading ? 'Updating...' : 'Update Plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
             {/* Invoice Details Modal */}
             {showInvoiceModal && (

@@ -18,6 +18,7 @@ const CoachRegister = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({});
   
   // Form state
   const [formData, setFormData] = useState({
@@ -51,6 +52,15 @@ const CoachRegister = () => {
   const handleInputChange = (e) => {
     const { name, value, type, checked, files } = e.target;
     
+    // Clear validation error for this field when user starts typing
+    if (validationErrors[name]) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+    
     if (type === 'file') {
       if (name === 'profile_photo') {
         const file = files[0];
@@ -61,12 +71,28 @@ const CoachRegister = () => {
             setProfilePreview(reader.result);
           };
           reader.readAsDataURL(file);
+          // Clear validation error when file is selected
+          if (validationErrors.profile_photo) {
+            setValidationErrors((prev) => {
+              const newErrors = { ...prev };
+              delete newErrors.profile_photo;
+              return newErrors;
+            });
+          }
         }
       } else if (name === 'certification_licence') {
         const file = files[0];
         if (file) {
           setFormData((prev) => ({ ...prev, certification_licence: file }));
           setCertificationFileName(file.name);
+          // Clear validation error when file is selected
+          if (validationErrors.certification_licence) {
+            setValidationErrors((prev) => {
+              const newErrors = { ...prev };
+              delete newErrors.certification_licence;
+              return newErrors;
+            });
+          }
         }
       }
     } else if (type === 'checkbox') {
@@ -77,57 +103,111 @@ const CoachRegister = () => {
   };
 
   const validateStep1 = () => {
+    const errors = {};
+    
     if (!formData.fullname.trim()) {
-      setError('Full name is required');
-      return false;
+      errors.fullname = 'Full name is required';
     }
     if (!formData.email.trim()) {
-      setError('Email is required');
-      return false;
+      errors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Please enter a valid email address';
     }
     if (!formData.password) {
-      setError('Password is required');
-      return false;
+      errors.password = 'Password is required';
+    } else if (formData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
     }
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return false;
+    if (!formData.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
     }
-    return true;
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const validateStep2 = () => {
+    const errors = {};
+    
     if (!formData.phone_number.trim()) {
-      setError('Phone number is required');
-      return false;
+      errors.phone_number = 'Phone number is required';
     }
     if (!formData.address.trim()) {
-      setError('Address is required');
-      return false;
+      errors.address = 'Address is required';
     }
     if (formData.coaching_categories.length === 0) {
-      setError('Please select at least one coaching category');
-      return false;
+      errors.coaching_categories = 'Please select at least one coaching category';
     }
     if (!formData.years_of_experience || formData.years_of_experience < 0) {
-      setError('Years of experience is required');
-      return false;
+      errors.years_of_experience = 'Years of experience is required';
     }
-    return true;
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  const handleNext = () => {
-    setError('');
-    if (step === 1 && validateStep1()) {
-      setStep(2);
-    } else if (step === 2 && validateStep2()) {
-      setStep(3);
+  const validateStep3 = () => {
+    const errors = {};
+    
+    if (!formData.profile_photo) {
+      errors.profile_photo = 'Profile picture is required';
     }
+    if (!formData.certification_licence) {
+      errors.certification_licence = 'Certification / License is required';
+    }
+    if (!formData.short_bio.trim()) {
+      errors.short_bio = 'Short bio is required';
+    }
+    if (!formData.available_for_coaching) {
+      errors.available_for_coaching = 'Please confirm your availability for coaching';
+    }
+    if (!formData.availability_notes.trim()) {
+      errors.availability_notes = 'Availability notes is required';
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleNext = (e) => {
+    if (e) {
+      e.preventDefault();
+    }
+    setError('');
+    
+    let isValid = false;
+    
+    if (step === 1) {
+      isValid = validateStep1();
+      if (isValid) {
+        setValidationErrors({});
+        setStep(2);
+      }
+    } else if (step === 2) {
+      isValid = validateStep2();
+      if (isValid) {
+        setValidationErrors({});
+        setStep(3);
+      }
+    }
+    
+    // If validation fails, errors are already set by validateStep1() or validateStep2()
+    // The component will re-render with validationErrors showing the errors
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
+    // Validate Step 3 fields before submitting
+    if (!validateStep3()) {
+      setLoading(false);
+      return; // Stop submission if validation fails
+    }
+    
+    setValidationErrors({});
     setLoading(true);
 
     try {
@@ -257,6 +337,7 @@ const CoachRegister = () => {
 
       if (response.ok) {
         setSuccess(true);
+        setValidationErrors({});
         // Store user data in localStorage
         // Handle both 'address' and 'city' field names (backend might return either)
         const addressField = result.data.address || result.data.city || '';
@@ -276,49 +357,126 @@ const CoachRegister = () => {
           navigate('/coach/dashboard');
         }, 2000);
       } else {
-        // Handle different error formats
-        let errorMessage = 'Registration failed. Please try again.';
-        let errorDetails = [];
+        // Handle API validation errors
+        const apiErrors = {};
         
-        if (result.message) {
-          errorMessage = result.message;
-        } else if (result.error) {
-          errorMessage = result.error;
-        } else if (result.detail) {
-          errorMessage = result.detail;
-        }
+        // Field name mapping (API field names to form field names)
+        const fieldMapping = {
+          'fullname': 'fullname',
+          'email': 'email',
+          'password': 'password',
+          'confirm_password': 'confirmPassword',
+          'phone_number': 'phone_number',
+          'address': 'address',
+          'coaching_categories': 'coaching_categories',
+          'years_of_experience': 'years_of_experience',
+          'profile_photo': 'profile_photo',
+          'certification_licence': 'certification_licence',
+          'short_bio': 'short_bio'
+        };
         
-        // Extract detailed validation errors
+        // Check for field-specific validation errors in result.errors
         if (result.errors && typeof result.errors === 'object') {
           Object.keys(result.errors).forEach((field) => {
+            const mappedField = fieldMapping[field] || field;
             const fieldErrors = result.errors[field];
+            let errorMessage = '';
+            
             if (Array.isArray(fieldErrors)) {
-              fieldErrors.forEach((err) => {
-                errorDetails.push(`${field}: ${err}`);
-              });
+              errorMessage = fieldErrors[0]; // Take first error message
+            } else if (typeof fieldErrors === 'string') {
+              errorMessage = fieldErrors;
             } else if (typeof fieldErrors === 'object') {
               // Handle nested errors like coaching_categories[0]
               Object.keys(fieldErrors).forEach((key) => {
                 const nestedErrors = fieldErrors[key];
-                if (Array.isArray(nestedErrors)) {
-                  nestedErrors.forEach((err) => {
-                    errorDetails.push(`${field} (${key}): ${err}`);
-                  });
+                if (Array.isArray(nestedErrors) && nestedErrors.length > 0) {
+                  errorMessage = nestedErrors[0];
                 }
               });
-            } else if (typeof fieldErrors === 'string') {
-              errorDetails.push(`${field}: ${fieldErrors}`);
+            }
+            
+            // Override password length error to show 8 characters
+            if (mappedField === 'password' && errorMessage && errorMessage.toLowerCase().includes('too short')) {
+              errorMessage = 'Password must be at least 8 characters';
+            }
+            
+            if (errorMessage) {
+              apiErrors[mappedField] = errorMessage;
             }
           });
         }
         
-        // Combine error message with details
-        if (errorDetails.length > 0) {
-          errorMessage = errorMessage + '\n\n' + errorDetails.join('\n');
+        // Check for direct field errors in response (non-standard format)
+        Object.keys(result).forEach((key) => {
+          if (key !== 'message' && key !== 'detail' && key !== 'error' && key !== 'errors' && key !== 'success' && key !== 'data') {
+            const mappedField = fieldMapping[key] || key;
+            const fieldValue = result[key];
+            let errorMessage = '';
+            
+            if (Array.isArray(fieldValue) && fieldValue.length > 0) {
+              errorMessage = fieldValue[0];
+            } else if (typeof fieldValue === 'string' && fieldValue.trim() !== '') {
+              errorMessage = fieldValue;
+            }
+            
+            // Override password length error to show 8 characters
+            if (mappedField === 'password' && errorMessage && errorMessage.toLowerCase().includes('too short')) {
+              errorMessage = 'Password must be at least 8 characters';
+            }
+            
+            if (errorMessage) {
+              apiErrors[mappedField] = errorMessage;
+            }
+          }
+        });
+        
+        if (Object.keys(apiErrors).length > 0) {
+          setValidationErrors(apiErrors);
+          
+          // If there are errors from Step 1 or Step 2, navigate to that step
+          const step1Fields = ['fullname', 'email', 'password', 'confirmPassword'];
+          const step2Fields = ['phone_number', 'address', 'coaching_categories', 'years_of_experience'];
+          
+          const hasStep1Error = step1Fields.some(field => apiErrors[field]);
+          const hasStep2Error = step2Fields.some(field => apiErrors[field]);
+          
+          if (hasStep1Error) {
+            setStep(1);
+          } else if (hasStep2Error) {
+            setStep(2);
+          }
+          // If only Step 3 errors, stay on Step 3
+          
+          // If email error exists, show only email error message, not general error
+          if (apiErrors.email) {
+            setError(''); // Clear general error, email error will show below field
+          } else {
+            // Set general error message for other errors
+            let errorMessage = 'Registration failed. Please try again.';
+            if (result.message) {
+              errorMessage = result.message;
+            } else if (result.error) {
+              errorMessage = result.error;
+            } else if (result.detail) {
+              errorMessage = result.detail;
+            }
+            setError(errorMessage);
+          }
+        } else {
+          // Set general error message if no field-specific errors
+          let errorMessage = 'Registration failed. Please try again.';
+          if (result.message) {
+            errorMessage = result.message;
+          } else if (result.error) {
+            errorMessage = result.error;
+          } else if (result.detail) {
+            errorMessage = result.detail;
+          }
+          setError(errorMessage);
         }
         
-        setError(errorMessage);
-        console.error('API Error Response:', result);
+        console.error('API Error Response:', result, apiErrors);
       }
     } catch (err) {
       console.error('Registration error:', err);
@@ -360,6 +518,7 @@ const CoachRegister = () => {
     setProfilePreview(null);
     setCertificationFileName('');
     setError('');
+    setValidationErrors({});
     setStep(1);
   };
 
@@ -389,7 +548,7 @@ const CoachRegister = () => {
             )}
 
             {step === 1 ? (
-              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
+              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleNext(); }} noValidate>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">
                     Full name
@@ -400,9 +559,13 @@ const CoachRegister = () => {
                     value={formData.fullname}
                     onChange={handleInputChange}
                     placeholder="John Coach"
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                    required
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.fullname ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.fullname && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.fullname}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">
@@ -414,9 +577,13 @@ const CoachRegister = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     placeholder="coach@domain.com"
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                    required
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.email ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.email && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">
@@ -428,9 +595,13 @@ const CoachRegister = () => {
                     value={formData.password}
                     onChange={handleInputChange}
                     placeholder="Choose a secure password"
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                    required
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.password ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.password && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">
@@ -442,9 +613,13 @@ const CoachRegister = () => {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     placeholder="Repeat password"
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                    required
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.confirmPassword ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.confirmPassword && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.confirmPassword}</p>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <button
@@ -464,7 +639,7 @@ const CoachRegister = () => {
                 </div>
               </form>
             ) : step === 2 ? (
-              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleNext(); }}>
+              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); handleNext(); }} noValidate>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">Phone</label>
                   <input
@@ -473,9 +648,13 @@ const CoachRegister = () => {
                     value={formData.phone_number}
                     onChange={handleInputChange}
                     placeholder="+1 5555 555 555"
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                    required
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.phone_number ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.phone_number && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.phone_number}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">Address</label>
@@ -485,9 +664,13 @@ const CoachRegister = () => {
                     value={formData.address}
                     onChange={handleInputChange}
                     placeholder="Enter your address"
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                    required
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.address ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.address && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.address}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">
@@ -498,7 +681,17 @@ const CoachRegister = () => {
                       <button
                         type="button"
                         key={category}
-                        onClick={() => toggleCategory(category)}
+                        onClick={() => {
+                          toggleCategory(category);
+                          // Clear error when user selects a category
+                          if (validationErrors.coaching_categories) {
+                            setValidationErrors((prev) => {
+                              const newErrors = { ...prev };
+                              delete newErrors.coaching_categories;
+                              return newErrors;
+                            });
+                          }
+                        }}
                         className={`px-4 py-1 rounded-full border text-sm font-[Inter] ${
                           formData.coaching_categories.includes(category)
                             ? 'bg-[#003F8F] text-white border-[#003F8F]'
@@ -509,6 +702,9 @@ const CoachRegister = () => {
                       </button>
                     ))}
                   </div>
+                  {validationErrors.coaching_categories && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.coaching_categories}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">Years of experience</label>
@@ -519,14 +715,21 @@ const CoachRegister = () => {
                     onChange={handleInputChange}
                     placeholder="0"
                     min="0"
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                    required
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.years_of_experience ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.years_of_experience && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.years_of_experience}</p>
+                  )}
                 </div>
                 <div className="flex justify-between">
                   <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={() => {
+                      setValidationErrors({});
+                      setStep(1);
+                    }}
                     className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro] cursor-pointer"
                   >
                     Back
@@ -541,22 +744,28 @@ const CoachRegister = () => {
                 </div>
               </form>
             ) : (
-              <form className="space-y-4" onSubmit={handleSubmit}>
+              <form className="space-y-4" onSubmit={handleSubmit} noValidate>
                 <div className="flex flex-col items-start gap-3">
-                  <label className="text-sm font-medium font-[Poppins] text-[#003F8F]">Profile picture (optional)</label>
+                  <label className="text-sm font-medium font-[Poppins] text-[#003F8F]">Profile picture</label>
                   <div className="flex items-center gap-4">
                     {profilePreview ? (
                       <img 
                         src={profilePreview} 
                         alt="Profile preview" 
-                        className="w-24 h-24 rounded-full border border-[#003F8F] object-cover"
+                        className={`w-24 h-24 rounded-full border object-cover ${
+                          validationErrors.profile_photo ? 'border-red-500' : 'border-[#003F8F]'
+                        }`}
                       />
                     ) : (
-                      <div className="w-24 h-24 rounded-full border border-[#003F8F] flex items-center justify-center text-xs text-gray-400 font-[Inter]">
+                      <div className={`w-24 h-24 rounded-full border flex items-center justify-center text-xs text-gray-400 font-[Inter] ${
+                        validationErrors.profile_photo ? 'border-red-500' : 'border-[#003F8F]'
+                      }`}>
                         No Image
                       </div>
                     )}
-                    <label className="px-4 py-2 bg-white border border-[#003F8F] text-[#003F8F] rounded-lg text-sm font-[Inter] cursor-pointer">
+                    <label className={`px-4 py-2 bg-white border rounded-lg text-sm font-[Inter] cursor-pointer ${
+                      validationErrors.profile_photo ? 'border-red-500 text-red-500' : 'border-[#003F8F] text-[#003F8F]'
+                    }`}>
                       Choose Picture
                       <input 
                         type="file" 
@@ -567,19 +776,26 @@ const CoachRegister = () => {
                       />
                     </label>
                   </div>
+                  {validationErrors.profile_photo && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.profile_photo}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">Certification / License (optional)</label>
+                  <label className="block text-sm font-medium font-[Poppins] text-[#003F8F]">Certification / License</label>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                     <input
                       type="text"
                       disabled
                       value={certificationFileName || "No file chosen"}
                       placeholder="No file chosen"
-                      className="flex-1 rounded-lg border border-[#003F8F] px-3 py-2 bg-gray-50 text-sm text-gray-500 font-[Inter]"
+                      className={`flex-1 rounded-lg border px-3 py-2 bg-gray-50 text-sm text-gray-500 font-[Inter] ${
+                        validationErrors.certification_licence ? 'border-red-500' : 'border-[#003F8F]'
+                      }`}
                     />
-                    <label className="px-4 py-2 bg-white text-[#003F8F] rounded-lg text-sm font-[Inter] cursor-pointer text-center border border-[#003F8F]">
+                    <label className={`px-4 py-2 bg-white rounded-lg text-sm font-[Inter] cursor-pointer text-center border ${
+                      validationErrors.certification_licence ? 'border-red-500 text-red-500' : 'border-[#003F8F] text-[#003F8F]'
+                    }`}>
                       Choose File
                       <input 
                         type="file" 
@@ -590,6 +806,9 @@ const CoachRegister = () => {
                       />
                     </label>
                   </div>
+                  {validationErrors.certification_licence && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.certification_licence}</p>
+                  )}
                 </div>
 
                 <div>
@@ -600,35 +819,65 @@ const CoachRegister = () => {
                     onChange={handleInputChange}
                     rows={3}
                     placeholder="Tell coaches and clients about yourself..."
-                    className="mt-1 block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
+                    className={`mt-1 block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                      validationErrors.short_bio ? 'border-red-500' : 'border-[#003F8F]'
+                    }`}
                   />
+                  {validationErrors.short_bio && (
+                    <p className="text-red-500 text-xs mt-1">{validationErrors.short_bio}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="inline-flex items-center gap-2 text-sm font-medium font-[Inter] text-gray-500">
-                    <input 
-                      type="checkbox" 
-                      name="available_for_coaching"
-                      checked={formData.available_for_coaching}
+                  <div>
+                    <label className="inline-flex items-center gap-2 text-sm font-medium font-[Inter] text-gray-500">
+                      <input 
+                        type="checkbox" 
+                        name="available_for_coaching"
+                        checked={formData.available_for_coaching}
+                        onChange={(e) => {
+                          handleInputChange(e);
+                          // Clear validation error when checkbox is checked
+                          if (e.target.checked && validationErrors.available_for_coaching) {
+                            setValidationErrors((prev) => {
+                              const newErrors = { ...prev };
+                              delete newErrors.available_for_coaching;
+                              return newErrors;
+                            });
+                          }
+                        }}
+                        className="w-4 h-4 text-[#003F8F]" 
+                      />
+                      Available for coaching
+                    </label>
+                    {validationErrors.available_for_coaching && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.available_for_coaching}</p>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      name="availability_notes"
+                      value={formData.availability_notes}
                       onChange={handleInputChange}
-                      className="w-4 h-4 text-[#003F8F]" 
+                      placeholder="Availability notes (e.g. mornings, weekends)"
+                      className={`block w-full rounded-lg border px-3 py-2 focus:outline-none font-[Inter] text-sm ${
+                        validationErrors.availability_notes ? 'border-red-500' : 'border-[#003F8F]'
+                      }`}
                     />
-                    Available for coaching
-                  </label>
-                  <input
-                    type="text"
-                    name="availability_notes"
-                    value={formData.availability_notes}
-                    onChange={handleInputChange}
-                    placeholder="Availability notes (e.g. mornings, weekends)"
-                    className="block w-full rounded-lg border border-[#003F8F] px-3 py-2 focus:outline-none font-[Inter] text-sm"
-                  />
+                    {validationErrors.availability_notes && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.availability_notes}</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3 justify-between">
                   <button
                     type="button"
-                    onClick={() => setStep(2)}
+                    onClick={() => {
+                      setValidationErrors({});
+                      setStep(2);
+                    }}
                     className="px-6 py-2 rounded-md text-[#003F8F] border border-[#003F8F] font-[BasisGrotesquePro] cursor-pointer"
                   >
                     Back
