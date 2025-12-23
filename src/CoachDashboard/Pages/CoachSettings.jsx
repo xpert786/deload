@@ -316,7 +316,7 @@ const CoachSettings = () => {
       console.log('Update Profile Request Body:', selectedImageFile ? 'FormData' : requestBody);
 
       const response = await fetch(apiUrl, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: headers,
         credentials: 'include',
         body: requestBody,

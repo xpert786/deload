@@ -292,7 +292,7 @@ const ClientSettings = () => {
       console.log('Update Profile Request Body:', selectedImageFile ? 'FormData' : requestBody);
 
       const response = await fetch(apiUrl, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: headers,
         credentials: 'include',
         body: requestBody,

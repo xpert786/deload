@@ -239,6 +239,14 @@ const Messages = () => {
     return date.toLocaleDateString();
   };
 
+  // Get initials from name
+  const getInitials = (name) => {
+    if (!name || name === 'U' || name === 'Client') return 'U';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  };
+
   // Fetch clients for compose modal
   const fetchClients = useCallback(async () => {
     setLoadingClients(true);
@@ -550,12 +558,42 @@ const Messages = () => {
                   >
                     <div className="flex items-start gap-3">
                       {/* Profile Picture */}
-                      <div className="relative flex-shrink-0">
-                        <img
-                          src={otherUser.photo || ProfileLogo}
-                          alt={otherUser.name}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
+                      <div className="relative flex-shrink-0 w-12 h-12 rounded-full overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#003F8F' }}>
+                        {(() => {
+                          const profilePhoto = otherUser.photo;
+                          const isValidPhoto = profilePhoto && 
+                                               profilePhoto.trim() !== '' && 
+                                               profilePhoto !== 'null' && 
+                                               profilePhoto !== 'undefined' &&
+                                               !profilePhoto.includes('ProfileLogo') &&
+                                               !profilePhoto.includes('clientprofile');
+                          
+                          if (isValidPhoto) {
+                            return (
+                              <>
+                                <img
+                                  src={profilePhoto}
+                                  alt={otherUser.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.nextSibling) {
+                                      e.target.nextSibling.style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                                <span className="text-white text-sm font-semibold hidden">
+                                  {getInitials(otherUser.name)}
+                                </span>
+                              </>
+                            );
+                          }
+                          return (
+                            <span className="text-white text-sm font-semibold">
+                              {getInitials(otherUser.name)}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* Conversation Info */}
@@ -672,11 +710,44 @@ const Messages = () => {
                       className="p-4 hover:bg-gray-50 cursor-pointer transition"
                     >
                       <div className="flex items-center gap-3">
-                        <img
-                          src={ProfileLogo}
-                          alt={client.name || client.fullname}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
+                        <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#003F8F' }}>
+                          {(() => {
+                            const profilePhoto = client.photo || client.profile_picture;
+                            const clientName = client.name || client.fullname || 'U';
+                            const isValidPhoto = profilePhoto && 
+                                                 profilePhoto.trim() !== '' && 
+                                                 profilePhoto !== 'null' && 
+                                                 profilePhoto !== 'undefined' &&
+                                                 !profilePhoto.includes('ProfileLogo') &&
+                                                 !profilePhoto.includes('clientprofile');
+                            
+                            if (isValidPhoto) {
+                              return (
+                                <>
+                                  <img
+                                    src={profilePhoto}
+                                    alt={clientName}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      if (e.target.nextSibling) {
+                                        e.target.nextSibling.style.display = 'flex';
+                                      }
+                                    }}
+                                  />
+                                  <span className="text-white text-xs font-semibold hidden">
+                                    {getInitials(clientName)}
+                                  </span>
+                                </>
+                              );
+                            }
+                            return (
+                              <span className="text-white text-xs font-semibold">
+                                {getInitials(clientName)}
+                              </span>
+                            );
+                          })()}
+                        </div>
                         <div className="flex-1">
                           <p className="font-semibold text-sm text-[#003F8F] font-[Inter]">
                             {client.name || client.fullname}

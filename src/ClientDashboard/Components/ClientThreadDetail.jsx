@@ -409,56 +409,58 @@ const ClientThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) =
   return (
     <div className="flex-1 flex flex-col bg-white rounded-xl overflow-hidden shadow-sm">
       {/* Chat Header */}
-      <div className="bg-[#003F8F] text-white p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="mr-2 text-white/80 hover:text-white"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-          )}
-          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#003F8F]">
-            {coachUser.photo ? (
-              <img
-                src={coachUser.photo}
-                alt={coachUser.name}
-                className="w-full h-full rounded-full object-cover"
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  if (e.target.nextSibling) {
-                    e.target.nextSibling.style.display = 'flex';
-                  }
-                }}
-              />
-            ) : null}
-            <span className={`text-white text-sm font-semibold ${coachUser.photo ? 'hidden' : 'flex'}`}>
-              {getInitials(coachUser.name)}
-            </span>
+      <div className="bg-white p-4">
+        <div className="bg-[#003F8F] text-white p-4 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="mr-2 text-white/80 hover:text-white"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/20">
+              {coachUser.photo ? (
+                <img
+                  src={coachUser.photo}
+                  alt={coachUser.name}
+                  className="w-full h-full rounded-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    if (e.target.nextSibling) {
+                      e.target.nextSibling.style.display = 'flex';
+                    }
+                  }}
+                />
+              ) : null}
+              <span className={`text-white text-sm font-semibold ${coachUser.photo ? 'hidden' : 'flex'}`}>
+                {getInitials(coachUser.name)}
+              </span>
+            </div>
+            <div>
+              <p className="font-semibold font-[Inter]">{coachUser.name}</p>
+              {isTyping && (
+                <p className="text-xs text-white/80 font-[Inter]">typing...</p>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="font-semibold font-[Inter]">{coachUser.name}</p>
-            {isTyping && (
-              <p className="text-xs text-white/80 font-[Inter]">typing...</p>
+          <div className="flex items-center gap-2">
+            {!isConnected && (
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                <span className="text-xs text-white/80">Connecting...</span>
+              </div>
+            )}
+            {isConnected && (
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                <span className="text-xs text-white/80">Online</span>
+              </div>
             )}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {!isConnected && (
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-              <span className="text-xs text-white/80">Connecting...</span>
-            </div>
-          )}
-          {isConnected && (
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-xs text-white/80">Online</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -733,3 +735,4 @@ const ClientThreadDetail = ({ thread, currentUserId, onBack, onThreadUpdate }) =
 };
 
 export default ClientThreadDetail;
+
