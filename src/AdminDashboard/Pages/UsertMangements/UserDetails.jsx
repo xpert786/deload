@@ -27,7 +27,6 @@ const UserDetails = () => {
     // Password change state
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [passwordData, setPasswordData] = useState({
-        current_password: '',
         new_password: '',
         confirm_password: ''
     });
@@ -418,7 +417,7 @@ const UserDetails = () => {
         e.preventDefault();
         
         // Validation
-        if (!passwordData.current_password || !passwordData.new_password || !passwordData.confirm_password) {
+        if (!passwordData.new_password || !passwordData.confirm_password) {
             setPasswordError('All password fields are required');
             return;
         }
@@ -430,11 +429,6 @@ const UserDetails = () => {
 
         if (passwordData.new_password.length < 8) {
             setPasswordError('New password must be at least 8 characters long');
-            return;
-        }
-
-        if (passwordData.current_password === passwordData.new_password) {
-            setPasswordError('New password must be different from your current password');
             return;
         }
 
@@ -471,8 +465,8 @@ const UserDetails = () => {
             const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
             // Check if baseUrl already includes /api, if not add it
             const apiUrl = baseUrl.includes('/api') 
-                ? `${baseUrl}/change-password/`
-                : `${baseUrl}/api/change-password/`;
+                ? `${baseUrl}/admin/change-coach-password/`
+                : `${baseUrl}/api/admin/change-coach-password/`;
 
             // Prepare headers
             const headers = {
@@ -485,7 +479,7 @@ const UserDetails = () => {
 
             // Prepare request body
             const requestBody = {
-                current_password: passwordData.current_password,
+                coach_id: userId,
                 new_password: passwordData.new_password,
                 confirm_password: passwordData.confirm_password
             };
@@ -518,7 +512,6 @@ const UserDetails = () => {
                 // Success
                 setPasswordSuccess(true);
                 setPasswordData({
-                    current_password: '',
                     new_password: '',
                     confirm_password: ''
                 });
@@ -1068,7 +1061,6 @@ const UserDetails = () => {
                                 setPasswordError(null);
                                 setPasswordSuccess(false);
                                 setPasswordData({
-                                    current_password: '',
                                     new_password: '',
                                     confirm_password: ''
                                 });
@@ -1107,7 +1099,7 @@ const UserDetails = () => {
                         {/* Form */}
                         <form onSubmit={handleUpdatePassword} className="space-y-5">
                             {/* Current Password */}
-                            <div>
+                            {/* <div>
                                 <label className="block text-sm font-semibold text-[#2D2F33] mb-2">Current Password</label>
                                 <input
                                     type="password"
@@ -1118,7 +1110,7 @@ const UserDetails = () => {
                                     required
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F]"
                                 />
-                            </div>
+                            </div> */}
 
                             {/* New Password */}
                             <div>
@@ -1153,7 +1145,6 @@ const UserDetails = () => {
                                 <p className="text-sm font-regular text-[#535B69] mb-2">Password requirements:</p>
                                 <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
                                     <li>At least 8 characters long</li>
-                                    <li>Different from your current password</li>
                                     <li>Passwords must match</li>
                                 </ul>
                             </div>
@@ -1167,7 +1158,6 @@ const UserDetails = () => {
                                         setPasswordError(null);
                                         setPasswordSuccess(false);
                                         setPasswordData({
-                                            current_password: '',
                                             new_password: '',
                                             confirm_password: ''
                                         });

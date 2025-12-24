@@ -28,6 +28,12 @@ const CoachSettings = () => {
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [updateError, setUpdateError] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({
+    fullname: '',
+    email: '',
+    phone_number: '',
+    address: ''
+  });
   
   // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -218,6 +224,70 @@ const CoachSettings = () => {
     }
   };
 
+  // Validation functions
+  const validateFullname = (fullname) => {
+    if (!fullname || fullname.trim() === '') {
+      return 'Name is required';
+    }
+    if (fullname.trim().length < 2) {
+      return 'Name must be at least 2 characters long';
+    }
+    if (fullname.trim().length > 100) {
+      return 'Name must be less than 100 characters';
+    }
+    // Check for valid name format (letters, spaces, hyphens, apostrophes)
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!nameRegex.test(fullname.trim())) {
+      return 'Name can only contain letters, spaces, hyphens, and apostrophes';
+    }
+    return '';
+  };
+
+  const validateEmail = (email) => {
+    if (!email || email.trim() === '') {
+      return 'Email is required';
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return 'Please enter a valid email address';
+    }
+    if (email.trim().length > 255) {
+      return 'Email must be less than 255 characters';
+    }
+    return '';
+  };
+
+  const validatePhoneNumber = (phone) => {
+    if (!phone || phone.trim() === '') {
+      return 'Phone number is required';
+    }
+    // Remove common phone number characters for validation
+    const cleanedPhone = phone.replace(/[\s\-\(\)\+]/g, '');
+    // Check if it contains only digits
+    const phoneRegex = /^\d+$/;
+    if (!phoneRegex.test(cleanedPhone)) {
+      return 'Phone number can only contain digits, spaces, hyphens, parentheses, and plus sign';
+    }
+    // Check minimum and maximum length (typically 10-15 digits)
+    if (cleanedPhone.length < 10) {
+      return 'Phone number must be at least 10 digits';
+    }
+    if (cleanedPhone.length > 15) {
+      return 'Phone number must be less than 15 digits';
+    }
+    return '';
+  };
+
+  const validateAddress = (address) => {
+    if (!address || address.trim() === '') {
+      return 'Address is required';
+    }
+    if (address.trim().length > 200) {
+      return 'Address must be less than 200 characters';
+    }
+    return '';
+  };
+
   // Handle profile form input change
   const handleFormChange = (e) => {
     const { name, value } = e.target;
@@ -225,7 +295,14 @@ const CoachSettings = () => {
       ...prev,
       [name]: value
     }));
-    // Clear errors when user starts typing
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+    // Clear general error when user starts typing
     if (updateError) {
       setUpdateError(null);
     }
@@ -233,9 +310,26 @@ const CoachSettings = () => {
 
   // Handle profile update
   const handleUpdateProfile = async () => {
-    setUpdatingProfile(true);
     setUpdateError(null);
     setUpdateSuccess(false);
+
+    // Validate all fields
+    const errors = {
+      fullname: validateFullname(formData.fullname),
+      email: validateEmail(formData.email),
+      phone_number: validatePhoneNumber(formData.phone_number),
+      address: validateAddress(formData.address)
+    };
+
+    setFieldErrors(errors);
+
+    // Check if there are any validation errors
+    const hasErrors = Object.values(errors).some(error => error !== '');
+    if (hasErrors) {
+      return; // Stop submission if there are validation errors
+    }
+
+    setUpdatingProfile(true);
 
     try {
       // Get authentication token
@@ -425,6 +519,14 @@ const CoachSettings = () => {
 
         // Clear selected image file after successful upload
         setSelectedImageFile(null);
+
+        // Clear field errors on success
+        setFieldErrors({
+          fullname: '',
+          email: '',
+          phone_number: '',
+          address: ''
+        });
 
         setUpdateSuccess(true);
         
@@ -680,8 +782,15 @@ const CoachSettings = () => {
                 value={formData.fullname}
                 onChange={handleFormChange}
                 placeholder="Enter name..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
+                  fieldErrors.fullname 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                }`}
               />
+              {fieldErrors.fullname && (
+                <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.fullname}</p>
+              )}
             </div>
 
             <div>
@@ -694,8 +803,15 @@ const CoachSettings = () => {
                 value={formData.email}
                 onChange={handleFormChange}
                 placeholder="Enter you email..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
+                  fieldErrors.email 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                }`}
               />
+              {fieldErrors.email && (
+                <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.email}</p>
+              )}
             </div>
 
             <div>
@@ -708,8 +824,15 @@ const CoachSettings = () => {
                 value={formData.phone_number}
                 onChange={handleFormChange}
                 placeholder="Enter phone number"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
+                  fieldErrors.phone_number 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                }`}
               />
+              {fieldErrors.phone_number && (
+                <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.phone_number}</p>
+              )}
             </div>
 
             <div>
@@ -722,8 +845,15 @@ const CoachSettings = () => {
                 value={formData.address}
                 onChange={handleFormChange}
                 placeholder="Enter address"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
+                  fieldErrors.address 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                }`}
               />
+              {fieldErrors.address && (
+                <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.address}</p>
+              )}
             </div>
           </div>
         </div>

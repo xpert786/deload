@@ -5,7 +5,11 @@ import * as Yup from 'yup';
 import DloadLogo from "../assets/DloadLogo.png";
 import ManImage from "../assets/ManImage.png";
 
-// UI Only - No API calls
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
 
 // Validation Schema
 const validationSchema = Yup.object().shape({
@@ -15,6 +19,9 @@ const validationSchema = Yup.object().shape({
   otp3: Yup.string().required(''),
   otp4: Yup.string().required(''),
   otp5: Yup.string().required(''),
+  new_password: Yup.string()
+    .required('New password is required')
+    .min(8, 'Password must be at least 8 characters'),
 }).test('otpComplete', 'OTP must be 6 digits', function(values) {
   const otp = Array.from({ length: 6 }, (_, i) => values[`otp${i}`] || '').join('');
   return otp.length === 6 && /^\d+$/.test(otp);
@@ -24,6 +31,7 @@ const OTPVerify = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email || '';
@@ -90,17 +98,60 @@ const OTPVerify = () => {
       return;
     }
 
-    // Simulate API call delay for UI demonstration
-    setTimeout(() => {
-      setSuccess('OTP verified successfully! Redirecting to login...');
+    try {
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/auth/verify-otp-reset-password/`
+        : `${baseUrl}/api/auth/verify-otp-reset-password/`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          otp: otp,
+          new_password: values.new_password
+        }),
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok) {
+        setSuccess(result.message || 'Password reset successfully! Redirecting to login...');
+        setLoading(false);
+        setSubmitting(false);
+        
+        // Navigate to login after a delay
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      } else {
+        const errorMessage = result.message || result.error || result.detail || 'Invalid OTP. Please try again.';
+        setError(errorMessage);
+        setLoading(false);
+        setSubmitting(false);
+      }
+    } catch (err) {
+      console.error('Error verifying OTP:', err);
+      setError(err.message || 'Failed to verify OTP. Please try again.');
       setLoading(false);
       setSubmitting(false);
-      
-      // Navigate to login after a delay
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
-    }, 1000);
+    }
   };
 
   return (
@@ -119,8 +170,8 @@ const OTPVerify = () => {
             }}
           >
             <div className="mb-6">
-              <h2 className="text-2xl font-medium mb-2 font-[Poppins]" style={{ color: '#003F8F' }}>Verify OTP</h2>
-              <p className="text-base font-normal font-[Inter]" style={{ color: '#6C757D' }}>Enter the OTP sent to your email</p>
+              <h2 className="text-2xl font-medium mb-2 font-[Poppins]" style={{ color: '#003F8F' }}>Reset Password</h2>
+              <p className="text-base font-normal font-[Inter]" style={{ color: '#6C757D' }}>Enter the OTP and your new password</p>
             </div>
 
             {/* Error Message */}
@@ -144,7 +195,8 @@ const OTPVerify = () => {
                 otp2: '',
                 otp3: '',
                 otp4: '',
-                otp5: ''
+                otp5: '',
+                new_password: ''
               }}
               validationSchema={validationSchema}
               onSubmit={handleSubmit}
@@ -188,6 +240,43 @@ const OTPVerify = () => {
                       )}
                     </div>
 
+                    {/* New Password */}
+                    <div>
+                      <label htmlFor="new_password" className="block text-sm font-medium font-[Poppins]" style={{ color: '#003F8F' }}>New Password</label>
+                      <div className="relative mt-1">
+                        <Field
+                          type={showPassword ? "text" : "password"}
+                          name="new_password"
+                          id="new_password"
+                          placeholder="Enter new password"
+                          className={`block w-full rounded-md px-3 py-2 pr-10 focus:outline-none inter-placeholder ${
+                            errors.new_password && touched.new_password ? 'border-red-500' : ''
+                          }`}
+                          style={{
+                            border: errors.new_password && touched.new_password ? '1px solid #EF4444' : '1px solid #003F8F',
+                            fontFamily: 'Inter'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer"
+                        >
+                          {showPassword ? (
+                            <svg className="h-5 w-5" style={{ color: '#003F8F' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          ) : (
+                            <svg className="h-5 w-5" style={{ color: '#003F8F' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      <ErrorMessage name="new_password" component="div" className="text-red-500 text-xs mt-1 font-[Inter]" />
+                    </div>
+
                     {/* Submit Button */}
                     <div className="flex justify-center">
                       <button
@@ -198,7 +287,7 @@ const OTPVerify = () => {
                           backgroundColor: '#003F8F',
                         }}
                       >
-                        {loading ? 'Verifying...' : 'Verify OTP'}
+                        {loading ? 'Resetting Password...' : 'Reset Password'}
                       </button>
                     </div>
 
@@ -225,9 +314,9 @@ const OTPVerify = () => {
         {/* Right Info Section */}
         <div className="w-1/2 bg-[linear-gradient(146.13deg,#003F8F_0%,#467EC6_30.29%,#74A8EA_50.48%,#3C75BE_74.52%,#003F8F_100%)] text-white flex flex-col relative min-h-screen">
           <div className="pl-10 pt-20">
-            <h1 className="text-4xl font-bold mb-4 font-[Poppins]">Verify OTP</h1>
+            <h1 className="text-4xl font-bold mb-4 font-[Poppins]">Reset Password</h1>
             <p className="text-xl font-normal font-[Inter]">
-              Enter the OTP sent to your email
+              Enter the OTP and your new password
             </p>
           </div>
 

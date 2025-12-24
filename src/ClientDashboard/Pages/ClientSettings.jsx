@@ -29,11 +29,17 @@ const ClientSettings = () => {
     email: '',
     phone_number: '',
     city: '',
-    short_bio: ''
+    short_bio: '',
+    strength: 'strength'
   });
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [updateError, setUpdateError] = useState(null);
   const [updateSuccess, setUpdateSuccess] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({
+    fullname: '',
+    email: '',
+    strength: ''
+  });
 
   // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -136,7 +142,8 @@ const ClientSettings = () => {
             email: result.data.email || '',
             phone_number: result.data.phone_number || '',
             city: result.data.city || '',
-            short_bio: result.data.short_bio || ''
+            short_bio: result.data.short_bio || '',
+            strength: result.data.strength || 'strength'
           });
 
           // Set profile image if available
@@ -197,6 +204,50 @@ const ClientSettings = () => {
     }
   };
 
+  // Validation functions
+  const validateFullname = (fullname) => {
+    if (!fullname || fullname.trim() === '') {
+      return 'Name is required';
+    }
+    if (fullname.trim().length < 2) {
+      return 'Name must be at least 2 characters long';
+    }
+    if (fullname.trim().length > 100) {
+      return 'Name must be less than 100 characters';
+    }
+    // Check for valid name format (letters, spaces, hyphens, apostrophes)
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!nameRegex.test(fullname.trim())) {
+      return 'Name can only contain letters, spaces, hyphens, and apostrophes';
+    }
+    return '';
+  };
+
+  const validateEmail = (email) => {
+    if (!email || email.trim() === '') {
+      return 'Email is required';
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return 'Please enter a valid email address';
+    }
+    if (email.trim().length > 255) {
+      return 'Email must be less than 255 characters';
+    }
+    return '';
+  };
+
+  const validateStrength = (strength) => {
+    if (!strength || strength === '' || strength === 'strength') {
+      return 'Please select a strength level';
+    }
+    const validStrengths = ['beginner', 'intermediate', 'advanced'];
+    if (!validStrengths.includes(strength)) {
+      return 'Please select a valid strength level';
+    }
+    return '';
+  };
+
   // Handle profile form input change
   const handleFormChange = (e) => {
     const { name, value } = e.target;
@@ -204,7 +255,14 @@ const ClientSettings = () => {
       ...prev,
       [name]: value
     }));
-    // Clear errors when user starts typing
+    // Clear field error when user starts typing
+    if (fieldErrors[name]) {
+      setFieldErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+    // Clear general error when user starts typing
     if (updateError) {
       setUpdateError(null);
     }
@@ -212,9 +270,25 @@ const ClientSettings = () => {
 
   // Handle profile update
   const handleUpdateProfile = async () => {
-    setUpdatingProfile(true);
     setUpdateError(null);
     setUpdateSuccess(false);
+
+    // Validate all fields
+    const errors = {
+      fullname: validateFullname(formData.fullname),
+      email: validateEmail(formData.email),
+      strength: validateStrength(formData.strength)
+    };
+
+    setFieldErrors(errors);
+
+    // Check if there are any validation errors
+    const hasErrors = Object.values(errors).some(error => error !== '');
+    if (hasErrors) {
+      return; // Stop submission if there are validation errors
+    }
+
+    setUpdatingProfile(true);
 
     try {
       // Get authentication token
@@ -269,6 +343,7 @@ const ClientSettings = () => {
         formDataToSend.append('email', formData.email);
         formDataToSend.append('phone_number', formData.phone_number);
         formDataToSend.append('city', formData.city);
+        formDataToSend.append('strength', formData.strength);
         if (formData.short_bio) {
           formDataToSend.append('short_bio', formData.short_bio);
         }
@@ -283,6 +358,7 @@ const ClientSettings = () => {
           email: formData.email,
           phone_number: formData.phone_number,
           city: formData.city,
+          strength: formData.strength,
           short_bio: formData.short_bio || ''
         });
       }
@@ -328,7 +404,8 @@ const ClientSettings = () => {
           email: result.data.email || '',
           phone_number: result.data.phone_number || '',
           city: result.data.city || '',
-          short_bio: result.data.short_bio || ''
+          short_bio: result.data.short_bio || '',
+          strength: result.data.strength || 'strength'
         });
 
         // Update profile image if URL changed or new image was uploaded
@@ -390,6 +467,13 @@ const ClientSettings = () => {
 
         // Clear selected image file after successful upload
         setSelectedImageFile(null);
+
+        // Clear field errors on success
+        setFieldErrors({
+          fullname: '',
+          email: '',
+          strength: ''
+        });
 
         setUpdateSuccess(true);
         
@@ -647,8 +731,15 @@ const ClientSettings = () => {
               value={formData.fullname}
               onChange={handleFormChange}
               placeholder="Enter name..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] text-sm sm:text-base font-[Inter]"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm sm:text-base font-[Inter] ${
+                fieldErrors.fullname 
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                  : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+              }`}
             />
+            {fieldErrors.fullname && (
+              <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.fullname}</p>
+            )}
           </div>
 
           {/* Email Input */}
@@ -662,8 +753,15 @@ const ClientSettings = () => {
               value={formData.email}
               onChange={handleFormChange}
               placeholder="Enter you email..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] text-sm sm:text-base font-[Inter]"
+              className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm sm:text-base font-[Inter] ${
+                fieldErrors.email 
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                  : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+              }`}
             />
+            {fieldErrors.email && (
+              <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.email}</p>
+            )}
           </div>
 
           {/* Strength Dropdown */}
@@ -673,7 +771,14 @@ const ClientSettings = () => {
             </label>
             <div className="relative">
               <select
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] appearance-none bg-white text-sm sm:text-base font-[Inter] cursor-pointer"
+                name="strength"
+                value={formData.strength}
+                onChange={handleFormChange}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 appearance-none bg-white text-sm sm:text-base font-[Inter] cursor-pointer ${
+                  fieldErrors.strength 
+                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                }`}
               >
                 <option value="strength">Strength</option>
                 <option value="beginner">Beginner</option>
@@ -696,6 +801,9 @@ const ClientSettings = () => {
                 </svg>
               </div>
             </div>
+            {fieldErrors.strength && (
+              <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.strength}</p>
+            )}
           </div>
         </div>
       </div>

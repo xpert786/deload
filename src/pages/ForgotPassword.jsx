@@ -5,7 +5,11 @@ import * as Yup from 'yup';
 import DloadLogo from "../assets/DloadLogo.png";
 import ManImage from "../assets/ManImage.png";
 
-// UI Only - No API calls
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+if (!API_BASE_URL) {
+  console.error('VITE_API_BASE_URL is not defined in .env file');
+}
 
 // Validation Schema
 const validationSchema = Yup.object().shape({
@@ -25,17 +29,56 @@ const ForgotPassword = () => {
     setSuccess('');
     setLoading(true);
 
-    // Simulate API call delay for UI demonstration
-    setTimeout(() => {
-      setSuccess('Password reset link has been sent to your email. Please check your inbox.');
+    try {
+      // Ensure API_BASE_URL doesn't have trailing slash
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      // Check if baseUrl already includes /api, if not add it
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/auth/request-password-reset/`
+        : `${baseUrl}/api/auth/request-password-reset/`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: values.email }),
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Failed to parse server response');
+      }
+
+      if (response.ok) {
+        setSuccess(result.message || 'Password reset link has been sent to your email. Please check your inbox.');
+        setLoading(false);
+        setSubmitting(false);
+        
+        // Navigate to OTP page after a delay
+        setTimeout(() => {
+          navigate('/otp-verify', { state: { email: values.email } });
+        }, 2000);
+      } else {
+        const errorMessage = result.message || result.error || result.detail || 'Failed to send password reset email';
+        setError(errorMessage);
+        setLoading(false);
+        setSubmitting(false);
+      }
+    } catch (err) {
+      console.error('Error sending password reset email:', err);
+      setError(err.message || 'Failed to send password reset email. Please try again.');
       setLoading(false);
       setSubmitting(false);
-      
-      // Navigate to OTP page after a delay
-      setTimeout(() => {
-        navigate('/otp-verify', { state: { email: values.email } });
-      }, 2000);
-    }, 1000);
+    }
   };
 
   return (
