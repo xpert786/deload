@@ -58,6 +58,8 @@ const ClientDashboard = () => {
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [notes, setNotes] = useState([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
+  const [progressOverview, setProgressOverview] = useState(null);
+  const [loadingProgress, setLoadingProgress] = useState(false);
 
   const tabs = ['Overview', 'Workout Calendar', 'Custom Workouts'];
 
@@ -104,7 +106,7 @@ const ClientDashboard = () => {
         // Ensure API_BASE_URL doesn't have trailing slash
         const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
         // Check if baseUrl already includes /api, if not add it
-        const apiUrl = baseUrl.includes('/api') 
+        const apiUrl = baseUrl.includes('/api')
           ? `${baseUrl}/clients/${id}/detail/`
           : `${baseUrl}/api/clients/${id}/detail/`;
 
@@ -151,7 +153,7 @@ const ClientDashboard = () => {
               loadedAddress = '';
             }
           }
-          
+
           const cleanedData = {
             ...result.data,
             phone_number: result.data.phone_number ? result.data.phone_number.replace(/\D/g, '') : result.data.phone_number,
@@ -182,7 +184,7 @@ const ClientDashboard = () => {
     if (activeTab !== 'Overview') {
       return;
     }
-    
+
     if (!id) {
       setLoadingNotes(false);
       return;
@@ -274,19 +276,95 @@ const ClientDashboard = () => {
     } finally {
       setLoadingNotes(false);
     }
-  }, [id, user, activeTab]); // Added activeTab to dependencies
+  }, [id, user, activeTab]);
+
+  // Fetch progress overview
+  const fetchProgressOverview = useCallback(async () => {
+    if (activeTab !== 'Overview' || !id) return;
+
+    setLoadingProgress(true);
+    try {
+      let token = null;
+      const storedUser = localStorage.getItem('user');
+
+      if (user) {
+        token = user.token || user.access_token || user.authToken || user.accessToken;
+      }
+
+      if (!token && storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          token = userData.token || userData.access_token || userData.authToken || userData.accessToken;
+        } catch (error) {
+          console.error('Error parsing user data:', error);
+        }
+      }
+
+      if (!token) {
+        token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('authToken') || localStorage.getItem('accessToken');
+      }
+
+      const isValidToken = token &&
+        typeof token === 'string' &&
+        token.trim().length > 0 &&
+        token.trim() !== 'null' &&
+        token.trim() !== 'undefined' &&
+        token.trim() !== '';
+
+      const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+      const apiUrl = baseUrl.includes('/api')
+        ? `${baseUrl}/clients/${id}/workout-plan/progress-overview/`
+        : `${baseUrl}/api/clients/${id}/workout-plan/progress-overview/`;
+
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (isValidToken) {
+        headers['Authorization'] = `Bearer ${token.trim()}`;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+
+      let result;
+      try {
+        const responseText = await response.text();
+        if (responseText) {
+          result = JSON.parse(responseText);
+        } else {
+          result = {};
+        }
+      } catch (parseError) {
+        console.error('Failed to parse progress overview response:', parseError);
+        return;
+      }
+
+      if (response.ok && result.data) {
+        setProgressOverview(result.data);
+      } else {
+        console.error('Failed to fetch progress overview:', result);
+      }
+    } catch (err) {
+      console.error('Fetch progress overview error:', err);
+    } finally {
+      setLoadingProgress(false);
+    }
+  }, [id, user, activeTab]);
 
   useEffect(() => {
-    // Only fetch notes when in Overview tab - DO NOT call API for Workout Calendar
+    // Only fetch notes and progress when in Overview tab
     if (activeTab === 'Overview') {
       fetchNotes();
+      fetchProgressOverview();
     } else {
-      // Clear notes immediately when switching away from Overview tab
-      // Workout Calendar has its own notes from workout-calendar API
       setNotes([]);
       setLoadingNotes(false);
     }
-  }, [activeTab, fetchNotes]);
+  }, [activeTab, fetchNotes, fetchProgressOverview]);
 
   // Calculate total for donut chart
   const total = Object.values(progressData).reduce((sum, val) => sum + val, 0);
@@ -334,7 +412,7 @@ const ClientDashboard = () => {
 
   // Filter notes based on search query
   const filteredNotes = notes.filter(note =>
-    (note.text && note.text.toLowerCase().includes(searchNote.toLowerCase())) || 
+    (note.text && note.text.toLowerCase().includes(searchNote.toLowerCase())) ||
     (note.date && note.date.toLowerCase().includes(searchNote.toLowerCase()))
   );
 
@@ -377,14 +455,14 @@ const ClientDashboard = () => {
   const handleEditClick = () => {
     setIsEditMode(true);
     // Copy current data to editing state, ensure address field is properly initialized
-    const initialAddress = clientData.address 
+    const initialAddress = clientData.address
       ? (clientData.address === null || clientData.address === undefined ? '' : String(clientData.address))
       : '';
-    
+
     console.log('Entering edit mode - initial address:', initialAddress);
     console.log('Client data address:', clientData.address);
-    
-    setEditingData({ 
+
+    setEditingData({
       ...clientData,
       address: initialAddress, // Ensure address is always a string, not undefined or null
       phone_number: clientData.phone_number ? clientData.phone_number.replace(/\D/g, '') : '' // Clean phone number
@@ -454,21 +532,21 @@ const ClientDashboard = () => {
 
       // Prepare request body with edited data
       // Clean phone number to remove any formatting before sending
-      const cleanPhoneNumber = editingData.phone_number 
-        ? editingData.phone_number.replace(/\D/g, '') 
+      const cleanPhoneNumber = editingData.phone_number
+        ? editingData.phone_number.replace(/\D/g, '')
         : (clientData.phone_number ? clientData.phone_number.replace(/\D/g, '') : '');
-      
+
       // Handle address - always use editingData.address when in edit mode
       // This ensures user can clear or modify address properly
       let addressValue = '';
-      
+
       // Since we're in edit mode, always use editingData.address
       // If editingData.address exists (even if empty string), use it
       // Otherwise fallback to clientData.address
       if ('address' in editingData) {
         // editingData has address property, use it (even if empty string)
         let rawAddress = editingData.address;
-        
+
         // Convert null/undefined to empty string
         if (rawAddress === null || rawAddress === undefined) {
           addressValue = '';
@@ -488,12 +566,12 @@ const ClientDashboard = () => {
           addressValue = '';
         }
       }
-      
+
       // Final safety check - ensure address is always a string and not "Not Specified"
       if (addressValue === null || addressValue === undefined || addressValue === 'Not Specified') {
         addressValue = '';
       }
-      
+
       // When user edits address field, send it as city field in API
       // Address field input maps to city field in API
       const requestBody = {
@@ -511,7 +589,7 @@ const ClientDashboard = () => {
         notes: editingData.notes || clientData.notes,
         weekly_session_goal: editingData.weekly_session_goal || clientData.weekly_session_goal,
       };
-      
+
       console.log('=== SAVING CLIENT DATA ===');
       console.log('Address field value (sending as city):', addressValue);
       console.log('Full request body:', JSON.stringify(requestBody, null, 2));
@@ -546,7 +624,7 @@ const ClientDashboard = () => {
         console.log('=== API RESPONSE ===');
         console.log('Raw address from API:', savedAddress);
         console.log('Type of address:', typeof savedAddress);
-        
+
         if (savedAddress === null || savedAddress === undefined) {
           savedAddress = '';
         } else {
@@ -556,7 +634,7 @@ const ClientDashboard = () => {
             savedAddress = '';
           }
         }
-        
+
         const cleanedData = {
           ...result.data,
           phone_number: result.data.phone_number ? result.data.phone_number.replace(/\D/g, '') : result.data.phone_number,
@@ -698,16 +776,16 @@ const ClientDashboard = () => {
         console.log('=== ARCHIVE SUCCESS ===');
         console.log('Success message:', result.message);
         console.log('Response data:', result.data);
-        
+
         // Show success message
         setSuccessMessage(result.message || 'Client archived successfully!');
         setShowSuccessPopup(true);
-        
+
         // Clear error state to ensure no error is shown
         setTimeout(() => {
           setError(''); // Ensure error is cleared
         }, 100);
-        
+
         setTimeout(() => {
           setShowSuccessPopup(false);
           setSuccessMessage('');
@@ -750,7 +828,7 @@ const ClientDashboard = () => {
           </div>
         </div>
       )}
-      
+
       {/* Profile Header Section */}
       <div className="bg-white rounded-xl p-6 space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
@@ -766,13 +844,13 @@ const ClientDashboard = () => {
                   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
                   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
                 };
-                
+
                 if (profilePhoto) {
                   return (
-              <img
+                    <img
                       src={profilePhoto}
-                alt="Profile"
-                className="w-full h-full object-cover"
+                      alt="Profile"
+                      className="w-full h-full object-cover"
                       onError={(e) => {
                         e.target.style.display = 'none';
                         if (e.target.nextSibling) {
@@ -823,7 +901,7 @@ const ClientDashboard = () => {
               <MessageIconForCoach />
               Message
             </button>
-            <button 
+            <button
               onClick={handleEditClick}
               disabled={isEditMode}
               className={`px-4 py-2 !border border-[#4D60804D] text-[#003F8F] rounded-lg font-semibold text-sm hover:bg-[#003F8F] hover:text-white transition flex items-center gap-2 ${isEditMode ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
@@ -849,7 +927,7 @@ const ClientDashboard = () => {
                 </button>
               </>
             )}
-            <button 
+            <button
               onClick={() => {
                 setError(''); // Clear any previous errors
                 setShowArchiveModal(true);
@@ -934,36 +1012,36 @@ const ClientDashboard = () => {
                     // Check if address exists and is not empty
                     const address = clientData.address;
                     console.log('Displaying address - clientData.address:', address, 'Type:', typeof address);
-                    
+
                     // Check if address is a valid non-empty string (and not "Not Specified")
                     if (address !== null && address !== undefined && address !== '') {
                       const addressStr = String(address).trim();
                       // Make sure it's not "Not Specified" (case insensitive)
                       const addressLower = addressStr.toLowerCase();
-                      if (addressStr !== '' && 
-                          addressLower !== 'not specified' && 
-                          addressStr !== 'null' && 
-                          addressStr !== 'undefined' &&
-                          addressStr !== 'None') {
+                      if (addressStr !== '' &&
+                        addressLower !== 'not specified' &&
+                        addressStr !== 'null' &&
+                        addressStr !== 'undefined' &&
+                        addressStr !== 'None') {
                         console.log('Displaying address:', addressStr);
                         return addressStr;
                       }
                     }
-                    
+
                     // Fallback to city if address is not available
                     const city = clientData.city;
                     if (city && typeof city === 'string') {
                       const cityStr = city.trim();
                       const cityLower = cityStr.toLowerCase();
-                      if (cityStr !== '' && 
-                          cityLower !== 'not specified' && 
-                          cityStr !== 'null' && 
-                          cityStr !== 'undefined' &&
-                          cityStr !== 'None') {
+                      if (cityStr !== '' &&
+                        cityLower !== 'not specified' &&
+                        cityStr !== 'null' &&
+                        cityStr !== 'undefined' &&
+                        cityStr !== 'None') {
                         return cityStr;
                       }
                     }
-                    
+
                     // Default to "Not Specified" only if address is truly empty
                     console.log('No valid address found, showing "Not Specified"');
                     return 'Not Specified';
@@ -1002,32 +1080,53 @@ const ClientDashboard = () => {
           <div className="grid lg:grid-cols-[2fr_2fr] gap-6">
             {/* Left Column */}
             <div className="space-y-6">
-              {/* Progress Overview Card */}
               <div className="bg-white rounded-xl p-6 space-y-4">
                 <h3 className="text-xl font-semibold text-[#003F8F] font-[Poppins]">Progress Overview</h3>
-                <div className="space-y-3">
-                  <div className='border border-gray-200 p-2 rounded-lg'>
-                    <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Goal</p>
-                    <p className="text-base font-medium text-gray-500 font-[Inter]">{clientData.primary_fitness_goal || clientData.goals || 'Not Specified'}</p>
-                  </div>
-                  <div className='border border-gray-200 p-2 rounded-lg'>
-                    <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Injury Risk</p>
-                    <p className="text-base font-[#003F8F] text-[#FB923C] font-[Inter]">Medium</p>
-                  </div>
-                  <div className='border border-gray-200 p-2 rounded-lg'>
-                    <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Strength</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-base font-medium text-gray-500 font-[Inter] flex items-center gap-2">Improved <span>
-                        <PercentageIconForCoach />
-                      </span><span>12%</span> </p>
+                {loadingProgress ? (
+                  <div className="p-4 text-center text-sm text-gray-500">Loading...</div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className='border border-gray-200 p-2 rounded-lg'>
+                      <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Goal</p>
+                      <p className="text-base font-medium text-gray-500 font-[Inter]">
+                        {progressOverview?.progress_metrics?.goals?.primary_goal || (clientData && (clientData.primary_fitness_goal || clientData.goals)) || 'Not Specified'}
+                      </p>
+                    </div>
+                    <div className='border border-gray-200 p-2 rounded-lg'>
+                      <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Injury Risk</p>
+                      <p className={`text-base font-medium font-[Inter] ${(progressOverview?.progress_metrics?.injury_risk?.level || '').toLowerCase() === 'low' ? 'text-green-500' :
+                        (progressOverview?.progress_metrics?.injury_risk?.level || '').toLowerCase() === 'medium' ? 'text-[#FB923C]' :
+                          (progressOverview?.progress_metrics?.injury_risk?.level || '').toLowerCase() === 'high' ? 'text-red-500' :
+                            'text-gray-500'
+                        }`}>
+                        {progressOverview?.progress_metrics?.injury_risk?.level
+                          ? progressOverview.progress_metrics.injury_risk.level.charAt(0).toUpperCase() + progressOverview.progress_metrics.injury_risk.level.slice(1)
+                          : 'Not Specified'}
+                      </p>
+                    </div>
+                    <div className='border border-gray-200 p-2 rounded-lg'>
+                      <p className="text-base text-[#003F8F] font-medium font-[Inter] mb-1">Strength</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-base font-medium text-gray-500 font-[Inter] flex items-center gap-2">
+                          {progressOverview?.progress_metrics?.performance_trend?.direction
+                            ? progressOverview.progress_metrics.performance_trend.direction.charAt(0).toUpperCase() + progressOverview.progress_metrics.performance_trend.direction.slice(1)
+                            : 'Stable'}
+                          <span>
+                            <PercentageIconForCoach />
+                          </span>
+                          <span>{progressOverview?.progress_metrics?.performance_trend?.percentage || 0}%</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
+
+
             {/* Right Column */}
             <div className="space-y-6">
-              {/* Progress Card with Donut Chart */}
+
               <div className="bg-white rounded-3xl p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-semibold text-[#003F8F] font-[Poppins]">Progress</h3>
@@ -1086,7 +1185,12 @@ const ClientDashboard = () => {
 
 
             </div>
+
+
+
           </div>
+
+
           <div className="bg-white rounded-3xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-semibold text-[#003F8F] font-[Poppins]">Season History</h3>
@@ -1202,12 +1306,12 @@ const ClientDashboard = () => {
                   </div>
                 ) : filteredNotes.length > 0 ? (
                   filteredNotes.map((note) => (
-                  <div key={note.id} className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex items-center gap-2 text-xs text-gray-600 font-[Inter] mb-2">
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.3181 11.6819 1.33333 8 1.33333C4.3181 1.33333 1.33333 4.3181 1.33333 8C1.33333 11.6819 4.3181 14.6667 8 14.6667Z" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M8 4.66667V8L10.6667 10.6667" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                    <div key={note.id} className="p-4 border border-gray-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-xs text-gray-600 font-[Inter] mb-2">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M8 14.6667C11.6819 14.6667 14.6667 11.6819 14.6667 8C14.6667 4.3181 11.6819 1.33333 8 1.33333C4.3181 1.33333 1.33333 4.3181 1.33333 8C1.33333 11.6819 4.3181 14.6667 8 14.6667Z" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M8 4.66667V8L10.6667 10.6667" stroke="#4D6080" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
                         <span className="font-semibold text-[#003F8F]">{note.date || 'No date'}</span>
                       </div>
                       <p className="text-sm text-gray-700 font-[Inter]">{note.text || ''}</p>
@@ -1268,7 +1372,7 @@ const ClientDashboard = () => {
                   // Get authentication token
                   let token = null;
                   const storedUser = localStorage.getItem('user');
-                  
+
                   if (storedUser) {
                     try {
                       const userData = JSON.parse(storedUser);
@@ -1291,7 +1395,7 @@ const ClientDashboard = () => {
 
                   // Build API URL
                   const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
-                  const apiUrl = baseUrl.includes('/api') 
+                  const apiUrl = baseUrl.includes('/api')
                     ? `${baseUrl}/clients/notes/`
                     : `${baseUrl}/api/clients/notes/`;
 
@@ -1387,12 +1491,12 @@ const ClientDashboard = () => {
                 </svg>
               </button>
             </div>
-            
+
             <div className="mb-6">
               <p className="text-gray-700 mb-2">
-                Are you sure you want to archive 
+                Are you sure you want to archive
               </p>
-             
+
             </div>
 
             <div className="flex gap-3 justify-end">

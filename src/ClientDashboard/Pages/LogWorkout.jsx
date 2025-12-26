@@ -329,9 +329,12 @@ const LogWorkout = () => {
 
           // Check if workout is already completed (all exercises are done or skipped)
           const allExercisesCompleted = transformedExercises.every(exercise => {
-            const allSetsDone = exercise.sets.every(set => set.status === 'done');
-            const allSetsSkipped = exercise.sets.every(set => set.status === 'skipped');
-            const allSetsDoneOrSkipped = exercise.sets.every(set => set.status === 'done' || set.status === 'skipped');
+            const sets = Array.isArray(exercise.sets) ? exercise.sets : [];
+            if (sets.length === 0) return false;
+            
+            const allSetsDone = sets.every(set => set.status === 'done');
+            const allSetsSkipped = sets.every(set => set.status === 'skipped');
+            const allSetsDoneOrSkipped = sets.every(set => set.status === 'done' || set.status === 'skipped');
             return allSetsDone || allSetsSkipped || allSetsDoneOrSkipped;
           });
 
@@ -367,10 +370,15 @@ const LogWorkout = () => {
       setExercises(prevExercises => {
         let hasChanges = false;
         const updatedExercises = prevExercises.map(exercise => {
+          // Ensure sets is an array
+          const sets = Array.isArray(exercise.sets) ? exercise.sets : [];
+          
+          if (sets.length === 0) return exercise;
+          
           // Check if exercise is already completed (all sets done) or skipped
-          const allSetsDone = exercise.sets.every(set => set.status === 'done');
-          const anySetSkipped = exercise.sets.some(set => set.status === 'skipped');
-          const isCompleted = allSetsDone || (anySetSkipped && exercise.sets.every(set => set.status === 'done' || set.status === 'skipped'));
+          const allSetsDone = sets.every(set => set.status === 'done');
+          const anySetSkipped = sets.some(set => set.status === 'skipped');
+          const isCompleted = allSetsDone || (anySetSkipped && sets.every(set => set.status === 'done' || set.status === 'skipped'));
           
           // Don't reload from localStorage if exercise is already completed
           // This ensures completed workouts from API are not overridden
@@ -378,10 +386,10 @@ const LogWorkout = () => {
             return exercise;
           }
           
-          const savedSets = loadSetsStatus(exercise.id, exercise.sets);
+          const savedSets = loadSetsStatus(exercise.id, sets);
           // Check if any set status changed
           const statusChanged = savedSets.some((set, idx) =>
-            set.status !== exercise.sets[idx]?.status
+            set.status !== sets[idx]?.status
           );
           if (statusChanged) {
             hasChanges = true;
@@ -609,21 +617,38 @@ const LogWorkout = () => {
       // Also include notes if they exist
       const exercisesToUpdate = exercises
         .map(exercise => {
-          const allSetsDone = exercise.sets.every(set => set.status === 'done');
-          const anySetSkipped = exercise.sets.some(set => set.status === 'skipped');
-          const hasAnyAction = exercise.sets.some(set => set.status === 'done' || set.status === 'skipped');
+          // Ensure sets is an array
+          const sets = Array.isArray(exercise.sets) ? exercise.sets : [];
+          
+          if (sets.length === 0) {
+            console.warn(`Exercise ${exercise.id} (${exercise.name}) has no sets!`);
+            return null;
+          }
+          
+          const allSetsDone = sets.every(set => set.status === 'done');
+          const anySetSkipped = sets.some(set => set.status === 'skipped');
+          const hasAnyAction = sets.some(set => set.status === 'done' || set.status === 'skipped');
+          
+          console.log(`Exercise ${exercise.id} (${exercise.name}):`, {
+            setsCount: sets.length,
+            allSetsDone,
+            anySetSkipped,
+            hasAnyAction,
+            notes: exercise.notes,
+            notesLength: exercise.notes?.length || 0
+          });
           
           if (allSetsDone) {
             return { 
               id: exercise.id, 
               status: 'completed',
-              notes: exercise.notes || null
+              notes: exercise.notes && exercise.notes.trim() ? exercise.notes.trim() : ''
             };
           } else if (anySetSkipped && hasAnyAction) {
             return { 
               id: exercise.id, 
               status: 'skipped',
-              notes: exercise.notes || null
+              notes: exercise.notes && exercise.notes.trim() ? exercise.notes.trim() : ''
             };
           }
           return null;
@@ -636,6 +661,8 @@ const LogWorkout = () => {
         return;
       }
 
+      console.log('Exercises to update:', JSON.stringify(exercisesToUpdate, null, 2));
+
       // Ensure API_BASE_URL doesn't have trailing slash
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
       // Use the bulk-status API endpoint: /api/log-workout/exercises/bulk-status/
@@ -643,6 +670,8 @@ const LogWorkout = () => {
       const apiUrl = baseUrl.includes('/api')
         ? `${baseUrl}/log-workout/exercises/bulk-status/`
         : `${baseUrl}/api/log-workout/exercises/bulk-status/`;
+
+      console.log('🚀 API URL:', apiUrl);
 
       // Prepare headers
       const headers = {
@@ -653,14 +682,27 @@ const LogWorkout = () => {
       const cleanToken = token.trim().replace(/^["']|["']$/g, '');
       headers['Authorization'] = `Bearer ${cleanToken}`;
 
-      console.log('Updating bulk exercise status:', exercisesToUpdate);
+      const requestBody = { exercises: exercisesToUpdate };
+      console.log('📤 Request Body:', JSON.stringify(requestBody, null, 2));
 
-      const response = await fetch(apiUrl, {
+      // First, send PATCH request to update exercises
+      const patchResponse = await fetch(apiUrl, {
         method: 'PATCH',
         headers: headers,
         credentials: 'include',
-        body: JSON.stringify({ exercises: exercisesToUpdate }),
+        body: JSON.stringify(requestBody),
       });
+      
+      console.log('📥 PATCH Response Status:', patchResponse.status, patchResponse.statusText);
+
+      // Then, GET the updated data with photos
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: headers,
+        credentials: 'include',
+      });
+      
+      console.log('📥 GET Response Status:', response.status, response.statusText);
 
       let result;
       try {
@@ -676,13 +718,32 @@ const LogWorkout = () => {
       }
 
       if (response.ok) {
-        console.log('Bulk exercise status updated successfully:', result);
+        console.log('✅ Bulk exercise status updated successfully!');
+        console.log('📊 Full API Response:', result);
+        console.log('📊 Response Data:', result.data);
+        
+        // Check for photos in different possible locations
+        const photos = result.data?.photos || result.photos || [];
+        const totalPhotos = result.data?.total_photos || photos.length || 0;
+        
+        console.log('📸 Photos Array:', photos);
+        console.log('📸 Total Photos:', totalPhotos);
+        
+        // Check for notes
+        const exercises = result.data?.exercises || result.data?.updated || [];
+        const notesCount = exercises.filter(ex => ex.notes && ex.notes.trim()).length;
+        console.log('📝 Notes saved:', notesCount);
         
         // Clear localStorage for all completed exercises since they're now saved to API
         exercises.forEach(exercise => {
-          const allSetsDone = exercise.sets.every(set => set.status === 'done');
-          const anySetSkipped = exercise.sets.some(set => set.status === 'skipped');
-          const hasAnyAction = exercise.sets.some(set => set.status === 'done' || set.status === 'skipped');
+          // Ensure sets is an array
+          const sets = Array.isArray(exercise.sets) ? exercise.sets : [];
+          
+          if (sets.length === 0) return;
+          
+          const allSetsDone = sets.every(set => set.status === 'done');
+          const anySetSkipped = sets.some(set => set.status === 'skipped');
+          const hasAnyAction = sets.some(set => set.status === 'done' || set.status === 'skipped');
           
           if ((allSetsDone || anySetSkipped) && hasAnyAction) {
             const key = getSetsStatusKey(exercise.id);
@@ -694,7 +755,21 @@ const LogWorkout = () => {
         // Mark workout as completed - hide all interactive elements
         setWorkoutCompleted(true);
         
-        // Show success popup
+        // Show success popup with details
+        const photosReceived = result.data?.photos || result.photos || [];
+        const totalPhotosReceived = result.data?.total_photos || photosReceived.length || 0;
+        
+        console.log(`✨ Workout Completed!`);
+        console.log(`📝 Exercises updated: ${exercises.length}`);
+        console.log(`📸 Photos in response: ${totalPhotosReceived}`);
+        
+        if (totalPhotosReceived > 0) {
+          console.log('🎉 Photos URLs:');
+          photosReceived.forEach((photo, idx) => {
+            console.log(`   ${idx + 1}. ${photo.photo_url}`);
+          });
+        }
+        
         setShowSuccessPopup(true);
         // Auto-hide popup after 3 seconds
         setTimeout(() => {
@@ -703,7 +778,8 @@ const LogWorkout = () => {
       } else {
         const errorMessage = result.message || result.detail || 'Failed to update exercise status';
         setError(errorMessage);
-        console.error('Failed to update bulk exercise status:', errorMessage);
+        console.error('❌ Failed to update bulk exercise status:', errorMessage);
+        console.error('Response:', result);
       }
     } catch (err) {
       console.error('Error updating bulk exercise status:', err);
@@ -807,9 +883,6 @@ const LogWorkout = () => {
       // Prepare FormData
       const formData = new FormData();
       
-      // Add exercise ID
-      formData.append('exercise_id', displayedExercise.id);
-      
       // Add day_id from workoutData
       if (workoutData && workoutData.day_id) {
         formData.append('day_id', workoutData.day_id);
@@ -822,9 +895,12 @@ const LogWorkout = () => {
         return;
       }
       
-      // Add all files - API expects 'photo' field (singular)
+      // Add exercise ID as 'id' (matching Postman API)
+      formData.append('id', displayedExercise.id);
+      
+      // Add all files - API expects 'files' field (matching Postman API)
       uploadFiles.forEach((file, index) => {
-        formData.append('photo', file);
+        formData.append('files', file);
       });
 
       // Prepare headers
@@ -860,17 +936,22 @@ const LogWorkout = () => {
       }
 
       if (response.ok) {
-        console.log('Photos uploaded successfully:', result);
+        console.log('✅ Photos uploaded successfully!');
+        console.log('📸 Upload Response:', JSON.stringify(result, null, 2));
+        console.log(`📁 Uploaded ${uploadFiles.length} file(s)`);
+        
         // Clear upload state
         setUploadPreview([]);
         setUploadFiles([]);
         setIsUploadModalOpen(false);
-        // Optionally show success message
-        // You can add a toast notification here
+        
+        // Show success message
+        // alert(`Successfully uploaded ${uploadFiles.length} photo(s)!`);
       } else {
         const errorMessage = result.message || result.detail || result.error || 'Failed to upload photos';
         setUploadError(errorMessage);
-        console.error('Failed to upload photos:', errorMessage);
+        console.error('❌ Failed to upload photos:', errorMessage);
+        console.error('Error Response:', result);
       }
     } catch (err) {
       console.error('Error uploading photos:', err);

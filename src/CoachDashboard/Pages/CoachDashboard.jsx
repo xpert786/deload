@@ -20,10 +20,14 @@ import {
 
 import ManImage from "../../assets/dashboard.png";
 
-// API URLs
-const API_BASE_URL = 'http://168.231.121.7/deload/api/comprehensive-dashboard/';
-const SESSIONS_API_URL = 'http://168.231.121.7/deload/api/sessions/';
-const CLIENT_PROGRESS_API_URL = 'http://168.231.121.7/deload/api/coach/client-progress';
+
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = `${BASE_URL}/comprehensive-dashboard/`;
+const SESSIONS_API_URL = `${BASE_URL}/sessions/`;
+const CLIENT_PROGRESS_API_URL = `${BASE_URL}/coach/client-progress`;
+const SESSION_ANALYTICS_API = `${BASE_URL}/coach/session-analytics/`;
+
 
 const notifications = {
   today: [
@@ -49,9 +53,12 @@ const CoachDashboard = () => {
   // API data state
   const [dashboardData, setDashboardData] = useState(null);
   const [sessionsData, setSessionsData] = useState(null);
-  const [clientProgressData, setClientProgressData] = useState(null);
+  // const [clientProgressData, setClientProgressData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [clientProgressData, setClientProgressData] = useState([]);
+
   const [error, setError] = useState(null);
+  const [sessionData, setSessionData] = useState(null);
 
   // Calendar state management
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -218,7 +225,7 @@ const CoachDashboard = () => {
 
       if (response.ok && result.data) {
         setSessionsData(result.data);
-        
+
         // Sync selected date if API provides one
         if (result.data.selected_date) {
           const apiSelectedDate = new Date(result.data.selected_date);
@@ -233,10 +240,9 @@ const CoachDashboard = () => {
     }
   }, [user]);
 
-  // Fetch client progress data
+
   const fetchClientProgressData = useCallback(async () => {
     try {
-      // Get authentication token
       let token = null;
       const storedUser = localStorage.getItem('user');
 
@@ -261,10 +267,8 @@ const CoachDashboard = () => {
         typeof token === 'string' &&
         token.trim().length > 0 &&
         token.trim() !== 'null' &&
-        token.trim() !== 'undefined' &&
-        token.trim() !== '';
+        token.trim() !== 'undefined';
 
-      // Prepare headers
       const headers = {
         'Content-Type': 'application/json',
       };
@@ -275,31 +279,22 @@ const CoachDashboard = () => {
 
       const response = await fetch(CLIENT_PROGRESS_API_URL, {
         method: 'GET',
-        headers: headers,
+        headers,
         credentials: 'include',
       });
 
-      let result;
+      let result = {};
       try {
         const responseText = await response.text();
-        if (responseText) {
-          result = JSON.parse(responseText);
-        } else {
-          result = {};
-        }
+        if (responseText) result = JSON.parse(responseText);
       } catch (parseError) {
         console.error('Failed to parse client progress response:', parseError);
         return;
       }
 
-      if (response.ok) {
-        // Set data even if it's an empty array
-        if (result.data && Array.isArray(result.data)) {
-          setClientProgressData(result.data);
-        } else {
-          // If data is not an array or doesn't exist, set empty array
-          setClientProgressData([]);
-        }
+      if (response.ok && result.success) {
+        // Use result.data.clients instead of result.data
+        setClientProgressData(Array.isArray(result.data.clients) ? result.data.clients : []);
       } else {
         console.error('Failed to fetch client progress data:', result);
         setClientProgressData([]);
@@ -314,6 +309,7 @@ const CoachDashboard = () => {
     fetchSessionsData();
     fetchClientProgressData();
   }, [fetchDashboardData, fetchSessionsData, fetchClientProgressData]);
+
 
   // Get quick stats from API or use defaults
   const quickStats = useMemo(() => {
@@ -337,7 +333,7 @@ const CoachDashboard = () => {
     if (sessionsData?.sessions && sessionsData.sessions.length > 0) {
       // Filter sessions by selected date
       const selectedDateStr = selectedDate.toISOString().split('T')[0];
-      
+
       const filteredSessions = sessionsData.sessions.filter(session => {
         if (session.date) {
           const sessionDate = new Date(session.date);
@@ -355,7 +351,7 @@ const CoachDashboard = () => {
         id: session.id
       }));
     }
-    
+
     // Also check if there are clients_on_day for the selected date
     if (sessionsData?.clients_on_day && sessionsData.clients_on_day.length > 0) {
       const selectedDateStr = selectedDate.toISOString().split('T')[0];
@@ -377,40 +373,57 @@ const CoachDashboard = () => {
         }));
       }
     }
-    
+
     // Return empty array if no sessions
     return [];
   }, [sessionsData, selectedDate]);
 
   // Get client progress from API
+  // const clientProgress = useMemo(() => {
+  //   if (clientProgressData && Array.isArray(clientProgressData) && clientProgressData.length > 0) {
+  //     return clientProgressData.map((client) => {
+
+  //       const progress = selectedTarget === 'weekly' 
+  //         ? client.weekly_progress || client.progress?.weekly || client.weekly_percentage
+  //         : client.monthly_progress || client.progress?.monthly || client.monthly_percentage;
+
+  //       // Extract percentage value
+  //       let percentage = 0;
+  //       if (typeof progress === 'number') {
+  //         percentage = progress;
+  //       } else if (progress?.percentage) {
+  //         percentage = progress.percentage;
+  //       } else if (progress?.percent) {
+  //         percentage = progress.percent;
+  //       }
+
+  //       return {
+  //         name: client.client_name || client.name || client.client?.name || 'Unknown',
+  //         percent: percentage,
+  //         id: client.id || client.client_id || client.client?.id
+  //       };
+  //     });
+  //   }
+
+  //   return [];
+  // }, [clientProgressData, selectedTarget]);
+
   const clientProgress = useMemo(() => {
     if (clientProgressData && Array.isArray(clientProgressData) && clientProgressData.length > 0) {
       return clientProgressData.map((client) => {
-        // Handle different possible API response structures
-        const progress = selectedTarget === 'weekly' 
-          ? client.weekly_progress || client.progress?.weekly || client.weekly_percentage
-          : client.monthly_progress || client.progress?.monthly || client.monthly_percentage;
-        
-        // Extract percentage value
-        let percentage = 0;
-        if (typeof progress === 'number') {
-          percentage = progress;
-        } else if (progress?.percentage) {
-          percentage = progress.percentage;
-        } else if (progress?.percent) {
-          percentage = progress.percent;
-        }
-        
+        const percentage = client.progress_percentage || 0;
+
         return {
-          name: client.client_name || client.name || client.client?.name || 'Unknown',
+          name: client.client_name || client.name || 'Unknown',
           percent: percentage,
-          id: client.id || client.client_id || client.client?.id
+          id: client.client_id || client.id
         };
       });
     }
-    // Default empty array
+
     return [];
-  }, [clientProgressData, selectedTarget]);
+  }, [clientProgressData]);
+
 
   // Generate week dates based on weekOffset - use API data if available
   const weekDates = useMemo(() => {
@@ -419,7 +432,7 @@ const CoachDashboard = () => {
       const startIndex = weekOffset * 7;
       const endIndex = startIndex + 7;
       const weekDatesFromAPI = sessionsData.calendar_dates.slice(startIndex, endIndex);
-      
+
       if (weekDatesFromAPI.length === 7) {
         return weekDatesFromAPI.map(dateData => {
           const date = new Date(dateData.date);
@@ -428,12 +441,12 @@ const CoachDashboard = () => {
         });
       }
     }
-    
+
     // Fallback to calculated dates
     const dates = [];
     const today = new Date();
     const startOfWeek = new Date(today);
-    
+
     // Calculate the start of the current week (Monday)
     // getDay() returns 0 (Sunday) to 6 (Saturday)
     const day = startOfWeek.getDay();
@@ -441,13 +454,13 @@ const CoachDashboard = () => {
     // Sunday (0) -> subtract 6, Monday (1) -> subtract 0, Tuesday (2) -> subtract 1, etc.
     const daysToSubtract = day === 0 ? 6 : day - 1;
     startOfWeek.setDate(startOfWeek.getDate() - daysToSubtract);
-    
+
     // Reset time to start of day for consistency
     startOfWeek.setHours(0, 0, 0, 0);
-    
+
     // Add week offset (7 days per week)
     startOfWeek.setDate(startOfWeek.getDate() + (weekOffset * 7));
-    
+
     // Generate 7 days starting from Monday
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
@@ -455,7 +468,7 @@ const CoachDashboard = () => {
       date.setHours(0, 0, 0, 0); // Reset time for consistency
       dates.push(date);
     }
-    
+
     return dates;
   }, [weekOffset, sessionsData]);
 
@@ -465,7 +478,7 @@ const CoachDashboard = () => {
       const dateStr = date.toISOString().split('T')[0];
       const isSelected = isDateSelected(date);
       const hasSessions = (apiDateData.total_clients > 0) || (apiDateData.clients && apiDateData.clients.length > 0);
-      
+
       return {
         dayName: apiDateData.day_name || 'Mon',
         dayNumber: apiDateData.day_number || date.getDate(),
@@ -476,7 +489,7 @@ const CoachDashboard = () => {
         sessionCount: apiDateData.total_clients || (apiDateData.clients ? apiDateData.clients.length : 0)
       };
     }
-    
+
     // Try to find date in API calendar_dates
     if (sessionsData?.calendar_dates) {
       const dateStr = date.toISOString().split('T')[0];
@@ -487,11 +500,11 @@ const CoachDashboard = () => {
         }
         return false;
       });
-      
+
       if (apiDateData) {
         const isSelected = isDateSelected(date);
         const hasSessions = (apiDateData.total_clients > 0) || (apiDateData.clients && apiDateData.clients.length > 0);
-        
+
         return {
           dayName: apiDateData.day_name || 'Mon',
           dayNumber: apiDateData.day_number || date.getDate(),
@@ -503,7 +516,7 @@ const CoachDashboard = () => {
         };
       }
     }
-    
+
     // Fallback to calculated format
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const dayName = dayNames[date.getDay()];
@@ -539,6 +552,36 @@ const CoachDashboard = () => {
     return date1.getTime() === date2.getTime();
   };
 
+
+  // Fetch session analytics from API
+  useEffect(() => {
+    const fetchSessionAnalytics = async () => {
+      if (!user?.token) return;
+
+      try {
+        const res = await fetch(SESSION_ANALYTICS_API, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+          },
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          setSessionData(data.data);
+        } else {
+          setError(data.message || "Failed to fetch session analytics");
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSessionAnalytics();
+  }, [user?.token]);
+
   // Show loading state
   if (loading) {
     return (
@@ -551,45 +594,64 @@ const CoachDashboard = () => {
     );
   }
 
-  // Show error state (but still show UI with default data)
+  // Show error state (but still show UI with default/fallback data)
   if (error) {
-    console.error('Dashboard error:', error);
+    console.error("Dashboard error:", error);
   }
+
+  // **Safe destructuring with fallback default values**
+  const {
+    goal_completion_percentage = 0,
+    weekly_session_goal = 0,
+    average_sessions_per_client = 0,
+    total_clients = 0,
+    current_week_sessions = 0,
+    previous_week_sessions = 0,
+  } = sessionData || {}; // <-- sessionData null hone par empty object use hoga
+
+  // Calculate session comparison safely
+  const sessionComparison =
+    previous_week_sessions === 0
+      ? 0
+      : ((current_week_sessions - previous_week_sessions) /
+        previous_week_sessions) *
+      100;
+
 
   return (
     <div className="space-y-6 p-2 sm:p-4 bg-[#F7F7F7] text-[#003F8F] overflow-x-hidden">
 
-    
 
-            {/* Hero */}
-            <div className="rounded-lg p-6 text-white relative" style={{ background: 'linear-gradient(to right, #003F8F, #0DC7F5)' }}>
-    <div className="relative flex justify-between items-start">
-      <div>
-        <h1 className="text-2xl font-medium font-[Poppins] mb-2">
-          Hello, {user?.name?.split(' ')[0] || 'John'}!
-        </h1>
-        <p className="text-sm font-[Inter] mb-4">
-          You're on a 7-day streak! Ready to crush today's workout?
-        </p>
+
+      {/* Hero */}
+      <div className="rounded-lg p-6 text-white relative" style={{ background: 'linear-gradient(to right, #003F8F, #0DC7F5)' }}>
+        <div className="relative flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-medium font-[Poppins] mb-2">
+              Hello, {user?.name?.split(' ')[0] || 'John'}!
+            </h1>
+            <p className="text-sm font-[Inter] mb-4">
+              You're on a 7-day streak! Ready to crush today's workout?
+            </p>
+          </div>
+
+          {/* Image shown only on larger screens and moved above parent */}
+          <div className="hidden sm:flex sm:absolute sm:right-0 sm:-top-15 sm:items-end mt-3 mb-6">
+            <img
+              src={ManImage}
+              alt="Fitness"
+              className="h-full w-auto object-cover opacity-90"
+              style={{ maxHeight: '150px' }}
+            />
+          </div>
+        </div>
+
+        {/* Background image only on mobile */}
+        <div
+          className="absolute inset-0 bg-cover bg-no-repeat bg-bottom sm:hidden opacity-30"
+          style={{ backgroundImage: `url(${ManImage})` }}
+        ></div>
       </div>
-
-      {/* Image shown only on larger screens and moved above parent */}
-      <div className="hidden sm:flex sm:absolute sm:right-0 sm:-top-15 sm:items-end mt-3 mb-6">
-        <img
-          src={ManImage}
-          alt="Fitness"
-          className="h-full w-auto object-cover opacity-90"
-          style={{ maxHeight: '150px' }}
-        />
-      </div>
-    </div>
-
-    {/* Background image only on mobile */}
-    <div
-      className="absolute inset-0 bg-cover bg-no-repeat bg-bottom sm:hidden opacity-30"
-      style={{ backgroundImage: `url(${ManImage})` }}
-    ></div>
-  </div>
 
       {/* QUICK START */}
       <div>
@@ -651,15 +713,15 @@ const CoachDashboard = () => {
 
               <div className="grid grid-cols-2 gap-3 w-full sm:max-w-sm ">
                 {[
-                  { 
-                    title: "Male", 
-                    value: dashboardData?.clients_list?.gender_breakdown?.male?.count || 0, 
-                    percent: `${dashboardData?.clients_list?.gender_breakdown?.male?.percentage?.toFixed(0) || 0}%` 
-                  }, 
-                  { 
-                    title: "Female", 
-                    value: dashboardData?.clients_list?.gender_breakdown?.female?.count || 0, 
-                    percent: `${dashboardData?.clients_list?.gender_breakdown?.female?.percentage?.toFixed(0) || 0}%` 
+                  {
+                    title: "Male",
+                    value: dashboardData?.clients_list?.gender_breakdown?.male?.count || 0,
+                    percent: `${dashboardData?.clients_list?.gender_breakdown?.male?.percentage?.toFixed(0) || 0}%`
+                  },
+                  {
+                    title: "Female",
+                    value: dashboardData?.clients_list?.gender_breakdown?.female?.count || 0,
+                    percent: `${dashboardData?.clients_list?.gender_breakdown?.female?.percentage?.toFixed(0) || 0}%`
                   }
                 ].map((item) => (
                   <div key={item.title} className="rounded-xl !border border-[#4D60804D] p-3 ">
@@ -676,23 +738,23 @@ const CoachDashboard = () => {
             {/* LEVEL PROGRESS */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
-                { 
-                  label: "Beginner", 
-                  value: dashboardData?.clients_list?.level_breakdown?.beginner?.count || 0, 
-                  percent: dashboardData?.clients_list?.level_breakdown?.beginner?.percentage || 0, 
-                  color: "bg-[#0B53BD]" 
+                {
+                  label: "Beginner",
+                  value: dashboardData?.clients_list?.level_breakdown?.beginner?.count || 0,
+                  percent: dashboardData?.clients_list?.level_breakdown?.beginner?.percentage || 0,
+                  color: "bg-[#0B53BD]"
                 },
-                { 
-                  label: "Intermediate", 
-                  value: dashboardData?.clients_list?.level_breakdown?.intermediate?.count || 0, 
-                  percent: dashboardData?.clients_list?.level_breakdown?.intermediate?.percentage || 0, 
-                  color: "bg-[#4A5C84]" 
+                {
+                  label: "Intermediate",
+                  value: dashboardData?.clients_list?.level_breakdown?.intermediate?.count || 0,
+                  percent: dashboardData?.clients_list?.level_breakdown?.intermediate?.percentage || 0,
+                  color: "bg-[#4A5C84]"
                 },
-                { 
-                  label: "Advanced", 
-                  value: dashboardData?.clients_list?.level_breakdown?.advanced?.count || 0, 
-                  percent: dashboardData?.clients_list?.level_breakdown?.advanced?.percentage || 0, 
-                  color: "bg-[#E3C8B0]" 
+                {
+                  label: "Advanced",
+                  value: dashboardData?.clients_list?.level_breakdown?.advanced?.count || 0,
+                  percent: dashboardData?.clients_list?.level_breakdown?.advanced?.percentage || 0,
+                  color: "bg-[#E3C8B0]"
                 },
               ].map((level) => (
                 <div key={level.label} className="rounded-xl !border border-[#4D60804D] p-4 ">
@@ -750,7 +812,7 @@ const CoachDashboard = () => {
             {/* DATE SELECTOR */}
             <div className="flex items-center gap-3 text-xs">
 
-              <button 
+              <button
                 onClick={handlePreviousWeek}
                 className="flex items-center justify-center bg-[#F5F6FA] w-8 h-10 rounded-lg border border-[#D7DCE5] hover:bg-[#E6E7EB] transition cursor-pointer"
                 aria-label="Previous week"
@@ -769,7 +831,7 @@ const CoachDashboard = () => {
                       apiDateData = sessionsData.calendar_dates[apiIndex];
                     }
                   }
-                  
+
                   const { dayName, dayNumber, isSelected: apiIsSelected, hasSessions, sessionCount } = formatDate(date, apiDateData);
                   const isSelected = apiIsSelected !== undefined ? apiIsSelected : isDateSelected(date);
 
@@ -807,7 +869,7 @@ const CoachDashboard = () => {
                 })}
               </div>
 
-              <button 
+              <button
                 onClick={handleNextWeek}
                 className="flex items-center justify-center bg-[#F5F6FA] w-8 h-10 rounded-lg border border-[#D7DCE5] hover:bg-[#E6E7EB] transition cursor-pointer"
                 aria-label="Next week"
@@ -835,11 +897,10 @@ const CoachDashboard = () => {
           rounded-xl border px-4 py-4 flex flex-col sm:flex-row 
           items-start sm:items-center justify-between gap-4 cursor-pointer transition
 
-          ${
-            isSelectedRow
-              ? "bg-[#FFF4EC] border-[#F5C6A5]"   
-              : "bg-white border-[#D5DFEE] hover:border-[#003F8F66]" 
-          }
+          ${isSelectedRow
+                          ? "bg-[#FFF4EC] border-[#F5C6A5]"
+                          : "bg-white border-[#D5DFEE] hover:border-[#003F8F66]"
+                        }
         `}
                     >
                       {/* LEFT Section */}
@@ -890,10 +951,9 @@ const CoachDashboard = () => {
                   onClick={() => setSelectedTarget("weekly")}
                   className={`
                     px-4 py-2 rounded-lg text-sm cursor-pointer
-                    ${
-                      selectedTarget === "weekly"
-                        ? "bg-[#003F8F] text-white"
-                        : "bg-transparent text-[#003F8F]"
+                    ${selectedTarget === "weekly"
+                      ? "bg-[#003F8F] text-white"
+                      : "bg-transparent text-[#003F8F]"
                     }
                   `}
                 >
@@ -903,10 +963,9 @@ const CoachDashboard = () => {
                   onClick={() => setSelectedTarget("monthly")}
                   className={`
                     px-4 py-2 rounded-lg text-sm cursor-pointer
-                    ${
-                      selectedTarget === "monthly"
-                        ? "bg-[#003F8F] text-white"
-                        : "bg-transparent text-[#003F8F]"
+                    ${selectedTarget === "monthly"
+                      ? "bg-[#003F8F] text-white"
+                      : "bg-transparent text-[#003F8F]"
                     }
                   `}
                 >
@@ -962,47 +1021,56 @@ const CoachDashboard = () => {
         {/* RIGHT SIDE */}
         <div className="space-y-6">
 
-          {/* TRAINING SESSION */}
-          <div className="bg-white rounded-2xl p-6 space-y-6">
-            <p className="text-lg font-semibold">Number of Training Session</p>
 
+
+          <div className="bg-white rounded-2xl p-6 space-y-6">
+            {/* Number of Training Sessions */}
+            <p className="text-lg font-semibold">Number of Training Sessions</p>
             <div className="flex flex-col items-center gap-4">
               <div className="relative w-32 h-32">
                 <span className="absolute -top-2 -right-2 text-[10px] bg-white !border border-[#00000026] px-2 py-1 rounded-full shadow">
-                  70%
+                  {goal_completion_percentage.toFixed(0)}%
                 </span>
-
                 <div className="absolute inset-0 rounded-full !border-[12px] !border-[#E6EDFF]" />
-                <div className="absolute inset-0 rounded-full !border-[12px] !border-[#1F66D0] border-t-transparent border-l-transparent rotate-[200deg]" />
-
+                <div
+                  className="absolute inset-0 rounded-full !border-[12px] !border-[#1F66D0] border-t-transparent border-l-transparent rotate-[200deg]"
+                />
                 <div className="absolute inset-[18px] bg-white rounded-full flex flex-col items-center justify-center">
                   <p className="text-xs text-gray-500 font-semibold">Total</p>
-                  <p className="text-3xl font-bold text-[#003F8F]">16</p>
+                  <p className="text-3xl font-bold text-[#003F8F]">
+                    {current_week_sessions}
+                  </p>
                 </div>
               </div>
-
               <span className="flex items-center gap-2 text-xs text-[#4B5B79] font-medium">
-
-                {/* BLUE BADGE */}
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E8F5EC] border border-[#A7C5FF] text-[#003F8F] font-semibold">
-
-                  {/* SMALL ICON CIRCLE */}
                   <span className="w-4 h-4 flex items-center justify-center text-[10px] text-[#003F8F] border border-[#A7C5FF] rounded-full">
                     ↗
-                  </span>
-
-                  25%
-                </span>
-
+                  </span>{" "}
+                  {sessionComparison.toFixed(0)}%
+                </span>{" "}
                 vs Last Week
               </span>
-
             </div>
 
+            {/* Session Stats */}
             <div className="space-y-3 text-sm">
               {[
-                { label: "Weekly Session Goals", value: "20", icon: <WeeklyGoalIcon /> },
-                { label: "Avg Session Per Client", value: "3", icon: <AvgSession /> },
+                {
+                  label: "Weekly Session Goals",
+                  value: weekly_session_goal,
+                  icon: <WeeklyGoalIcon />,
+                },
+                {
+                  label: "Avg Session Per Client",
+                  value: average_sessions_per_client,
+                  icon: <AvgSession />,
+                },
+                {
+                  label: "Total Clients",
+                  value: total_clients,
+                  icon: <ClientIcon />,
+                },
               ].map((stat) => (
                 <div
                   key={stat.label}
@@ -1012,21 +1080,21 @@ const CoachDashboard = () => {
                     <span className="w-6 h-6 flex items-center justify-center !border rounded-xl shrink-0">
                       {stat.icon}
                     </span>
-
-                    {/* Text wrap control */}
-                    <span className="text-[#003F8F] text-[13px] font-medium"> {stat.label} </span>
+                    <span className="text-[#003F8F] text-[13px] font-medium">
+                      {stat.label}
+                    </span>
                   </div>
-
-                  {/* Right value */}
                   <span className="font-semibold text-[#003F8F] shrink-0 whitespace-nowrap">
                     {stat.value}
-                    <span className="text-xs text-[#003F8F] ml-1">Sessions</span>
+                    <span className="text-xs text-[#003F8F] ml-1">
+                      {stat.label.includes("Session") ? "Sessions" : ""}
+                    </span>
                   </span>
                 </div>
               ))}
             </div>
-
           </div>
+
 
           {/* NOTIFICATIONS */}
           <div className="bg-white rounded-2xl p-6 space-y-4">

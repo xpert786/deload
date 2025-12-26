@@ -31,8 +31,8 @@ const Messages = () => {
   }, [selectedThread]);
 
   const currentUserId = user?.id;
-  const number = Number(currentUserId.replace(/\D/g, ""));
-  console.log('coachid====================>>>', number);
+  // const number = Number(currentUserId.replace(/\D/g, ""));
+  // console.log('coachid====================>>>', number);
 
   // Load threads
   const loadThreads = useCallback(async () => {

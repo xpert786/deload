@@ -290,10 +290,18 @@ const WorkOut = ({ clientId }) => {
         // Find the selected day in weekly_schedule
         const selectedDayData = calendarData.weekly_schedule.find(d => d.day_abbrev === selectedDay);
 
+        console.log(`📝 Checking notes for ${selectedDay}:`, selectedDayData);
+
         if (selectedDayData && selectedDayData.sessions && selectedDayData.sessions.length > 0) {
             selectedDayData.sessions.forEach((session) => {
                 if (session.exercises && session.exercises.length > 0) {
                     session.exercises.forEach((ex) => {
+                        console.log(`Exercise ${ex.exercise_name}:`, {
+                            hasNotes: !!ex.notes,
+                            notesLength: ex.notes?.length || 0,
+                            notes: ex.notes
+                        });
+                        
                         if (ex.notes && ex.notes.trim() !== '') {
                             notes.push({
                                 id: `exercise-${ex.id}`,
@@ -309,6 +317,8 @@ const WorkOut = ({ clientId }) => {
                 }
             });
         }
+        
+        console.log(`✅ Total notes found for ${selectedDay}:`, notes.length, notes);
         return notes;
     }, [calendarData, selectedDay, selectedDayDate]);
 
@@ -331,19 +341,58 @@ const WorkOut = ({ clientId }) => {
         });
     }, [exerciseNotes]);
 
+    // Get progress photos from selected day's sessions
     const progressPhotos = useMemo(() => {
-        if (!calendarData || !calendarData.progress_photos || !calendarData.progress_photos.data) {
+        if (!calendarData || !calendarData.weekly_schedule || !selectedDay) {
+            console.log('📸 No calendar data or selectedDay');
             return [];
         }
-        return calendarData.progress_photos.data.map((p) => ({
-            image: p.photo_url,
-            date: new Date(p.created_at).toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric',
-            }),
-        }));
-    }, [calendarData]);
+        
+        // Find the selected day's data
+        const selectedDayData = calendarData.weekly_schedule.find(d => d.day_abbrev === selectedDay);
+        
+        console.log(`📸 Photos for ${selectedDay}:`, selectedDayData);
+        
+        if (!selectedDayData || !selectedDayData.sessions) {
+            console.log('📸 No sessions found');
+            return [];
+        }
+        
+        // Collect all photos from all sessions for the selected day
+        const allPhotos = [];
+        selectedDayData.sessions.forEach((session, idx) => {
+            console.log(`Session ${idx}:`, {
+                name: session.session_name,
+                hasPhotos: !!session.photos,
+                photosCount: session.photos?.length || 0,
+                photos: session.photos
+            });
+            
+            if (session.photos && Array.isArray(session.photos)) {
+                session.photos.forEach(photo => {
+                    allPhotos.push({
+                        image: photo.photo_url,
+                        date: new Date(photo.created_at).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                        }),
+                        id: photo.id,
+                        media_type: photo.media_type
+                    });
+                });
+            }
+        });
+        
+        console.log(`✅ Total photos found for ${selectedDay}:`, allPhotos.length, allPhotos);
+        
+        // Sort by created date (newest first)
+        return allPhotos.sort((a, b) => {
+            const dateA = new Date(a.date).getTime();
+            const dateB = new Date(b.date).getTime();
+            return dateB - dateA;
+        });
+    }, [calendarData, selectedDay]);
 
     const { completed, missed, total, completedPercent, missedPercent } = useMemo(() => {
         if (!calendarData || !calendarData.completion_rate) {
@@ -789,27 +838,35 @@ const WorkOut = ({ clientId }) => {
                 {/* Progress Photos Section */}
                 <div className="bg-white rounded-xl p-6 space-y-4">
                     <h3 className="text-2xl font-bold text-[#003F8F] font-[Poppins]">Progress photos</h3>
-                    <div className="grid grid-cols-4 gap-4">
-                        {progressPhotos.map((photo, idx) => (
-                            <div key={idx} className="space-y-2">
-                                <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-100">
-                                    <img
-                                        src={photo.image}
-                                        alt={`Progress ${idx + 1}`}
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => {
-                                            e.target.style.display = 'none';
-                                            e.target.parentElement.innerHTML =
-                                                '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>';
-                                        }}
-                                    />
-                                </div>
-                                <p className="text-xs text-gray-600 font-[Inter] text-center font-medium">
-                                    {photo.date}
-                                </p>
+                    {progressPhotos.length > 0 ? (
+                        <div className="overflow-y-auto overflow-x-hidden pr-2" style={{ maxHeight: '240px' }}>
+                            <div className="grid grid-cols-4 gap-4">
+                                {progressPhotos.map((photo, idx) => (
+                                    <div key={photo.id || idx} className="space-y-2">
+                                        <div className="w-full aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                            <img
+                                                src={photo.image}
+                                                alt={`Progress ${idx + 1}`}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                    e.target.parentElement.innerHTML =
+                                                        '<div class="w-full h-full flex items-center justify-center text-gray-400 text-xs">No Image</div>';
+                                                }}
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-600 font-[Inter] text-center font-medium">
+                                            {photo.date}
+                                        </p>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-400">
+                            No photos available
+                        </div>
+                    )}
                 </div>
             </div>
 

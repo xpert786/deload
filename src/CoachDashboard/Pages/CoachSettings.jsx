@@ -17,13 +17,15 @@ const CoachSettings = () => {
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   // Profile update state
   const [formData, setFormData] = useState({
     fullname: '',
     email: '',
     phone_number: '',
-    address: ''
+    address: '',
+    weekly_session_goal: '',
+    average_sessions_per_client: ''
   });
   const [updatingProfile, setUpdatingProfile] = useState(false);
   const [updateError, setUpdateError] = useState(null);
@@ -34,7 +36,7 @@ const CoachSettings = () => {
     phone_number: '',
     address: ''
   });
-  
+
   // Password change state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -55,7 +57,9 @@ const CoachSettings = () => {
     years_of_experience: 0,
     short_bio: '',
     available_for_coaching: '',
-    certification_licence_url: null
+    certification_licence_url: null,
+    weekly_session_goal: 0,
+    average_sessions_per_client: 0
   });
 
   // Fetch coach profile data
@@ -68,7 +72,7 @@ const CoachSettings = () => {
         // Get authentication token
         let token = null;
         const storedUser = localStorage.getItem('user');
-        
+
         if (user) {
           token = user.token || user.access_token || user.authToken || user.accessToken;
         }
@@ -96,7 +100,7 @@ const CoachSettings = () => {
         // Ensure API_BASE_URL doesn't have trailing slash
         const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
         // Check if baseUrl already includes /api, if not add it
-        const apiUrl = baseUrl.includes('/api') 
+        const apiUrl = baseUrl.includes('/api')
           ? `${baseUrl}/coach/profile/`
           : `${baseUrl}/api/coach/profile/`;
 
@@ -146,15 +150,17 @@ const CoachSettings = () => {
             certification_licence_url: result.data.certification_licence_url || null
           };
           setCoachData(profileData);
-          
+
           // Set form data for editing
           setFormData({
             fullname: result.data.fullname || '',
             email: result.data.email || '',
             phone_number: result.data.phone_number || '',
-            address: result.data.address || ''
+            address: result.data.address || '',
+            weekly_session_goal: result.data.weekly_session_goal || '',
+            average_sessions_per_client: result.data.average_sessions_per_client || ''
           });
-          
+
           // Set notification states from API
           if (result.data.email_notifications !== undefined) {
             setEmailNotifications(result.data.email_notifications);
@@ -169,7 +175,7 @@ const CoachSettings = () => {
           // Set profile image if available
           if (result.data.profile_photo_url) {
             let imageUrl = result.data.profile_photo_url;
-            
+
             // If URL is relative, construct full URL
             if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
               // Remove leading slash if present
@@ -180,13 +186,13 @@ const CoachSettings = () => {
               const domainUrl = baseUrl.replace(/\/api$/, '').replace(/\/deload\/api$/, '').replace(/\/deload$/, '');
               imageUrl = `${domainUrl}/${cleanUrl}`;
             }
-            
+
             // Ensure URL is properly formatted
             imageUrl = imageUrl.trim();
-            
+
             console.log('Profile photo URL from API:', result.data.profile_photo_url);
             console.log('Final image URL to use:', imageUrl);
-            
+
             // Set the image URL
             setProfileImage(imageUrl);
           } else {
@@ -214,7 +220,7 @@ const CoachSettings = () => {
     if (file) {
       // Store the file for upload
       setSelectedImageFile(file);
-      
+
       // Show preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -335,7 +341,7 @@ const CoachSettings = () => {
       // Get authentication token
       let token = null;
       const storedUser = localStorage.getItem('user');
-      
+
       if (user) {
         token = user.token || user.access_token || user.authToken || user.accessToken;
       }
@@ -364,7 +370,7 @@ const CoachSettings = () => {
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
       // Check if baseUrl already includes /api, if not add it
       // Use PATCH method on /coach/profile/update/ endpoint
-      const apiUrl = baseUrl.includes('/api') 
+      const apiUrl = baseUrl.includes('/api')
         ? `${baseUrl}/coach/profile/update/`
         : `${baseUrl}/api/coach/profile/update/`;
 
@@ -376,7 +382,7 @@ const CoachSettings = () => {
       }
 
       let requestBody;
-      
+
       // If image is selected, use FormData for multipart/form-data
       if (selectedImageFile) {
         const formDataToSend = new FormData();
@@ -384,11 +390,14 @@ const CoachSettings = () => {
         formDataToSend.append('fullname', formData.fullname || '');
         formDataToSend.append('email', formData.email || '');
         formDataToSend.append('phone_number', formData.phone_number || '');
+        formDataToSend.append('phone_number', formData.phone_number || '');
         formDataToSend.append('address', formData.address || '');
+        formDataToSend.append('weekly_session_goal', formData.weekly_session_goal || '');
+        formDataToSend.append('average_sessions_per_client', formData.average_sessions_per_client || '');
         formDataToSend.append('email_notifications', emailNotifications ? 'true' : 'false');
         formDataToSend.append('push_notifications', pushNotifications ? 'true' : 'false');
         formDataToSend.append('two_factor_enabled', twoFactorAuth ? 'true' : 'false');
-        
+
         requestBody = formDataToSend;
         // Don't set Content-Type header when using FormData, browser will set it with boundary
       } else {
@@ -398,7 +407,10 @@ const CoachSettings = () => {
           fullname: formData.fullname || '',
           email: formData.email || '',
           phone_number: formData.phone_number || '',
+          phone_number: formData.phone_number || '',
           address: formData.address || '',
+          weekly_session_goal: formData.weekly_session_goal || '',
+          average_sessions_per_client: formData.average_sessions_per_client || '',
           email_notifications: emailNotifications,
           push_notifications: pushNotifications,
           two_factor_enabled: twoFactorAuth
@@ -444,13 +456,15 @@ const CoachSettings = () => {
           available_for_coaching: result.data.available_for_coaching || '',
           certification_licence_url: result.data.certification_licence || null
         });
-        
+
         // Update form data with all fields from response
         setFormData({
           fullname: result.data.fullname || '',
           email: result.data.email || '',
           phone_number: result.data.phone_number || '',
-          address: result.data.address || ''
+          address: result.data.address || '',
+          weekly_session_goal: result.data.weekly_session_goal || '',
+          average_sessions_per_client: result.data.average_sessions_per_client || ''
         });
 
         // Update notification states from API response
@@ -467,7 +481,7 @@ const CoachSettings = () => {
         // Update profile image if URL changed or provided
         if (result.data.profile_photo) {
           let imageUrl = result.data.profile_photo;
-          
+
           // If URL is already absolute, use it as is
           // If URL is relative, construct full URL
           if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
@@ -476,25 +490,25 @@ const CoachSettings = () => {
             const domainUrl = baseUrl.replace(/\/api$/, '').replace(/\/deload\/api$/, '').replace(/\/deload$/, '');
             imageUrl = `${domainUrl}/${cleanUrl}`;
           }
-          
+
           imageUrl = imageUrl.trim();
-          
+
           // Set the profile image URL
-          if (imageUrl && 
-              imageUrl.trim() !== '' && 
-              imageUrl !== 'null' && 
-              imageUrl !== 'undefined') {
+          if (imageUrl &&
+            imageUrl.trim() !== '' &&
+            imageUrl !== 'null' &&
+            imageUrl !== 'undefined') {
             setProfileImage(imageUrl);
-            
+
             // Update localStorage with user-specific key
             const userId = user?.id;
             if (userId) {
               localStorage.setItem(`coachProfilePhoto_${userId}`, imageUrl);
             }
-            
+
             // Dispatch event to notify header about profile image update
             window.dispatchEvent(new CustomEvent('profileImageUpdated', {
-              detail: { 
+              detail: {
                 imageUrl,
                 userId: userId
               }
@@ -506,10 +520,10 @@ const CoachSettings = () => {
             if (userId) {
               localStorage.removeItem(`coachProfilePhoto_${userId}`);
             }
-            
+
             // Dispatch event to clear profile image
             window.dispatchEvent(new CustomEvent('profileImageUpdated', {
-              detail: { 
+              detail: {
                 imageUrl: null,
                 userId: userId
               }
@@ -529,7 +543,7 @@ const CoachSettings = () => {
         });
 
         setUpdateSuccess(true);
-        
+
         // Hide success message after 3 seconds
         setTimeout(() => {
           setUpdateSuccess(false);
@@ -564,7 +578,7 @@ const CoachSettings = () => {
   // Handle password update
   const handleUpdatePassword = async (e) => {
     e.preventDefault();
-    
+
     // Validation
     if (!passwordData.current_password || !passwordData.new_password || !passwordData.confirm_password) {
       setPasswordError('All password fields are required');
@@ -594,7 +608,7 @@ const CoachSettings = () => {
       // Get authentication token
       let token = null;
       const storedUser = localStorage.getItem('user');
-      
+
       if (user) {
         token = user.token || user.access_token || user.authToken || user.accessToken;
       }
@@ -622,7 +636,7 @@ const CoachSettings = () => {
       // Ensure API_BASE_URL doesn't have trailing slash
       const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
       // Check if baseUrl already includes /api, if not add it
-      const apiUrl = baseUrl.includes('/api') 
+      const apiUrl = baseUrl.includes('/api')
         ? `${baseUrl}/change-password/`
         : `${baseUrl}/api/change-password/`;
 
@@ -674,7 +688,7 @@ const CoachSettings = () => {
           new_password: '',
           confirm_password: ''
         });
-        
+
         // Close modal and hide success message after 2 seconds
         setTimeout(() => {
           setShowPasswordModal(false);
@@ -732,15 +746,15 @@ const CoachSettings = () => {
         <h2 className="text-xl font-semibold text-[#003F8F] font-[Poppins] mb-6">
           Account Settings
         </h2>
-        
+
         <div className="space-y-6">
           {/* Profile Picture */}
           <div className="flex items-center gap-4">
             <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center border-1 border-[#4D60801A] overflow-hidden">
               {profileImage ? (
-                <img 
-                  src={profileImage} 
-                  alt="Profile" 
+                <img
+                  src={profileImage}
+                  alt="Profile"
                   className="w-full h-full rounded-full object-cover"
                   onError={(e) => {
                     console.error('Failed to load profile image:', profileImage);
@@ -782,11 +796,10 @@ const CoachSettings = () => {
                 value={formData.fullname}
                 onChange={handleFormChange}
                 placeholder="Enter name..."
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
-                  fieldErrors.fullname 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
-                }`}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${fieldErrors.fullname
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                  }`}
               />
               {fieldErrors.fullname && (
                 <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.fullname}</p>
@@ -803,11 +816,10 @@ const CoachSettings = () => {
                 value={formData.email}
                 onChange={handleFormChange}
                 placeholder="Enter you email..."
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
-                  fieldErrors.email 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
-                }`}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${fieldErrors.email
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                  }`}
               />
               {fieldErrors.email && (
                 <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.email}</p>
@@ -824,11 +836,10 @@ const CoachSettings = () => {
                 value={formData.phone_number}
                 onChange={handleFormChange}
                 placeholder="Enter phone number"
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
-                  fieldErrors.phone_number 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
-                }`}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${fieldErrors.phone_number
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                  }`}
               />
               {fieldErrors.phone_number && (
                 <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.phone_number}</p>
@@ -845,11 +856,10 @@ const CoachSettings = () => {
                 value={formData.address}
                 onChange={handleFormChange}
                 placeholder="Enter address"
-                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${
-                  fieldErrors.address 
-                    ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-                    : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
-                }`}
+                className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 text-sm font-[Inter] placeholder:text-[#4D6080CC] ${fieldErrors.address
+                  ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-[#003F8F] focus:border-[#003F8F]'
+                  }`}
               />
               {fieldErrors.address && (
                 <p className="mt-1 text-sm text-red-600 font-[Inter]">{fieldErrors.address}</p>
@@ -867,7 +877,7 @@ const CoachSettings = () => {
         <p className="text-sm text-gray-600 font-[Inter] mb-4">
           Change your password regularly to keep your account secure
         </p>
-        <button 
+        <button
           onClick={() => setShowPasswordModal(true)}
           className="bg-[#003F8F] text-white px-6 py-2 rounded-lg hover:bg-[#002A5F] transition-colors font-medium font-[Inter] cursor-pointer"
         >
@@ -880,7 +890,7 @@ const CoachSettings = () => {
         <h2 className="text-xl font-semibold text-[#003F8F] font-[Poppins] mb-6">
           Notifications & Communication
         </h2>
-        
+
         <div className="space-y-4">
           {/* Email Notifications */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -925,7 +935,7 @@ const CoachSettings = () => {
         <h2 className="text-xl font-semibold text-[#003F8F] font-[Poppins] mb-6">
           Security & Privacy
         </h2>
-        
+
         <div className="space-y-4">
           {/* Two-Factor Authentication */}
           <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -947,6 +957,43 @@ const CoachSettings = () => {
         </div>
       </div>
 
+      {/* Number of training Session Section */}
+      <div className="bg-white rounded-lg p-6 border border-gray-200">
+        <h2 className="text-xl font-semibold text-[#003F8F] font-[Poppins] mb-6">
+          Number of training Session
+        </h2>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-[#003F8F] mb-2 font-[Inter]">
+              Weekly Session Goals
+            </label>
+            <input
+              type="number"
+              name="weekly_session_goal"
+              value={formData.weekly_session_goal}
+              onChange={handleFormChange}
+              placeholder="20"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#003F8F] mb-2 font-[Inter]">
+              Avg Session Per Client
+            </label>
+            <input
+              type="number"
+              name="average_sessions_per_client"
+              value={formData.average_sessions_per_client}
+              onChange={handleFormChange}
+              placeholder="3"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F] text-sm font-[Inter] placeholder:text-[#4D6080CC]"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Bottom Action Buttons */}
       <div>
         {/* Success Message */}
@@ -964,7 +1011,7 @@ const CoachSettings = () => {
         )}
 
         <div className="flex items-center justify-start gap-4">
-          <button 
+          <button
             onClick={handleUpdateProfile}
             disabled={updatingProfile}
             className="bg-[#003F8F] text-white px-6 py-2 rounded-lg font-semibold text-sm hover:bg-[#002F6F] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
@@ -978,140 +1025,142 @@ const CoachSettings = () => {
       </div>
 
       {/* Password Change Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/60 bg-opacity-40 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 relative max-w-lg w-full my-auto max-h-[90vh] overflow-y-auto">
-            {/* Close Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setShowPasswordModal(false);
-                setPasswordError(null);
-                setPasswordSuccess(false);
-                setPasswordData({
-                  current_password: '',
-                  new_password: '',
-                  confirm_password: ''
-                });
-              }}
-              disabled={updatingPassword}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 cursor-pointer disabled:opacity-50"
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="20" height="20" rx="10" fill="#4D6080" fillOpacity="0.8" />
-                <path d="M13.3888 7.49593C13.4485 7.43831 13.4962 7.36936 13.529 7.29313C13.5618 7.21689 13.579 7.13489 13.5798 7.0519C13.5806 6.96891 13.5648 6.88661 13.5334 6.80978C13.502 6.73296 13.4556 6.66315 13.397 6.60444C13.3383 6.54573 13.2686 6.49929 13.1918 6.46783C13.115 6.43637 13.0327 6.42051 12.9497 6.4212C12.8667 6.42188 12.7847 6.43908 12.7084 6.4718C12.6322 6.50452 12.5632 6.5521 12.5055 6.61177L10.0005 9.11593L7.49632 6.61177C7.4391 6.55036 7.3701 6.50111 7.29343 6.46695C7.21677 6.43279 7.13401 6.41442 7.05009 6.41294C6.96617 6.41146 6.88281 6.4269 6.80499 6.45833C6.72716 6.48976 6.65647 6.53655 6.59712 6.5959C6.53777 6.65525 6.49098 6.72594 6.45955 6.80377C6.42812 6.88159 6.41268 6.96495 6.41416 7.04887C6.41564 7.13279 6.43401 7.21555 6.46817 7.29221C6.50233 7.36888 6.55158 7.43788 6.61299 7.4951L9.11549 10.0001L6.61132 12.5043C6.50092 12.6227 6.44082 12.7795 6.44367 12.9414C6.44653 13.1033 6.51212 13.2578 6.62663 13.3723C6.74115 13.4868 6.89563 13.5524 7.05755 13.5552C7.21947 13.5581 7.37617 13.498 7.49465 13.3876L10.0005 10.8834L12.5047 13.3884C12.6231 13.4988 12.7798 13.5589 12.9418 13.5561C13.1037 13.5532 13.2582 13.4876 13.3727 13.3731C13.4872 13.2586 13.5528 13.1041 13.5556 12.9422C13.5585 12.7803 13.4984 12.6236 13.388 12.5051L10.8855 10.0001L13.3888 7.49593Z" fill="white" />
-              </svg>
-            </button>
+      {
+        showPasswordModal && (
+          <div className="fixed inset-0 bg-black/60 bg-opacity-40 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 relative max-w-lg w-full my-auto max-h-[90vh] overflow-y-auto">
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPasswordError(null);
+                  setPasswordSuccess(false);
+                  setPasswordData({
+                    current_password: '',
+                    new_password: '',
+                    confirm_password: ''
+                  });
+                }}
+                disabled={updatingPassword}
+                className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 cursor-pointer disabled:opacity-50"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="20" height="20" rx="10" fill="#4D6080" fillOpacity="0.8" />
+                  <path d="M13.3888 7.49593C13.4485 7.43831 13.4962 7.36936 13.529 7.29313C13.5618 7.21689 13.579 7.13489 13.5798 7.0519C13.5806 6.96891 13.5648 6.88661 13.5334 6.80978C13.502 6.73296 13.4556 6.66315 13.397 6.60444C13.3383 6.54573 13.2686 6.49929 13.1918 6.46783C13.115 6.43637 13.0327 6.42051 12.9497 6.4212C12.8667 6.42188 12.7847 6.43908 12.7084 6.4718C12.6322 6.50452 12.5632 6.5521 12.5055 6.61177L10.0005 9.11593L7.49632 6.61177C7.4391 6.55036 7.3701 6.50111 7.29343 6.46695C7.21677 6.43279 7.13401 6.41442 7.05009 6.41294C6.96617 6.41146 6.88281 6.4269 6.80499 6.45833C6.72716 6.48976 6.65647 6.53655 6.59712 6.5959C6.53777 6.65525 6.49098 6.72594 6.45955 6.80377C6.42812 6.88159 6.41268 6.96495 6.41416 7.04887C6.41564 7.13279 6.43401 7.21555 6.46817 7.29221C6.50233 7.36888 6.55158 7.43788 6.61299 7.4951L9.11549 10.0001L6.61132 12.5043C6.50092 12.6227 6.44082 12.7795 6.44367 12.9414C6.44653 13.1033 6.51212 13.2578 6.62663 13.3723C6.74115 13.4868 6.89563 13.5524 7.05755 13.5552C7.21947 13.5581 7.37617 13.498 7.49465 13.3876L10.0005 10.8834L12.5047 13.3884C12.6231 13.4988 12.7798 13.5589 12.9418 13.5561C13.1037 13.5532 13.2582 13.4876 13.3727 13.3731C13.4872 13.2586 13.5528 13.1041 13.5556 12.9422C13.5585 12.7803 13.4984 12.6236 13.388 12.5051L10.8855 10.0001L13.3888 7.49593Z" fill="white" />
+                </svg>
+              </button>
 
-            {/* Title and Subtitle */}
-            <h2 className="text-xl font-bold text-[#2D2F33] mb-2">
-              Change Password
-            </h2>
-            <p className="text-sm text-gray-600 font-[Inter] mb-6">
-              Update your password to keep your account secure
-            </p>
+              {/* Title and Subtitle */}
+              <h2 className="text-xl font-bold text-[#2D2F33] mb-2">
+                Change Password
+              </h2>
+              <p className="text-sm text-gray-600 font-[Inter] mb-6">
+                Update your password to keep your account secure
+              </p>
 
-            {/* Error Message */}
-            {passwordError && (
-              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {passwordError}
-              </div>
-            )}
+              {/* Error Message */}
+              {passwordError && (
+                <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {passwordError}
+                </div>
+              )}
 
-            {/* Success Message */}
-            {passwordSuccess && (
-              <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-                Password updated successfully!
-              </div>
-            )}
+              {/* Success Message */}
+              {passwordSuccess && (
+                <div className="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+                  Password updated successfully!
+                </div>
+              )}
 
-            {/* Form */}
-            <form onSubmit={handleUpdatePassword} className="space-y-5">
-              {/* Current Password */}
-              <div>
-                <label className="block text-sm font-semibold text-[#2D2F33] mb-2">Current Password</label>
-                <input
-                  type="password"
-                  name="current_password"
-                  value={passwordData.current_password}
-                  onChange={handlePasswordChange}
-                  placeholder="Enter your current password"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F]"
-                />
-              </div>
+              {/* Form */}
+              <form onSubmit={handleUpdatePassword} className="space-y-5">
+                {/* Current Password */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#2D2F33] mb-2">Current Password</label>
+                  <input
+                    type="password"
+                    name="current_password"
+                    value={passwordData.current_password}
+                    onChange={handlePasswordChange}
+                    placeholder="Enter your current password"
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F]"
+                  />
+                </div>
 
-              {/* New Password */}
-              <div>
-                <label className="block text-sm font-semibold text-[#2D2F33] mb-2">New password</label>
-                <input
-                  type="password"
-                  name="new_password"
-                  value={passwordData.new_password}
-                  onChange={handlePasswordChange}
-                  placeholder="Enter your new password"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F]"
-                />
-              </div>
+                {/* New Password */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#2D2F33] mb-2">New password</label>
+                  <input
+                    type="password"
+                    name="new_password"
+                    value={passwordData.new_password}
+                    onChange={handlePasswordChange}
+                    placeholder="Enter your new password"
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F]"
+                  />
+                </div>
 
-              {/* Confirm New Password */}
-              <div>
-                <label className="block text-sm font-semibold text-[#2D2F33] mb-2">Confirm New Password</label>
-                <input
-                  type="password"
-                  name="confirm_password"
-                  value={passwordData.confirm_password}
-                  onChange={handlePasswordChange}
-                  placeholder="Confirm your new password"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F]"
-                />
-              </div>
+                {/* Confirm New Password */}
+                <div>
+                  <label className="block text-sm font-semibold text-[#2D2F33] mb-2">Confirm New Password</label>
+                  <input
+                    type="password"
+                    name="confirm_password"
+                    value={passwordData.confirm_password}
+                    onChange={handlePasswordChange}
+                    placeholder="Confirm your new password"
+                    required
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003F8F] focus:border-[#003F8F]"
+                  />
+                </div>
 
-              {/* Password Requirements */}
-              <div className="mt-4">
-                <p className="text-sm font-regular text-[#535B69] mb-2">Password requirements:</p>
-                <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
-                  <li>At least 8 characters long</li>
-                  <li>Different from your current password</li>
-                  <li>Passwords must match</li>
-                </ul>
-              </div>
+                {/* Password Requirements */}
+                <div className="mt-4">
+                  <p className="text-sm font-regular text-[#535B69] mb-2">Password requirements:</p>
+                  <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                    <li>At least 8 characters long</li>
+                    <li>Different from your current password</li>
+                    <li>Passwords must match</li>
+                  </ul>
+                </div>
 
-              {/* Buttons */}
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    setPasswordError(null);
-                    setPasswordSuccess(false);
-                    setPasswordData({
-                      current_password: '',
-                      new_password: '',
-                      confirm_password: ''
-                    });
-                  }}
-                  disabled={updatingPassword}
-                  className="px-4 py-2 bg-white border border-[#003F8F] text-[#003F8F] rounded-lg text-sm font-semibold hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
+                {/* Buttons */}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordModal(false);
+                      setPasswordError(null);
+                      setPasswordSuccess(false);
+                      setPasswordData({
+                        current_password: '',
+                        new_password: '',
+                        confirm_password: ''
+                      });
+                    }}
+                    disabled={updatingPassword}
+                    className="px-4 py-2 bg-white border border-[#003F8F] text-[#003F8F] rounded-lg text-sm font-semibold hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
 
-                <button
-                  type="submit"
-                  disabled={updatingPassword}
-                  className="px-5 py-2 bg-[#003F8F] text-white text-sm font-semibold rounded-lg hover:bg-[#002A6A] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {updatingPassword ? 'Saving...' : 'Save Password'}
-                </button>
-              </div>
-            </form>
+                  <button
+                    type="submit"
+                    disabled={updatingPassword}
+                    className="px-5 py-2 bg-[#003F8F] text-white text-sm font-semibold rounded-lg hover:bg-[#002A6A] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {updatingPassword ? 'Saving...' : 'Save Password'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 
